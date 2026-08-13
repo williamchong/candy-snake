@@ -1,17 +1,16 @@
 import Phaser from 'phaser';
 
+import { generateTextures } from '../render/textures';
 import { SceneKey } from './keys';
 
-/**
- * Generates runtime textures and loads settings before the game starts.
- * Nothing to do yet in the scaffold phase — goes straight to GameScene.
- */
+/** Bakes the runtime textures before play starts. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super(SceneKey.Boot);
   }
 
   create(): void {
+    generateTextures(this);
     this.scene.start(SceneKey.Game);
   }
 }

@@ -13,7 +13,10 @@ new Phaser.Game({
   parent: 'app',
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  backgroundColor: '#2b1a12',
+  backgroundColor: '#0d0a1a',
+  // 8-bit art direction: nearest-neighbour filtering keeps the 8×8 source
+  // sprites hard-edged when scaled up (see render/textures.ts).
+  pixelArt: true,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

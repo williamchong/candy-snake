@@ -17,7 +17,9 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        background: #1d1109;
+        /* Must match the Phaser backgroundColor, or Scale.FIT letterbox bars
+           show as a different color than the game. */
+        background: #0d0a1a;
         overscroll-behavior: none;
       }
       /* Centering is Phaser's job (Scale.CENTER_BOTH) — don't double up with flex. */
