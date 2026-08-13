@@ -1,5 +1,7 @@
 # Candy Snake 🍬
 
+[![CI](https://github.com/williamchong/candy-snake/actions/workflows/ci.yml/badge.svg)](https://github.com/williamchong/candy-snake/actions/workflows/ci.yml)
+
 A web-based arcade game for desktop and mobile: you are an old-fashioned candy
 maker, and your snake is the pulled sugar strand. Eat sugar to grow it, knead
 in red/yellow/blue dye to color it (colors blend like real paint), then chop
