@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 
 import { BootScene } from './scenes/BootScene';
+import { GameOverScene } from './scenes/GameOverScene';
 import { GameScene } from './scenes/GameScene';
+import { MenuScene } from './scenes/MenuScene';
 import { UIScene } from './scenes/UIScene';
 
 // Fixed FIT scaling at 960×640 is the MVP shortcut (architecture §9);
@@ -25,5 +27,5 @@ new Phaser.Game({
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   // Only the first is started automatically; GameScene launches the HUD.
-  scene: [BootScene, GameScene, UIScene],
+  scene: [BootScene, MenuScene, GameScene, UIScene, GameOverScene],
 });

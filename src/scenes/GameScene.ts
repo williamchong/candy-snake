@@ -5,6 +5,7 @@ import type { GameEvent } from '../core/types';
 import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
 import { BoardView } from '../render/boardView';
+import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
 
 /**
@@ -94,20 +95,28 @@ export class GameScene extends Phaser.Scene {
         if (event.kneaded === 0) this.view.splash(event.pos, event.primary);
         return;
 
+      case 'game-over':
+        // The HUD is this scene's to clean up: it was launched here, holds a
+        // reference to this run's core, and a fresh run launches a fresh one.
+        this.scene.stop(SceneKey.UI);
+        this.scene.start(SceneKey.GameOver, {
+          score: event.score,
+          served: event.served,
+          elapsedMs: event.elapsedMs,
+        } satisfies RunSummary);
+        return;
+
       // The serving window is UIScene's, and it draws the queue from state
       // every frame — the board itself has nothing to play for these. The juice
-      // pass (Phase 7) gives serves and losses their own effects, and
-      // `game-over` hands off to GameOverScene once the scene flow lands.
+      // pass (Phase 7) gives serves and losses their own effects.
       case 'customer-arrived':
       case 'customer-served':
       case 'customer-left':
       case 'life-lost':
-      case 'game-over':
         return;
 
-      // Nothing to play yet; the juice pass (Phase 7) fills these in.
-      // `candy-staled` gets the stale-candy toss (design §5) when the shelf
-      // strip moves into UIScene in Phase 4.
+      // Nothing to play yet; the juice pass (Phase 7) fills these in, including
+      // the stale-candy toss off the rack (design §5).
       case 'candy-staled':
       case 'strand-broken':
       case 'strand-cut':

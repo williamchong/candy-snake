@@ -12,6 +12,6 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     generateTextures(this);
     generateGlyphTextures(this);
-    this.scene.start(SceneKey.Game);
+    this.scene.start(SceneKey.Menu);
   }
 }
