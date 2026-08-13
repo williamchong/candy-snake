@@ -225,7 +225,10 @@ back to defaults silently. No PII, no backend.
 
 - `npm run dev` (Vite), `npm run build` → `dist/` static bundle,
   `npm run test` / `lint` / `typecheck` gate commits.
-- Deploy `dist/` to GitHub Pages via Actions on push to `main` (or Netlify —
-  either is a one-file config; decide at deploy phase).
+- Deploy `dist/` to GitHub Pages via Actions on push to `main`
+  (`.github/workflows/deploy.yml`, using `upload-pages-artifact` /
+  `deploy-pages`; repo Settings → Pages source must be "GitHub Actions").
+  Vite's `base: './'` keeps asset URLs relative so the bundle works both at the
+  `/candy-snake/` project-page path and under `vite preview`.
 - Phaser is the only heavy dependency (~1.1 MB min+gz ~300 KB); acceptable for
   a game page, no code-splitting needed for v1.
