@@ -68,23 +68,25 @@ describe('board', () => {
 });
 
 describe('chopping block', () => {
-  it('runs along the top wall, by the serving window', () => {
-    expect(CHOP_BLOCK_CELLS.every((cell) => cell.y === 0)).toBe(true);
-    // A bench, not scattered cells: consecutive and inside the row.
+  it('runs down the right wall, by the serving window', () => {
+    expect(CHOP_BLOCK_CELLS.every((cell) => cell.x === COLS - 1)).toBe(true);
+    // A bench, not scattered cells: consecutive and inside the column.
     CHOP_BLOCK_CELLS.forEach((cell, index) => {
-      expect(cell.x).toBe(CHOP_BLOCK_CELLS[0]!.x + index);
-      expect(cell.x).toBeLessThan(COLS);
+      expect(cell.y).toBe(CHOP_BLOCK_CELLS[0]!.y + index);
+      expect(cell.y).toBeLessThan(ROWS);
     });
-    // Small enough that the top row is still a lane the player can use.
-    expect(CHOP_BLOCK_CELLS.length).toBeLessThan(COLS / 2);
+    // Small enough that the right column is still a lane the player can use.
+    expect(CHOP_BLOCK_CELLS.length).toBeLessThan(ROWS / 2);
   });
 
   it('knows its own cells and no others', () => {
     for (const cell of CHOP_BLOCK_CELLS) expect(isChopBlock(cell)).toBe(true);
 
+    // One cell off each end of the bench, and one off its side: the run is a
+    // single column, and it stops where it says it does.
     const [first] = CHOP_BLOCK_CELLS;
-    expect(isChopBlock({ x: first!.x, y: 1 })).toBe(false);
-    expect(isChopBlock({ x: first!.x - 1, y: 0 })).toBe(false);
-    expect(isChopBlock({ x: CHOP_BLOCK_CELLS.at(-1)!.x + 1, y: 0 })).toBe(false);
+    expect(isChopBlock(stepCell(first!, Dir.Left))).toBe(false);
+    expect(isChopBlock(stepCell(first!, Dir.Up))).toBe(false);
+    expect(isChopBlock(stepCell(CHOP_BLOCK_CELLS.at(-1)!, Dir.Down))).toBe(false);
   });
 });

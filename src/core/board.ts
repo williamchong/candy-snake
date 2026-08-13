@@ -37,17 +37,25 @@ export const freeCells = (occupied: ReadonlySet<number>): Vec2[] => {
 };
 
 /**
- * The chopping block: a short run along the top wall, where the serving window
- * and its customers go in Phase 4 (design §5). Deliberately only 3 of the 16
- * cells in that row, so the top row stays usable as a lane — crossing the
- * block always chops, and that has to be a choice rather than a toll.
+ * The chopping block: a short run down the right wall, where the serving
+ * window and its customers go in Phase 4 — the same wall the shelf and the
+ * queue anchor to (design §5, §10). Deliberately only 3 of the 16 cells in
+ * that column, so the right column stays usable as a lane — crossing the block
+ * always chops, and that has to be a choice rather than a toll.
  */
-const CHOP_BLOCK_WIDTH = 3;
-const CHOP_BLOCK_LEFT = Math.floor((COLS - CHOP_BLOCK_WIDTH) / 2);
+const CHOP_BLOCK_HEIGHT = 3;
+
+/**
+ * Off the row the maker spawns in, rather than centred on the wall. The maker
+ * starts empty-handed and drives straight until the player turns, so a bench
+ * in that lane would chop the first strand they manage to build, a few cells
+ * after they built it — the spawn lane has to be somewhere to gather (§5).
+ */
+export const CHOP_BLOCK_TOP = 2;
 
 export const CHOP_BLOCK_CELLS: readonly Vec2[] = Array.from(
-  { length: CHOP_BLOCK_WIDTH },
-  (_unused, index) => ({ x: CHOP_BLOCK_LEFT + index, y: 0 }),
+  { length: CHOP_BLOCK_HEIGHT },
+  (_unused, index) => ({ x: COLS - 1, y: CHOP_BLOCK_TOP + index }),
 );
 
 const CHOP_BLOCK_KEYS = new Set(CHOP_BLOCK_CELLS.map(cellKey));

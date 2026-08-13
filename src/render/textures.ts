@@ -264,17 +264,19 @@ const CANDY = [
 
 /**
  * The chopping block: a slab of three planks that fills its cell edge to edge,
- * so a run of them reads as one bench. Station, not candy — it is tinted by
- * value rather than hue (design §4, palette constraints).
+ * so a run of them reads as one bench. The planks run *down* the cell, along
+ * the bench's own length — grain across the run would read as three separate
+ * slabs. Station, not candy — it is tinted by value rather than hue (design §4,
+ * palette constraints).
  */
 const BLOCK = [
   'AAAAAAAA',
-  'A999999A',
-  'A888888A',
-  'A999999A',
-  'A999999A',
-  'A888888A',
-  'A999999A',
+  'A989989A',
+  'A989989A',
+  'A989989A',
+  'A989989A',
+  'A989989A',
+  'A989989A',
   'AAAAAAAA',
 ];
 

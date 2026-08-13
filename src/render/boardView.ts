@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-import { CHOP_BLOCK_CELLS, COLS, ROWS } from '../core/board';
+import { CHOP_BLOCK_CELLS, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
 import { colorInfo, type Primary } from '../core/colors';
 import { SHELF_SLOTS } from '../core/shelf';
 import {
@@ -79,13 +79,21 @@ const DYE_FLASH_MS = 120;
 /** Enough to read debris as spilled sugar rather than as live strand. */
 const DEBRIS_ALPHA = 0.5;
 
+/** The pixel centre of a board row. `cellToPixel` is this plus the column. */
+const rowToPixel = (row: number): number => BOARD_Y + row * CELL_SIZE + CELL_SIZE / 2;
+
 /**
- * The shelf strip: six slots in the free column beside the board. Deliberately
- * plain — the HUD moves into `UIScene` in Phase 4 (architecture §6), and this
- * holds no layout knowledge worth carrying over.
+ * The shelf strip: six slots in the free column beside the board, starting
+ * level with the top of the chopping block and running down from it. The rack
+ * has to sit on the same wall the bench cuts against, or the player makes
+ * candy at one edge of the board and hunts for where it went at another; the
+ * column below it is left for the customer window in Phase 4, so the whole
+ * line — bench, rack, queue — reads down one side (design §10). The slot
+ * geometry is throwaway — the HUD moves into `UIScene` in Phase 4
+ * (architecture §6) — but the anchoring to the bench row is not.
  */
 const SHELF_X = BOARD_X + COLS * CELL_SIZE + 96;
-const SHELF_TOP = BOARD_Y + 48;
+const SHELF_TOP = rowToPixel(CHOP_BLOCK_TOP);
 const SHELF_PITCH = 48;
 const SLOT_SIZE = 40;
 
@@ -166,7 +174,7 @@ interface PoolConfig {
 
 const cellToPixel = (cell: Vec2): Vec2 => ({
   x: BOARD_X + cell.x * CELL_SIZE + CELL_SIZE / 2,
-  y: BOARD_Y + cell.y * CELL_SIZE + CELL_SIZE / 2,
+  y: rowToPixel(cell.y),
 });
 
 /** Glyphs are baked at their display size, so they draw unscaled. */

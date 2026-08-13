@@ -448,21 +448,26 @@ describe('Game chopping block', () => {
   const bench = CHOP_BLOCK_CELLS[0]!;
 
   /**
-   * The strand laid out below the bench — and, because a cut piece stands
-   * still on the cells it was *leaving*, exactly where the batch ends up. The
-   * tests assert against the same list they started from, which is the claim.
+   * The strand laid out to the left of the bench — and, because a cut piece
+   * stands still on the cells it was *leaving*, exactly where the batch ends
+   * up. The tests assert against the same list they started from, which is the
+   * claim.
    */
   const frozen = (colors: ColorMask[]): Segment[] =>
-    colors.map((color, index) => ({ pos: at(bench.x, 2 + index), color }));
+    colors.map((color, index) => ({ pos: at(bench.x - 2 - index, bench.y), color }));
 
   /**
-   * A strand one move below the bench, heading up, with nothing else on the
-   * board: the next move puts the head on the block and the batch behind it.
+   * A strand one move short of the bench, heading right, with nothing else on
+   * the board: the next move puts the head on the block and the batch behind it.
    */
   const aboutToReachBlock = (colors: ColorMask[]): Game => {
     const game = new Game();
     game.state.pickups = [];
-    game.state.snake = { head: at(bench.x, 1), dir: Dir.Up, body: frozen(colors) };
+    game.state.snake = {
+      head: at(bench.x - 1, bench.y),
+      dir: Dir.Right,
+      body: frozen(colors),
+    };
     return game;
   };
 
@@ -481,35 +486,34 @@ describe('Game chopping block', () => {
     const game = aboutToReachBlock([RED, RAW]);
     drive(game, 1);
 
-    expect(game.state.snake.head).toEqual(at(bench.x, 0));
+    expect(game.state.snake.head).toEqual(bench);
 
     drive(game, 2);
 
-    // Two more cells travelled — up through the service door and on down.
-    expect(game.state.snake.head).toEqual(at(bench.x, ROWS - 2));
+    // Two more cells travelled — out through the service door and on across.
+    expect(game.state.snake.head).toEqual(at(1, bench.y));
     expect(game.state.snake.body).toEqual([]);
   });
 
   it('draws the batch in one segment per move, block end first', () => {
     const colors = [RED, RAW];
+    const laid = frozen(colors);
     const game = aboutToReachBlock(colors);
     drive(game, 1);
 
     const first = drive(game, 1);
     expect(first).toContainEqual({
       type: 'candy-chopped',
-      pos: at(bench.x, 2),
+      pos: laid[0]!.pos,
       color: RED,
     });
     expect(game.state.shelf).toEqual([{ color: RED, bornAt: 2 }]);
-    expect(game.state.severed).toEqual([
-      { segments: frozen(colors).slice(1), fate: 'chop' },
-    ]);
+    expect(game.state.severed).toEqual([{ segments: laid.slice(1), fate: 'chop' }]);
 
     const second = drive(game, 1);
     expect(second).toContainEqual({
       type: 'candy-chopped',
-      pos: at(bench.x, 3),
+      pos: laid[1]!.pos,
       color: RAW,
     });
     expect(game.state.shelf).toEqual([
@@ -532,6 +536,17 @@ describe('Game chopping block', () => {
     ).toEqual(colors);
   });
 
+  it('sits clear of the lane the maker spawns in', () => {
+    // Two constants chosen in different files — the spawn cell in `Game` and
+    // `CHOP_BLOCK_TOP` in `board` — and the design rule is the relationship
+    // between them: the lane the player starts in is theirs to gather in, not
+    // a run at the chopper (§5). Nothing else would catch the bench drifting
+    // back across it.
+    const { head } = new Game().state.snake;
+
+    expect(CHOP_BLOCK_CELLS.some((cell) => cell.y === head.y)).toBe(false);
+  });
+
   it('has nothing to cut when the maker crosses it alone', () => {
     const game = aboutToReachBlock([]);
 
@@ -546,7 +561,7 @@ describe('Game chopping block', () => {
     const game = aboutToReachBlock([RAW, RAW]);
     // A cube the strand was passing through, two cells back: once the batch is
     // cut loose no tail will ever clear it.
-    const pos = at(bench.x, 3);
+    const pos = frozen([RAW, RAW])[1]!.pos;
     game.state.pickups = [{ kind: 'sugar', pos, open: true }];
 
     drive(game, 1);
