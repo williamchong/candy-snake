@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 
+import { SceneKey } from './keys';
+
 /** Scaffold placeholder: proves the canvas, scaling, and scene flow work. */
 export class GameScene extends Phaser.Scene {
   constructor() {
-    super('Game');
+    super(SceneKey.Game);
   }
 
   create(): void {
