@@ -96,6 +96,15 @@ export class Game {
   }
 
   /**
+   * The opening level being played, or undefined once they are done — the one
+   * place that question is answered, for the spawner, the window and the HUD
+   * alike (design §7).
+   */
+  get openingLevel(): TutorialLevel | undefined {
+    return this.tutorial[this.state.tutorialIndex];
+  }
+
+  /**
    * How far the snake stands between its last cell and its next, 0…1.
    * Movement is discrete here but must not look it, so the view draws the
    * snake at this fraction of the way across. `extraMs` lets a caller add
@@ -385,24 +394,33 @@ export class Game {
    * tutorial level started carries over into the endless game's own pacing.
    */
   private admitCustomer(dtMs: number, events: GameEvent[]): void {
-    const level = this.tutorial[this.state.tutorialIndex];
-    // One child at a time while the tutorial runs: each level is a single
-    // order, and the next does not walk up until this one has been served.
-    const maxQueue = level === undefined ? this.config.stage.maxQueue : 1;
-    if (this.state.customers.length >= maxQueue) return;
+    const level = this.openingLevel;
+    const stage = this.config.stage;
+    // One child at a time while the tutorial runs, and no clock on them: each
+    // level is a single order, the next does not walk up until this one is
+    // served, and a tutorial that plays on every run must not be able to cost
+    // you the run (design §7).
+    const window =
+      level === undefined
+        ? {
+            maxQueue: stage.maxQueue,
+            intervalMs: stage.arrivalIntervalMs,
+            patienceMs: stage.patienceMs as number | undefined,
+          }
+        : { maxQueue: 1, intervalMs: TUTORIAL_ARRIVAL_GAP_MS, patienceMs: undefined };
+
+    if (this.state.customers.length >= window.maxQueue) return;
 
     this.waitMs += dtMs;
-    const interval =
-      level === undefined ? this.config.stage.arrivalIntervalMs : TUTORIAL_ARRIVAL_GAP_MS;
-    if (this.waitMs < interval) return;
+    if (this.waitMs < window.intervalMs) return;
     this.waitMs = 0;
 
     const customer = createCustomer(
       this.nextCustomerId,
-      level?.want ?? rollOrder(this.config.stage, this.rng),
-      // A tutorial customer never runs out: the opening levels play on every
-      // run, and a tutorial must not be able to cost you the run (design §7).
-      level === undefined ? this.config.stage.patienceMs : undefined,
+      // Drawn only now that a child is actually arriving, so the seeded run of
+      // orders does not depend on how often `step` was called.
+      level?.want ?? rollOrder(stage, this.rng),
+      window.patienceMs,
     );
     this.nextCustomerId += 1;
     this.state.customers = [...this.state.customers, customer];
@@ -423,7 +441,7 @@ export class Game {
     const slot = this.state.shelf.findIndex((candy) => candy.color === customer.want);
     if (slot < 0) return;
 
-    this.state.shelf = this.state.shelf.filter((_unused, at) => at !== slot);
+    this.state.shelf = removeAt(this.state.shelf, slot);
     this.serveCustomer(index, true, events);
   }
 
@@ -439,7 +457,7 @@ export class Game {
     this.state.served += 1;
     // While the tutorial runs the queue holds nothing but its own child, so a
     // serve is exactly what finishes a level.
-    if (this.state.tutorialIndex < this.tutorial.length) this.state.tutorialIndex += 1;
+    if (this.openingLevel !== undefined) this.state.tutorialIndex += 1;
 
     events.push({
       type: 'customer-served',
@@ -451,7 +469,7 @@ export class Game {
   }
 
   private spawnPickups(events: GameEvent[]): void {
-    const stocked = stockedPrimaries(this.tutorial, this.state.tutorialIndex);
+    const stocked = stockedPrimaries(this.openingLevel);
 
     for (const pickup of ensurePickups(this.state, this.rng, stocked)) {
       this.state.pickups.push(pickup);

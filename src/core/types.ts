@@ -135,8 +135,9 @@ export interface GameState {
   over: boolean;
   /**
    * How many of the three opening levels are done (design §7). It is state
-   * rather than a counter on `Game` because it gates what the spawner stocks
-   * and what the next customer wants, so a seeded replay has to reproduce it.
+   * rather than a private counter — as the arrival clock and the id counter
+   * are — because the HUD reads it: which level is running decides the caption
+   * beside the queue.
    */
   tutorialIndex: number;
   /**

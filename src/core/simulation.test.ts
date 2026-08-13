@@ -73,7 +73,7 @@ const violationsIn = (game: Game, tick: number): string[] => {
     broken.push(at(`${state.shelf.length} candies on a ${SHELF_SLOTS}-slot shelf`));
   }
 
-  const inTutorial = state.tutorialIndex < game.tutorial.length;
+  const inTutorial = game.openingLevel !== undefined;
   const cap = inTutorial ? 1 : MIXING_STAGE.maxQueue;
   if (state.customers.length > cap) {
     broken.push(at(`${state.customers.length} children waiting, cap ${cap}`));
@@ -94,10 +94,7 @@ const violationsIn = (game: Game, tick: number): string[] => {
     }
   }
 
-  const stocked: readonly Primary[] = stockedPrimaries(
-    game.tutorial,
-    state.tutorialIndex,
-  );
+  const stocked: readonly Primary[] = stockedPrimaries(game.openingLevel);
   for (const primary of PRIMARIES) {
     const jars = state.pickups.filter(
       (pickup) => pickup.kind === 'dye' && pickup.primary === primary,

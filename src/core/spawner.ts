@@ -1,5 +1,5 @@
 import { CHOP_BLOCK_CELLS, cellKey, eq, freeCells, stepCell } from './board';
-import { PRIMARIES, type Primary } from './colors';
+import type { Primary } from './colors';
 import type { Rng } from './rng';
 import type { GameState, Pickup, Vec2 } from './types';
 
@@ -79,7 +79,9 @@ const missingPickups = (state: GameState, stocked: readonly Primary[]): PickupMa
 export const ensurePickups = (
   state: GameState,
   rng: Rng,
-  stocked: readonly Primary[] = PRIMARIES,
+  /** Required: a default here would silently re-grant every jar to a caller
+   * that forgot it, which is the exact bug the opening levels need ruled out. */
+  stocked: readonly Primary[],
 ): Pickup[] => {
   const makers = missingPickups(state, stocked);
   if (makers.length === 0) return [];

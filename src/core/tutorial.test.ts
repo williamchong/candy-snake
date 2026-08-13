@@ -68,10 +68,10 @@ describe('stockedPrimaries', () => {
   it('stocks the level being played', () => {
     const levels = tutorialFor(42);
 
-    expect(stockedPrimaries(levels, 1)).toEqual(levels[1]?.stock);
+    expect(stockedPrimaries(levels[1])).toEqual(levels[1]?.stock);
   });
 
   it('opens the board up to every dye once the tutorial is over', () => {
-    expect(stockedPrimaries(tutorialFor(42), 3)).toEqual(PRIMARIES);
+    expect(stockedPrimaries(tutorialFor(42)[3])).toEqual(PRIMARIES);
   });
 });

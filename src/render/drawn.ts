@@ -27,6 +27,21 @@ export const NO_TINT = 0xffffff;
 export const GLYPH_TINT = 0x5f5668;
 export const BORDER = 0xc9b4dd;
 
+/** Outline thickness for every framed slot in the HUD, in screen pixels. */
+export const CHROME_WIDTH = 2;
+
+/**
+ * The HUD's layers, named for the same reason the board's are: so a widget
+ * cannot end up above its own frame by accident. The board keeps its own,
+ * deeper table — the two scenes never share a display list.
+ */
+export const HudDepth = {
+  /** The frame a candy sits in: a shelf slot, an order card. */
+  Slot: 0,
+  Icon: 1,
+  Glyph: 2,
+} as const;
+
 export interface Drawn {
   readonly image: Phaser.GameObjects.Image;
   /** The symbol riding along with it, for layers that want one. */

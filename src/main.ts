@@ -5,11 +5,9 @@ import { GameOverScene } from './scenes/GameOverScene';
 import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { UIScene } from './scenes/UIScene';
-
 // Fixed FIT scaling at 960×640 is the MVP shortcut (architecture §9);
 // Scale.RESIZE + layout() replaces it in the mobile phase.
-const GAME_WIDTH = 960;
-const GAME_HEIGHT = 640;
+import { GAME_HEIGHT, GAME_WIDTH } from './ui/layout';
 
 new Phaser.Game({
   type: Phaser.AUTO,

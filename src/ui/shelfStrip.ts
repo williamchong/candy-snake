@@ -2,7 +2,15 @@ import type Phaser from 'phaser';
 
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Candy, Vec2 } from '../core/types';
-import { BORDER, makeDrawn, paint, show, type Drawn } from '../render/drawn';
+import {
+  BORDER,
+  CHROME_WIDTH,
+  HudDepth,
+  makeDrawn,
+  paint,
+  show,
+  type Drawn,
+} from '../render/drawn';
 import { TextureKey } from '../render/textures';
 
 /**
@@ -12,7 +20,6 @@ import { TextureKey } from '../render/textures';
  * at another — bench, rack and queue read down one side (design §10).
  */
 const SLOT_SIZE = 40;
-const SLOT_BORDER_WIDTH = 2;
 const SHELF_PITCH = 44;
 
 export class ShelfStrip {
@@ -27,11 +34,15 @@ export class ShelfStrip {
       scene.add
         .rectangle(centre.x, centre.y, SLOT_SIZE, SLOT_SIZE)
         // An empty slot is chrome, and chrome in this kitchen is one color.
-        .setStrokeStyle(SLOT_BORDER_WIDTH, BORDER)
-        .setDepth(0);
+        .setStrokeStyle(CHROME_WIDTH, BORDER)
+        .setDepth(HudDepth.Slot);
 
       this.slots.push(
-        makeDrawn(scene, { key: TextureKey.Candy, depth: 1, glyphDepth: 2 }, centre),
+        makeDrawn(
+          scene,
+          { key: TextureKey.Candy, depth: HudDepth.Icon, glyphDepth: HudDepth.Glyph },
+          centre,
+        ),
       );
     }
   }

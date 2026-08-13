@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { onceAnyInput } from '../input/anyInput';
+import { CENTRE_X } from '../ui/layout';
 import { textStyle } from '../ui/text';
 import { SceneKey } from './keys';
 
@@ -9,8 +10,6 @@ import { SceneKey } from './keys';
  * teaching levels (design §7), so this screen has no tutorial work to do — and
  * the high-score table that will earn it its keep lands in Phase 8.
  */
-const CENTRE_X = 480;
-
 export class MenuScene extends Phaser.Scene {
   constructor() {
     super(SceneKey.Menu);

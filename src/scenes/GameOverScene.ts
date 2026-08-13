@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { onceAnyInput } from '../input/anyInput';
+import { CENTRE_X } from '../ui/layout';
 import { textStyle } from '../ui/text';
 import { SceneKey } from './keys';
 
@@ -10,8 +11,6 @@ export interface RunSummary {
   readonly served: number;
   readonly elapsedMs: number;
 }
-
-const CENTRE_X = 480;
 
 const asClock = (elapsedMs: number): string => {
   const seconds = Math.floor(elapsedMs / 1_000);

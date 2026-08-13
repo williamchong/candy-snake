@@ -1,4 +1,5 @@
 import { colorInfo, type ColorTier } from './colors';
+import { patienceFraction } from './customers';
 import type { Customer } from './types';
 
 /**
@@ -22,21 +23,13 @@ const STREAK_CAP = 2;
 export const streakMultiplier = (streak: number): number =>
   Math.min(STREAK_STEP ** streak, STREAK_CAP);
 
-/** 0…1 of the bar left. A customer who cannot run out earns no bonus. */
-const patienceLeft = (customer: Customer): number => {
-  const { patience } = customer;
-  if (patience === undefined || patience.totalMs <= 0) return 0;
-
-  return Math.min(Math.max(patience.remainingMs / patience.totalMs, 0), 1);
-};
-
 /**
  * Points for one serve. Rounded once at the end rather than per term, so the
  * bonus and the multiplier cannot each shed a fraction on the way through.
  */
 export const scoreServe = (customer: Customer, streak: number): number => {
   const base = BASE_POINTS[colorInfo(customer.want).tier];
-  const earned = base + base * PATIENCE_BONUS * patienceLeft(customer);
+  const earned = base + base * PATIENCE_BONUS * patienceFraction(customer.patience);
 
   return Math.round(earned * streakMultiplier(streak));
 };

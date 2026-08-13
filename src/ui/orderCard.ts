@@ -1,8 +1,18 @@
 import type Phaser from 'phaser';
 
 import { primariesOf } from '../core/colors';
+import { patienceFraction } from '../core/customers';
 import type { Customer, Vec2 } from '../core/types';
-import { BORDER, GLYPH_TINT, makeDrawn, paint, show, type Drawn } from '../render/drawn';
+import {
+  BORDER,
+  CHROME_WIDTH,
+  GLYPH_TINT,
+  HudDepth,
+  makeDrawn,
+  paint,
+  show,
+  type Drawn,
+} from '../render/drawn';
 import { TextureKey } from '../render/textures';
 
 /**
@@ -19,7 +29,6 @@ export const CARD_HEIGHT = 116;
 
 /** Chrome: a shade off the page, outlined like every other slot. */
 const CARD_FILL = 0xe7dcf0;
-const CARD_BORDER_WIDTH = 2;
 
 /** Rows within the card, from its top edge. */
 const CANDY_Y = 30;
@@ -34,6 +43,7 @@ const BAR_WIDTH = 56;
 const BAR_HEIGHT = 8;
 
 export class OrderCard {
+  private readonly centreX: number;
   private readonly background: Phaser.GameObjects.Rectangle;
   private readonly candy: Drawn;
   private readonly jars: Drawn[] = [];
@@ -41,18 +51,22 @@ export class OrderCard {
   private readonly barFill: Phaser.GameObjects.Rectangle;
   /** Who the card is currently stamped for; re-stamping every frame is waste. */
   private shownId: number | undefined;
+  /** Whole pixels of bar drawn, so a sub-pixel drain writes nothing. */
+  private shownBarWidth = -1;
+  private cleared = false;
 
   constructor(scene: Phaser.Scene, at: Vec2) {
     const top = at.y - CARD_HEIGHT / 2;
+    this.centreX = at.x;
 
     this.background = scene.add
       .rectangle(at.x, at.y, CARD_WIDTH, CARD_HEIGHT, CARD_FILL)
-      .setStrokeStyle(CARD_BORDER_WIDTH, BORDER)
-      .setDepth(0);
+      .setStrokeStyle(CHROME_WIDTH, BORDER)
+      .setDepth(HudDepth.Slot);
 
     this.candy = makeDrawn(
       scene,
-      { key: TextureKey.Candy, depth: 1, glyphDepth: 2 },
+      { key: TextureKey.Candy, depth: HudDepth.Icon, glyphDepth: HudDepth.Glyph },
       { x: at.x, y: top + CANDY_Y },
     );
 
@@ -60,7 +74,7 @@ export class OrderCard {
       this.jars.push(
         makeDrawn(
           scene,
-          { key: TextureKey.Dye, depth: 1, glyphDepth: 2 },
+          { key: TextureKey.Dye, depth: HudDepth.Icon, glyphDepth: HudDepth.Glyph },
           { x: at.x, y: top + JAR_Y },
         ),
       );
@@ -68,13 +82,17 @@ export class OrderCard {
 
     this.barTrack = scene.add
       .rectangle(at.x, top + BAR_Y, BAR_WIDTH, BAR_HEIGHT, BORDER)
-      .setDepth(1);
+      .setDepth(HudDepth.Icon);
     // Anchored at its left edge, so draining shortens it rather than shrinking
     // it toward the middle.
     this.barFill = scene.add
       .rectangle(at.x - BAR_WIDTH / 2, top + BAR_Y, BAR_WIDTH, BAR_HEIGHT, GLYPH_TINT)
       .setOrigin(0, 0.5)
-      .setDepth(2);
+      .setDepth(HudDepth.Glyph);
+
+    // Everything above is born visible, so an unused slot would show a blank
+    // card for the frame between here and the first render.
+    this.clear();
   }
 
   /** Draws the child at this slot, or clears the slot when there is none. */
@@ -89,22 +107,32 @@ export class OrderCard {
       this.stamp(customer);
     }
 
-    const { patience } = customer;
-    // An opening-level child has no clock at all, so the card shows no bar
-    // rather than a full one that never moves (design §7).
-    this.barTrack.setVisible(patience !== undefined);
-    this.barFill.setVisible(patience !== undefined);
-    if (patience === undefined) return;
+    if (customer.patience === undefined) return;
 
-    const left = Math.min(Math.max(patience.remainingMs / patience.totalMs, 0), 1);
-    this.barFill.setDisplaySize(BAR_WIDTH * left, BAR_HEIGHT);
+    // 56 px over 35 s is a fifth of a pixel a second, so all but one frame in
+    // thirty would redraw the identical bar. Whole pixels also sit better
+    // against the rest of the art.
+    const width = Math.round(BAR_WIDTH * patienceFraction(customer.patience));
+    if (width === this.shownBarWidth) return;
+
+    this.shownBarWidth = width;
+    this.barFill.setDisplaySize(width, BAR_HEIGHT);
   }
 
   /** The candy and the jars that go into it — only when the child changes. */
   private stamp(customer: Customer): void {
+    this.cleared = false;
     this.background.setVisible(true);
     show(this.candy, true);
     paint(this.candy, customer.want);
+
+    // An opening-level child has no clock at all, so the card shows no bar
+    // rather than a full one that never moves (design §7). Patience is fixed
+    // when a customer is created, so this never changes under the same id.
+    const ticking = customer.patience !== undefined;
+    this.barTrack.setVisible(ticking);
+    this.barFill.setVisible(ticking);
+    this.shownBarWidth = -1;
 
     const primaries = primariesOf(customer.want);
     this.jars.forEach((jar, index) => {
@@ -115,12 +143,16 @@ export class OrderCard {
       paint(jar, primary);
       // One jar sits centred; two spread either side of the middle.
       const offset = primaries.length === 1 ? 0 : (index * 2 - 1) * JAR_SPREAD;
-      jar.image.setX(this.background.x + offset);
-      jar.glyph?.setX(this.background.x + offset);
+      jar.image.setX(this.centreX + offset);
+      jar.glyph?.setX(this.centreX + offset);
     });
   }
 
+  /** Guarded because an empty slot is redrawn every frame it stays empty. */
   private clear(): void {
+    if (this.cleared) return;
+
+    this.cleared = true;
     this.shownId = undefined;
     this.background.setVisible(false);
     show(this.candy, false);

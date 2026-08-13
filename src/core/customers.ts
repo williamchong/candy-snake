@@ -1,4 +1,4 @@
-import type { ColorMask, Customer } from './types';
+import type { ColorMask, Customer, Patience } from './types';
 
 /**
  * The queue at the serving window. Pure list operations — scoring, lives and
@@ -77,6 +77,21 @@ export const matchIndex = (customers: readonly Customer[], color: ColorMask): nu
   return best;
 };
 
-/** Takes a served customer out of the queue, leaving the order intact. */
-export const removeAt = (customers: readonly Customer[], index: number): Customer[] =>
-  customers.filter((_unused, at) => at !== index);
+/**
+ * How much of the bar is left, 0…1. The score bonus pays on this and the card
+ * draws it, so both have to read the same number or the payout can drift from
+ * what the player watched drain. A customer who cannot run out has no bar and
+ * earns no bonus, which is the same 0.
+ */
+export const patienceFraction = (patience: Patience | undefined): number => {
+  if (patience === undefined || patience.totalMs <= 0) return 0;
+
+  return Math.min(Math.max(patience.remainingMs / patience.totalMs, 0), 1);
+};
+
+/**
+ * Takes the item at `index` out, leaving the order intact — a served customer
+ * off the queue, a matched candy off the rack.
+ */
+export const removeAt = <T>(items: readonly T[], index: number): T[] =>
+  items.filter((_unused, at) => at !== index);

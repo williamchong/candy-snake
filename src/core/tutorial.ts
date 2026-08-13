@@ -45,11 +45,9 @@ export const rollTutorial = (rng: Rng): TutorialLevel[] => {
 };
 
 /**
- * The jars the spawner keeps on the board: the current level's stock while the
- * tutorial runs, and every primary once it is over — which is the Phase 2 floor
- * the game had before, and what Phase 5's pity spawner replaces (design §8).
+ * The jars the spawner keeps on the board: the level's own stock while the
+ * tutorial runs, and every primary once it is over — which is the floor the
+ * game had before, and what Phase 5's pity spawner replaces (design §8).
  */
-export const stockedPrimaries = (
-  levels: readonly TutorialLevel[],
-  index: number,
-): readonly Primary[] => levels[index]?.stock ?? PRIMARIES;
+export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Primary[] =>
+  level?.stock ?? PRIMARIES;

@@ -59,7 +59,7 @@ describe('spawner placement', () => {
     ]);
 
     for (let seed = 0; seed < 200; seed += 1) {
-      for (const spawned of ensurePickups(state, createRng(seed))) {
+      for (const spawned of ensurePickups(state, createRng(seed), PRIMARIES)) {
         expect(forbidden.has(cellKey(spawned.pos))).toBe(false);
       }
     }
@@ -69,7 +69,7 @@ describe('spawner placement', () => {
     const state = stateWith();
 
     for (let seed = 0; seed < 200; seed += 1) {
-      for (const spawned of ensurePickups(state, createRng(seed))) {
+      for (const spawned of ensurePickups(state, createRng(seed), PRIMARIES)) {
         expect(isChopBlock(spawned.pos)).toBe(false);
       }
     }
@@ -81,7 +81,7 @@ describe('spawner placement', () => {
     const forbidden = new Set(rubble.map(cellKey));
 
     for (let seed = 0; seed < 200; seed += 1) {
-      for (const spawned of ensurePickups(state, createRng(seed))) {
+      for (const spawned of ensurePickups(state, createRng(seed), PRIMARIES)) {
         expect(forbidden.has(cellKey(spawned.pos))).toBe(false);
       }
     }
@@ -89,7 +89,7 @@ describe('spawner placement', () => {
 
   it('never stacks two pickups spawned in the same tick', () => {
     for (let seed = 0; seed < 200; seed += 1) {
-      const spawned = ensurePickups(stateWith(), createRng(seed));
+      const spawned = ensurePickups(stateWith(), createRng(seed), PRIMARIES);
 
       expect(spawned).toHaveLength(4); // sugar + one jar of each primary
       expect(new Set(spawned.map((pickup) => cellKey(pickup.pos))).size).toBe(4);
@@ -99,8 +99,8 @@ describe('spawner placement', () => {
   it('is deterministic for a given seed', () => {
     const state = stateWith();
 
-    expect(ensurePickups(state, createRng(99))).toEqual(
-      ensurePickups(state, createRng(99)),
+    expect(ensurePickups(state, createRng(99), PRIMARIES)).toEqual(
+      ensurePickups(state, createRng(99), PRIMARIES),
     );
   });
 
@@ -109,20 +109,20 @@ describe('spawner placement', () => {
       sugar(keyToCell(key)),
     );
 
-    expect(ensurePickups(stateWith([], everyCell), createRng(1))).toEqual([]);
+    expect(ensurePickups(stateWith([], everyCell), createRng(1), PRIMARIES)).toEqual([]);
   });
 });
 
 describe('spawner stock levels', () => {
   it('leaves a fully stocked board alone', () => {
-    expect(ensurePickups(stateWith([], stocked()), createRng(1))).toEqual([]);
+    expect(ensurePickups(stateWith([], stocked()), createRng(1), PRIMARIES)).toEqual([]);
   });
 
   it('replaces only what is missing', () => {
     const short = stocked().filter(
       (pickup) => !(pickup.kind === 'dye' && pickup.primary === YELLOW),
     );
-    const spawned = ensurePickups(stateWith([], short), createRng(1));
+    const spawned = ensurePickups(stateWith([], short), createRng(1), PRIMARIES);
 
     expect(spawned).toHaveLength(1);
     expect(spawned[0]).toMatchObject({ kind: 'dye', primary: YELLOW });
@@ -130,7 +130,7 @@ describe('spawner stock levels', () => {
 
   it('holds the "at least one sugar" invariant (design §8.1)', () => {
     const noSugar = stocked().filter((pickup) => pickup.kind !== 'sugar');
-    const spawned = ensurePickups(stateWith([], noSugar), createRng(1));
+    const spawned = ensurePickups(stateWith([], noSugar), createRng(1), PRIMARIES);
 
     expect(spawned).toHaveLength(1);
     expect(spawned[0]?.kind).toBe('sugar');
@@ -140,16 +140,17 @@ describe('spawner stock levels', () => {
     const state = stateWith([], stocked());
 
     for (const primary of PRIMARIES) {
-      const jars = [...state.pickups, ...ensurePickups(state, createRng(3))].filter(
-        (pickup) => pickup.kind === 'dye' && pickup.primary === primary,
-      );
+      const jars = [
+        ...state.pickups,
+        ...ensurePickups(state, createRng(3), PRIMARIES),
+      ].filter((pickup) => pickup.kind === 'dye' && pickup.primary === primary);
 
       expect(jars).toHaveLength(1);
     }
   });
 
   it('spawns in a fixed order, so a seed replays identically', () => {
-    const spawned = ensurePickups(stateWith(), createRng(5));
+    const spawned = ensurePickups(stateWith(), createRng(5), PRIMARIES);
 
     expect(
       spawned.map((pickup) => (pickup.kind === 'sugar' ? 'sugar' : pickup.primary)),
