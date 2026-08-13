@@ -21,6 +21,7 @@ Check the plan for the current phase before adding anything; features listed in 
 - `npx vitest run src/core/foo.test.ts` — single test file; add `-t 'name'` for one test
 - `npm run typecheck` / `npm run lint` / `npm run format:check` — gates; all must pass before committing
 - `npm run build` — typecheck + production build to `dist/`
+- `node .claude/skills/run-candy-snake/driver.mjs` — headless smoke run: boots the game in Chromium, fails on console errors or missing canvas, saves a screenshot (see the run-candy-snake skill)
 
 ## Architecture: engine-free core
 
