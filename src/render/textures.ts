@@ -20,6 +20,8 @@ export const TextureKey = {
   Segment: 'segment',
   Sugar: 'sugar',
   Dye: 'dye',
+  Candy: 'candy',
+  Block: 'block',
   Floor: 'floor',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
@@ -120,6 +122,38 @@ const DYE = [
   '.AAAAAA.',
 ];
 
+/**
+ * A wrapped sweet: the pinched twists at either end are the whole point of the
+ * silhouette. A candy is a segment that has been through the block, so it must
+ * not read as one — same tint, different shape.
+ */
+const CANDY = [
+  '........',
+  'A..AA..A',
+  'AA9999AA',
+  'A999999A',
+  'A999999A',
+  'AA9999AA',
+  'A..AA..A',
+  '........',
+];
+
+/**
+ * The chopping block: a slab of three planks that fills its cell edge to edge,
+ * so a run of them reads as one bench. Station, not candy — it is tinted by
+ * value rather than hue (design §4, palette constraints).
+ */
+const BLOCK = [
+  'AAAAAAAA',
+  'A999999A',
+  'A888888A',
+  'A999999A',
+  'A999999A',
+  'A888888A',
+  'A999999A',
+  'AAAAAAAA',
+];
+
 const FLOOR_BANDS = ['1', '2', '3', '4', '5', '6'];
 const BAND_WIDTH = 3;
 
@@ -147,6 +181,8 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.Head]: HEAD,
   [TextureKey.Sugar]: SUGAR,
   [TextureKey.Dye]: DYE,
+  [TextureKey.Candy]: CANDY,
+  [TextureKey.Block]: BLOCK,
   [TextureKey.Floor]: FLOOR,
 };
 

@@ -72,6 +72,13 @@ export class GameScene extends Phaser.Scene {
         this.view.splash(event.segment.pos, event.segment.color);
         return;
 
+      case 'candy-chopped':
+        // Placeholder pop: the same one-cell puff a crumbling block makes,
+        // in the candy's color. The juice pass (Phase 7) gives chopping its
+        // own effect.
+        this.view.splash(event.pos, event.color);
+        return;
+
       case 'dye-spent':
         // A dye that landed needs nothing here — the strand visibly recolored
         // segment by segment. One that kneaded nothing has to say so (§5).
@@ -79,7 +86,11 @@ export class GameScene extends Phaser.Scene {
         return;
 
       // Nothing to play yet; the juice pass (Phase 7) fills these in.
+      // `candy-staled` gets the stale-candy toss (design §5) when the shelf
+      // strip moves into UIScene in Phase 4.
+      case 'candy-staled':
       case 'strand-broken':
+      case 'strand-cut':
       case 'dye-kneaded':
       case 'sugar-pulled':
       case 'sugar-spawned':
