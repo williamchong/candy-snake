@@ -22,6 +22,15 @@ export type Primary = (typeof PRIMARIES)[number];
 export const blend = (color: ColorMask, dye: Primary): ColorMask => color | dye;
 
 /**
+ * The primaries a mix is made of — `blend` read backwards. Order cards show
+ * these as component dots, which is the game's primary channel for teaching
+ * mixing (design §4), and the opening levels stock the board from them
+ * (`tutorial.ts`).
+ */
+export const primariesOf = (color: ColorMask): Primary[] =>
+  PRIMARIES.filter((primary) => (color & primary) !== 0);
+
+/**
  * How hard a color is to produce, which is what difficulty will mix orders by
  * (design §4). Brown is not a tier — it is the over-mix mistake, and no
  * regular customer orders it.

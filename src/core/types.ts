@@ -96,6 +96,27 @@ export interface Candy {
   readonly bornAt: number;
 }
 
+/**
+ * A patience timer, drained in real ms so the bar stays smooth however fast
+ * the ramp is driving the snake (architecture §5). `totalMs` is kept so the
+ * bar and the score bonus can both read a fraction without a second lookup.
+ */
+export interface Patience {
+  readonly remainingMs: number;
+  readonly totalMs: number;
+}
+
+/**
+ * A child at the serving window. `patience` is undefined for a customer who
+ * never leaves — the three opening levels use those, because a tutorial that
+ * runs on every single run must not be able to cost the run (design §7).
+ */
+export interface Customer {
+  readonly id: number;
+  readonly want: ColorMask;
+  readonly patience: Patience | undefined;
+}
+
 export interface GameState {
   snake: SnakeState;
   pickups: Pickup[];
