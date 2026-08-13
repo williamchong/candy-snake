@@ -2,4 +2,6 @@
 export const SceneKey = {
   Boot: 'Boot',
   Game: 'Game',
+  /** Runs in parallel above Game, never on its own (architecture §6). */
+  UI: 'UI',
 } as const;

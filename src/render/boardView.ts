@@ -1,11 +1,9 @@
 import type Phaser from 'phaser';
 
-import { CHOP_BLOCK_CELLS, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
+import { CHOP_BLOCK_CELLS, COLS, ROWS } from '../core/board';
 import { colorInfo, type Primary } from '../core/colors';
-import { SHELF_SLOTS } from '../core/shelf';
 import {
   RAW,
-  type Candy,
   type ColorMask,
   type GameState,
   type Pickup,
@@ -14,15 +12,18 @@ import {
   type SnakeState,
   type Vec2,
 } from '../core/types';
-import { strandSpriteAt } from './strand';
 import {
-  CELL_SIZE,
-  PIXEL_SCALE,
-  STRAND_TEXTURES,
-  TextureKey,
-  glyphTextureKey,
-  type GlyphTextureKey,
-} from './textures';
+  BORDER,
+  makeDrawn,
+  makeSprite,
+  paint,
+  place,
+  show,
+  type Drawn,
+  type DrawnConfig,
+} from './drawn';
+import { strandSpriteAt } from './strand';
+import { CELL_SIZE, PIXEL_SCALE, STRAND_TEXTURES, TextureKey } from './textures';
 
 /**
  * Board geometry. 16×16 cells at 32 px is 512×512, parked left of centre in
@@ -32,7 +33,9 @@ import {
  */
 const BOARD_X = 64;
 const BOARD_Y = 64;
-const BORDER = 0xc9b4dd;
+
+/** Where the kitchen ends and the serving column begins — the HUD anchors here. */
+export const BOARD_RIGHT = BOARD_X + COLS * CELL_SIZE;
 /**
  * Chrome thickness in screen pixels. Held separately from `PIXEL_SCALE`: how
  * thick an outline should look is not a function of how many source texels a
@@ -40,16 +43,13 @@ const BORDER = 0xc9b4dd;
  * silently redraws the furniture.
  */
 const BOARD_BORDER_WIDTH = 4;
-const SLOT_BORDER_WIDTH = 2;
 
 /**
  * Hue carries meaning in this game, so only candies may spend it (design §4,
- * palette constraints). Nothing here is a candy: the head and the symbol ink
- * are separated by value — the darkest things on the board — and sugar is the
- * near-white of raw, unmixed sugar. Candy hues all come from `core/colors.ts`.
+ * palette constraints). The head is not a candy: it is separated by value, as
+ * the darkest thing on the board.
  */
 const HEAD_TINT = 0x6e6478;
-const GLYPH_TINT = 0x5f5668;
 
 /**
  * The bench sits between the head and the floor in value, and takes no hue —
@@ -59,9 +59,6 @@ const BLOCK_TINT = 0xc4b2d2;
 
 /** A sugar cube is raw sugar, so it takes raw's color from the palette. */
 const SUGAR_TINT = colorInfo(RAW).hex;
-
-/** Leaves a texture's own pixels alone, for sprites that tint per item. */
-const NO_TINT = 0xffffff;
 
 const SHATTER_MS = 280;
 
@@ -79,23 +76,12 @@ const DYE_FLASH_MS = 120;
 /** Enough to read debris as spilled sugar rather than as live strand. */
 const DEBRIS_ALPHA = 0.5;
 
-/** The pixel centre of a board row. `cellToPixel` is this plus the column. */
-const rowToPixel = (row: number): number => BOARD_Y + row * CELL_SIZE + CELL_SIZE / 2;
-
 /**
- * The shelf strip: six slots in the free column beside the board, starting
- * level with the top of the chopping block and running down from it. The rack
- * has to sit on the same wall the bench cuts against, or the player makes
- * candy at one edge of the board and hunts for where it went at another; the
- * column below it is left for the customer window in Phase 4, so the whole
- * line — bench, rack, queue — reads down one side (design §10). The slot
- * geometry is throwaway — the HUD moves into `UIScene` in Phase 4
- * (architecture §6) — but the anchoring to the bench row is not.
+ * The pixel centre of a board row. `cellToPixel` is this plus the column, and
+ * the HUD uses it to hang the shelf level with the bench (design §10).
  */
-const SHELF_X = BOARD_X + COLS * CELL_SIZE + 96;
-const SHELF_TOP = rowToPixel(CHOP_BLOCK_TOP);
-const SHELF_PITCH = 48;
-const SLOT_SIZE = 40;
+export const rowToPixel = (row: number): number =>
+  BOARD_Y + row * CELL_SIZE + CELL_SIZE / 2;
 
 /**
  * Every glyph sits directly above the sprite it labels, so the layers pair up.
@@ -113,9 +99,6 @@ const Depth = {
   SegmentGlyph: 7,
   Head: 8,
   Shard: 9,
-  /** Beside the board, not on it — the HUD never overlaps the play field. */
-  Shelf: 10,
-  ShelfGlyph: 11,
 } as const;
 
 /**
@@ -137,27 +120,13 @@ interface Placed {
   readonly angle?: number;
 }
 
-/** A sprite and the accessibility symbol stamped on it, moved as one. */
-interface Drawn {
-  readonly image: Phaser.GameObjects.Image;
-  /** The symbol riding along with it, for layers that want one. */
-  readonly glyph: Phaser.GameObjects.Image | undefined;
-}
-
 /** A sprite mid-slide between the cell it left and the cell it is entering. */
 interface Sliding extends Drawn {
   from: Vec2;
   to: Vec2;
 }
 
-interface PoolConfig {
-  readonly key: TextureKey;
-  /**
-   * For pools whose items carry no color of their own. Pools that do — the
-   * strand and the dye jars — leave this out and are tinted per item instead.
-   */
-  readonly tint?: number;
-  readonly depth: number;
+interface PoolConfig extends DrawnConfig {
   /**
    * Whether a sprite keeps its identity between ticks. The strand does — a
    * body segment slides into the cell ahead of it. Pickups do not: spending
@@ -166,29 +135,12 @@ interface PoolConfig {
    * either — it is frozen by definition.
    */
   readonly slides: boolean;
-  /** Drawn at this alpha, for layers that must read as inert (debris). */
-  readonly alpha?: number;
-  /** Depth for the symbol glyph, or undefined to draw none (design §4). */
-  readonly glyphDepth?: number;
 }
 
 const cellToPixel = (cell: Vec2): Vec2 => ({
   x: BOARD_X + cell.x * CELL_SIZE + CELL_SIZE / 2,
   y: rowToPixel(cell.y),
 });
-
-/** Glyphs are baked at their display size, so they draw unscaled. */
-const GLYPH_SCALE = 1;
-
-const makeSprite = (
-  scene: Phaser.Scene,
-  key: TextureKey | GlyphTextureKey,
-  tint: number,
-  depth: number,
-  at: Vec2,
-  scale = PIXEL_SCALE,
-): Phaser.GameObjects.Image =>
-  scene.add.image(at.x, at.y, key).setScale(scale).setTint(tint).setDepth(depth);
 
 /**
  * Whether two pixel positions are one cell apart — the only distance a sprite
@@ -202,21 +154,6 @@ const isOneCellApart = (a: Vec2, b: Vec2): boolean => {
 };
 
 /**
- * Moves a sprite and the glyph riding on it together, so they never drift.
- * Takes loose numbers because the per-frame path calls it for every visible
- * sprite, and a Vec2 per sprite per frame is pure garbage.
- */
-const place = (entry: Drawn, x: number, y: number): void => {
-  entry.image.setPosition(x, y);
-  entry.glyph?.setPosition(x, y);
-};
-
-const show = (entry: Drawn, visible: boolean): void => {
-  entry.image.setVisible(visible);
-  entry.glyph?.setVisible(visible);
-};
-
-/**
  * Blends two packed 0xRRGGBB tints channel by channel: `t` of 0 gives `from`,
  * 1 gives `to`. Hand-rolled rather than taken from `Phaser.Display.Color`
  * because this module imports Phaser for types only, and one lerp is not worth
@@ -227,41 +164,6 @@ const mixTint = (from: number, to: number, t: number): number => {
     Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t) << shift;
 
   return channel(16) | channel(8) | channel(0);
-};
-
-/** Colorless items keep whatever tint they were built with. */
-const paint = (entry: Drawn, color: ColorMask | undefined): void => {
-  if (color === undefined) return;
-
-  entry.image.setTint(colorInfo(color).hex);
-  entry.glyph?.setTexture(glyphTextureKey(color));
-};
-
-/**
- * A sprite plus its symbol glyph, built as a pair so every layer that wants a
- * glyph gets the same alignment and the same alpha (design §4).
- */
-const makeDrawn = (
-  scene: Phaser.Scene,
-  config: Pick<PoolConfig, 'key' | 'tint' | 'depth' | 'glyphDepth' | 'alpha'>,
-  at: Vec2,
-): Drawn => {
-  const { key, tint, depth, glyphDepth, alpha } = config;
-
-  return {
-    image: makeSprite(scene, key, tint ?? NO_TINT, depth, at).setAlpha(alpha ?? 1),
-    glyph:
-      glyphDepth === undefined
-        ? undefined
-        : makeSprite(
-            scene,
-            glyphTextureKey(RAW),
-            GLYPH_TINT,
-            glyphDepth,
-            at,
-            GLYPH_SCALE,
-          ).setAlpha(alpha ?? 1),
-  };
 };
 
 /**
@@ -435,58 +337,6 @@ const strandPieces = ({ head, body }: SnakeState): Placed[] =>
     };
   });
 
-/**
- * The candy cache, drawn beside the board: one sprite per slot, shown only
- * while a candy occupies it. Oldest sits at the top, which is the order the
- * core keeps the shelf in (design §5).
- */
-class ShelfStrip {
-  private readonly slots: Drawn[] = [];
-  /** The shelf the slots currently show — see `render`. */
-  private drawn: readonly Candy[] | undefined;
-
-  constructor(scene: Phaser.Scene) {
-    for (let slot = 0; slot < SHELF_SLOTS; slot += 1) {
-      const at = { x: SHELF_X, y: SHELF_TOP + slot * SHELF_PITCH };
-
-      scene.add
-        .rectangle(at.x, at.y, SLOT_SIZE, SLOT_SIZE)
-        // The board's own outline: an empty slot is chrome, and chrome on this
-        // board is one color.
-        .setStrokeStyle(SLOT_BORDER_WIDTH, BORDER)
-        .setDepth(Depth.Floor);
-
-      this.slots.push(
-        makeDrawn(
-          scene,
-          {
-            key: TextureKey.Candy,
-            depth: Depth.Shelf,
-            glyphDepth: Depth.ShelfGlyph,
-          },
-          at,
-        ),
-      );
-    }
-  }
-
-  /**
-   * The core replaces the whole shelf array whenever a candy is racked, so an
-   * unchanged reference means an unchanged shelf — and re-stamping six glyph
-   * textures every grid move to draw the same six candies is pure waste.
-   */
-  render(shelf: readonly Candy[]): void {
-    if (shelf === this.drawn) return;
-    this.drawn = shelf;
-
-    this.slots.forEach((slot, index) => {
-      const candy = shelf[index];
-      show(slot, candy !== undefined);
-      if (candy !== undefined) paint(slot, candy.color);
-    });
-  }
-}
-
 /** Draws the board from game state. Owns no rules — it only reflects state. */
 export class BoardView {
   private readonly head: SpritePool;
@@ -495,7 +345,6 @@ export class BoardView {
   private readonly dyes: SpritePool;
   private readonly debris: SpritePool;
   private readonly batch: SpritePool;
-  private readonly shelf: ShelfStrip;
   private readonly shards: ShardBurst;
   private previousPickups: readonly Pickup[] | undefined;
   /** The head's dye flash, held so a second jar can cut the first one short. */
@@ -552,7 +401,6 @@ export class BoardView {
       depth: Depth.Head,
       slides: true,
     });
-    this.shelf = new ShelfStrip(scene);
     this.shards = new ShardBurst(scene);
   }
 
@@ -564,7 +412,6 @@ export class BoardView {
     const { crumble, chop } = splitByFate(state.severed);
     this.debris.retarget(crumble);
     this.batch.retarget(chop);
-    this.shelf.render(state.shelf);
 
     // The strand is drawn *arriving* at the cell it already occupies
     // logically, so it trails the simulation by one move. Pickups have to

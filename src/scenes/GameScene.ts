@@ -41,6 +41,9 @@ export class GameScene extends Phaser.Scene {
     this.accumulatorMs = 0;
 
     bindKeyboard(this, this.turns);
+    // The HUD runs in parallel and reads the same core, read-only
+    // (architecture §6).
+    this.scene.launch(SceneKey.UI, { core: this.core });
     this.view.syncToState(this.core.state);
   }
 
@@ -91,9 +94,10 @@ export class GameScene extends Phaser.Scene {
         if (event.kneaded === 0) this.view.splash(event.pos, event.primary);
         return;
 
-      // The serving window is drawn by UIScene, which listens to the same
-      // events; the board itself has nothing to play for them. `game-over`
-      // hands off to GameOverScene once the scene flow lands.
+      // The serving window is UIScene's, and it draws the queue from state
+      // every frame — the board itself has nothing to play for these. The juice
+      // pass (Phase 7) gives serves and losses their own effects, and
+      // `game-over` hands off to GameOverScene once the scene flow lands.
       case 'customer-arrived':
       case 'customer-served':
       case 'customer-left':
