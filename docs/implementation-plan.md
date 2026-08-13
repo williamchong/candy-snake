@@ -107,8 +107,41 @@ over, restart — is playable start to finish with keyboard.
   tuning table. **Expect to iterate here — budget real playtime.**
 
 **Done when:** a decent player survives ~8–10 min on a first real run and
-death feels earned (post-playtest judgment call), and simulation asserts no
-order is ever primary-starved.
+death feels earned (post-playtest judgment call), simulation asserts no order
+is ever primary-starved, and the batching bot outscores the grinder.
+
+### Where the balance stands going in
+
+Measured at the end of Phase 4, two seeded bots over ten minutes on four seeds
+(`core/simulation.test.ts`, "the reference players, before the balancing
+pass"). The numbers are committed as assertions so this phase's diff shows what
+it moved; all of them are expected to change here.
+
+- **Nothing can lose.** Both bots finish untouched on 3 lives — and one of them
+  is the laziest strategy in the game, a single segment carried to the bench
+  and back. Against a target of dying around 8–10 minutes, the ramp currently
+  has no teeth at all.
+- **Demand is the binding constraint, not the maker.** Both bots serve ~52 in
+  ten minutes: the 12 s `arrivalIntervalMs` runs out ~50 times over those 600 s,
+  and the three opening levels make up the rest. The grinder chops ~135 to
+  serve them and the batcher ~165, staling the difference on a permanently full
+  shelf. Neither is near its own throughput ceiling, so **supply-side levers
+  move nothing until arrival interval and queue cap have taken up the slack** —
+  the dye economy included.
+- **Batching is currently punished.** The bot that builds a production line
+  does strictly more work for the same serves, stales ~40% more, and scores no
+  better than the grinder. Playing the way the color system was designed for is
+  the worse way to play, which is the single most important thing to invert
+  here.
+
+Hence two reference bots rather than one: tightening the ramp until the
+*grinder* dies on schedule would calibrate the game around the strategy it
+least wants to reward, and make it brutal for anyone playing as intended.
+
+The instant dye respawn (design §8's "cap doubles as a floor" stopgap) is worth
+retiring here as the pity spawner lands, since scarcity is what makes dye
+*order* matter — but on the numbers above it is a fine-tuning lever, not the
+fix, and §8.3's 5 s guarantee caps how hard it can ever bite.
 
 ## Phase 6 — Mobile & responsive (L)
 
