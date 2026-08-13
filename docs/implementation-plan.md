@@ -55,12 +55,18 @@ and the strand visibly turns one segment at a time as it crosses a jar.
 
 ## Phase 3 — Chopping block & shelf (M)
 
-- Chopping block station cells on the board; chop mode (snake halts, tail
-  segments → candies one per chop tick, head released after).
+- Chopping block station cells along the top wall. Reaching one cuts the whole
+  strand loose (design §5): the maker drives on empty-handed, and the batch
+  freezes where it lay and is drawn into the block one segment per move, block
+  end first. No chop mode, no halt — the strand is never dragged or teleported.
+- A cut piece is one concept whichever way it was cut: `crumble` (self-hit) and
+  `chop` share the frozen-and-consumed-one-per-move machinery, and differ only
+  in what each segment becomes.
 - Shelf model (6 slots, oldest-evicted) + minimal shelf strip in a temporary
   HUD corner.
 - Events wired to placeholder effects (pop per chop).
-- Unit tests: chop ordering & colors, mid-chop state, shelf eviction.
+- Unit tests: chop ordering & colors, batch drain, pickups re-closed by a cut,
+  shelf eviction, block cells excluded from spawns.
 
 **Done when:** grow → dye → chop produces the right candies in the right
 order, visible on the shelf.
@@ -152,8 +158,10 @@ every core event has audiovisual feedback.
 
 ## Risks & mitigations
 
-- **Chop-mode feel** (snake frozen while chopping may frustrate) — prototype
-  in Phase 3; fallback: instant chop with staggered candy *animation* only.
+- **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
+  the block cuts the strand loose and the maker never stops moving. The
+  fallback held in reserve (instant chop, staggered animation) is close to
+  what shipped, minus the freeze.
 - **Swipe latency vs. grid ticks** — mid-drag threshold detection (arch §8);
   validate on real devices early in Phase 6, not at the end.
 - **Color confusion for colorblind players** — symbols are in from Phase 2,

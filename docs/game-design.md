@@ -30,8 +30,8 @@ Traditional candy making, step by step, mapped onto game verbs:
 | Chopping into candies      | Driving into the **chopping block**            |
 | Serving the shop window    | Auto-matching candies to **customer orders**   |
 
-The board is the kitchen floor. The chopping block sits in a fixed corner next
-to the serving window where customers (children) appear.
+The board is the kitchen floor. The chopping block is a fixed bench along the
+top wall, beside the serving window where customers (children) appear.
 
 ### Art direction — pastel cotton candy (chosen in Phase 1)
 
@@ -204,14 +204,22 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 
 ### Chopping block
 
-- A fixed station occupying a small run of cells along one wall, adjacent to
-  the serving window.
-- When the head enters a chopping-block cell, the snake enters **chop mode**:
-  it stops moving, and body segments are removed **from the tail, one per
-  chop tick**, each becoming a candy of that segment's color. When the body is
-  gone the head is released (brief invulnerable hop back onto the grid).
-- Chopping the whole strand is intentional: unmatched candies aren't wasted —
-  they go to the shelf.
+- A fixed station occupying a small run of cells along the top wall, next to
+  the serving window. Only a few cells wide, so the row it sits in is still a
+  lane the player can use — crossing the bench must be a decision, not a toll.
+- **Reaching it cuts the strand loose.** The head entering a bench cell severs
+  the whole strand there and keeps going: the maker drives on, empty-handed
+  and immediately free to start pulling the next batch.
+- The cut batch **stays exactly where it lay** and is drawn into the block
+  **one segment per move, from the block end**, each leaving as a candy of
+  that segment's color. Nothing is dragged across the board and nothing
+  teleports — the same rule pickups follow above, and breaks in §6.
+- Candies therefore come out **oldest sugar first**: the dyed head end of the
+  batch leads and the raw tail end trails, which is the production line read
+  back in the order it was made.
+- Chopping the whole strand is intentional — there is no partial cut. Anything
+  no customer wants isn't wasted: it goes to the shelf.
+- The maker is not sugar, so a head crossing the bench alone cuts nothing.
 
 ### Shelf (candy cache)
 
@@ -219,7 +227,9 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 - When a new customer arrives, the shelf is checked first — instant serve if a
   match exists.
 - If the shelf is full, the **oldest** candy is discarded (with a visible
-  "stale candy" toss animation) to make room.
+  "stale candy" toss animation) to make room. A batch longer than the shelf is
+  therefore a real risk: chop twelve segments with no customers waiting and the
+  first six are gone.
 
 ### Customers (children)
 
@@ -244,10 +254,12 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
   spawn on it while it is still there.
 - A pickup the lost length was still passing through is **left on the board,
   closed again** — the strand that was drawing through it no longer exists, so
-  the head has to come back for it.
+  the head has to come back for it. A batch cut at the block leaves its
+  pickups the same way, for the same reason.
 - **Walls:** the kitchen edges wrap (pass-through service doors on each wall —
   exit left, re-enter right). This keeps flow forgiving on mobile. Station
-  cells (chopping block) are solid interactables, not hazards.
+  cells (the chopping block) are crossed, not collided with: they interact
+  with whatever passes over them and are never hazards.
 - **Lives:** start with **3**. Lost only by letting a customer's patience
   expire. 0 lives → game over → score screen + local high-score table.
 

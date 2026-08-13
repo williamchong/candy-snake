@@ -101,15 +101,17 @@ export const blend = (c: ColorMask, dye: ColorMask): ColorMask => c | dye;
 
 // types.ts
 interface Segment { pos: Vec2; color: ColorMask }
-interface SnakeState { head: Vec2; dir: Dir; body: Segment[]; mode: 'moving' | 'chopping' }
+interface SnakeState { head: Vec2; dir: Dir; body: Segment[] }   // no chop mode: the block cuts, the maker drives on
 // A pickup is opened by the head and spent when the strand clears it, so its
 // in-between state lives in core state, not in a Phaser tween (design §5).
 type Pickup = { pos: Vec2; open: boolean } & ({ kind: 'sugar' } | { kind: 'dye'; primary; kneaded: number })
-interface Debris { segments: Segment[] }   // frozen break, crumbles impact-end first
-interface Candy { color: ColorMask; bornAt: number }
+// One concept for both ways a strand comes off the maker: frozen where it was
+// cut, consumed one segment per move from segments[0]. Only the ending differs.
+interface Severed { segments: Segment[]; fate: 'crumble' | 'chop' }
+interface Candy { color: ColorMask; bornAt: number }   // bornAt is a tick, never a wall clock
 interface Customer { id: number; want: ColorMask; patienceMs: number; maxPatienceMs: number }
 interface GameState {
-  snake: SnakeState; pickups: Pickup[]; debris: Debris[]; shelf: Candy[];
+  snake: SnakeState; pickups: Pickup[]; severed: Severed[]; shelf: Candy[];
   customers: Customer[]; score: number; lives: number;
   streak: number; elapsedMs: number; served: number; over: boolean;
 }
@@ -117,7 +119,8 @@ interface GameState {
 
 `Game.step(dtMs, inputs)` advances everything and returns `GameEvent[]`
 (`sugar-pulled`, `sugar-spawned`, `dye-kneaded`, `dye-spent`, `dye-spawned`,
-`strand-broken`, `debris-crumbled`, `candy-chopped`,
+`strand-broken`, `debris-crumbled`, `strand-cut`, `candy-chopped`,
+`candy-staled`,
 `customer-arrived`, `customer-served`, `customer-left`, `life-lost`,
 `game-over`, …). The Phaser layer never mutates core state; it only renders it
 and plays effects per event. Events carry the data needed for presentation
@@ -128,7 +131,8 @@ and plays effects per event. Events carry the data needed for presentation
 - **Render:** Phaser's `update(time, delta)` every animation frame.
 - **Logic:** fixed-timestep accumulator inside `GameScene.update` calling
   `game.step(TICK_MS)`; snake moves one cell every `moveIntervalMs` (a
-  difficulty knob), chop mode consumes one segment per chop interval.
+  difficulty knob). A cut piece — crumbling or chopping — gives up one segment
+  per grid move, so the board runs on a single clock and needs no second knob.
 - Patience bars and arrival timers tick in real ms (accumulated per step) so
   they stay smooth and frame-rate independent.
 - **Rendering runs at a different granularity than logic:** sprites are only
@@ -215,7 +219,7 @@ back to defaults silently. No PII, no backend.
 
 - **Unit (Vitest, core only):** color blending table (all 8×3 dye
   applications), self-hit shatter boundaries (hit neck, hit tail, hit middle),
-  chop ordering (tail-first, colors preserved), order matching + shelf
+  chop ordering (block end first, colors preserved), order matching + shelf
   eviction, pity-spawner guarantees, difficulty curve monotonicity, scoring
   incl. streak caps. Deterministic via seeded `rng.ts`.
 - **Simulation tests:** run `Game.step` thousands of ticks with a scripted
