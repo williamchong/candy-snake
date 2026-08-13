@@ -77,25 +77,29 @@ order, visible on the shelf.
 The phase where it becomes a *game*.
 
 - `core/orders.ts` + `customers.ts`: arrivals, patience countdown, queue cap;
-  order generation per difficulty stage table (start with static Warm-up
-  values).
+  order generation per difficulty stage table, from one static stage row.
+- `core/tutorial.ts`: the three opening levels every run starts with (design
+  §7) — one customer each, the board stocked with exactly what that order
+  needs, and no patience clock until they are done. They also decide what the
+  spawner stocks, so `ensurePickups` takes its stock list from the caller.
 - Matching: on candy produced and on customer arrival, serve from
   production/shelf automatically.
 - Scoring (base + patience bonus + streak), lives, game over.
-- `UIScene`: order cards (color + component dots + patience bar), lives,
+- `UIScene`: order cards (color + the jars that go in + patience bar), lives,
   score, shelf strip moved here.
 - Menu → Game → GameOver scene flow; restart.
 - Unit + simulation tests: matching precedence, expiry → life loss, scoring
-  math, bot-run invariants.
+  math, opening-level stock and non-expiry, bot-run invariants.
 
-**Done when:** a full run — serve customers, lose lives, game over, restart —
-is playable start to finish with keyboard.
+**Done when:** a full run — opening levels, serve customers, lose lives, game
+over, restart — is playable start to finish with keyboard.
 
 ## Phase 5 — Difficulty ramp & spawn fairness (M)
 
 - `core/difficulty.ts`: continuous curve over (time, serves) driving order
   tier mix, arrival interval, patience, queue cap, snake speed (per the table
-  in the design doc).
+  in the design doc). It replaces the single static `StageConfig` Phase 4
+  pinned, starting from the Mixing row the opening levels hand over at.
 - Pity spawner: needed-primary detection and forced spawn ≤5 s; brown-mercy
   customer.
 - Balancing pass: scripted bot simulations + human playtests; adjust the
@@ -123,7 +127,8 @@ both orientations.
 
 - Collapsible mixing cheat sheet (edge tab, auto-collapse, persisted state) —
   the non-obstructive requirement from design §4.
-- Contextual first-run hint toasts (3 hints, persisted seen-flags).
+- (The three contextual hints are already carried by Phase 4's opening levels
+  and their captions — design §11 — so no toasts and no seen-once flags.)
 - Settings screen: sound, D-pad toggle, left-hand mode, high-contrast symbols.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
   serve confetti, patience-bar urgency pulse. Now that the strand is drawn as
@@ -136,8 +141,9 @@ every core event has audiovisual feedback.
 
 ## Phase 8 — Persistence, high scores & release (S)
 
-- `persist/storage.ts` (versioned blob): high scores top-10, settings,
-  seen-hints (wire-up — earlier phases used in-memory defaults).
+- `persist/storage.ts` (versioned blob): high scores top-10, settings
+  (wire-up — earlier phases used in-memory defaults). No seen-hints: the
+  opening levels replaced them.
 - Game-over score breakdown + high-score table on menu.
 - Favicon/title/meta (social card), lighthouse sanity pass.
 - Deploy: GitHub Actions → GitHub Pages (or Netlify); verify the deployed

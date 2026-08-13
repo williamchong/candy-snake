@@ -10,7 +10,7 @@
 | Tests          | **Vitest**                         | Runs the engine-free core logic in Node         |
 | Lint/format    | ESLint + Prettier                  | Standard                                        |
 | Hosting        | Static (GitHub Pages / Netlify)    | Client-side only, no backend                    |
-| Persistence    | `localStorage`                     | High scores, settings, seen-hints flags         |
+| Persistence    | `localStorage`                     | High scores and settings                        |
 
 No other runtime dependencies. Art for v1 is generated at boot from Phaser
 `Graphics` (see §7) — no asset pipeline needed until the polish phase.
@@ -63,6 +63,7 @@ candy-snake/
     │   ├── spawner.ts         # sugar/dye spawn rules + pity timer
     │   ├── customers.ts       # arrival, patience, queue
     │   ├── orders.ts          # order generation by difficulty stage
+    │   ├── tutorial.ts        # the three opening levels + what they stock
     │   ├── shelf.ts           # candy cache, matching
     │   ├── scoring.ts         # points, streaks, patience bonus
     │   ├── difficulty.ts      # stage curve (time/serves → knobs)
@@ -75,16 +76,20 @@ candy-snake/
     │   ├── UIScene.ts         # HUD overlay: orders, shelf, score, cheat sheet
     │   └── GameOverScene.ts
     ├── input/
+    │   ├── anyInput.ts        # "press any key" for the menu / game-over screens
     │   ├── keyboard.ts        # arrows/WASD → DirectionQueue
     │   ├── touch.ts           # swipe detector (+ optional virtual d-pad)
     │   └── directionQueue.ts  # 2-deep buffer, 180° reversal rejection
     ├── render/
     │   ├── textures.ts        # runtime-generated candy/strand/jar textures
+    │   ├── drawn.ts           # sprite + symbol glyph pairing, shared with ui/
     │   ├── strand.ts          # segment neighbours → rope piece + rotation (pure)
     │   ├── boardView.ts       # grid → sprites, segment coloring
     │   └── effects.ts         # particles, tweens (chop pop, shatter, confetti)
     ├── ui/
-    │   ├── orderCard.ts       # candy icon + component dots + patience bar
+    │   ├── orderCard.ts       # candy icon + the jars that go in + patience bar
+    │   ├── shelfStrip.ts      # the six candy slots, level with the bench
+    │   ├── text.ts            # one answer to "what does screen text look like"
     │   ├── cheatSheet.ts      # collapsible mixing strip
     │   └── layout.ts          # responsive anchoring (portrait/landscape)
     └── persist/
@@ -110,11 +115,15 @@ type Pickup = { pos: Vec2; open: boolean } & ({ kind: 'sugar' } | { kind: 'dye';
 // cut, consumed one segment per move from segments[0]. Only the ending differs.
 interface Severed { segments: Segment[]; fate: 'crumble' | 'chop' }
 interface Candy { color: ColorMask; bornAt: number }   // bornAt is a tick, never a wall clock
-interface Customer { id: number; want: ColorMask; patienceMs: number; maxPatienceMs: number }
+// patience is undefined for a customer who never leaves — the opening levels
+interface Patience { remainingMs: number; totalMs: number }
+interface Customer { id: number; want: ColorMask; patience: Patience | undefined }
+interface TutorialLevel { want: ColorMask; stock: Primary[] }   // stock === primariesOf(want)
 interface GameState {
   snake: SnakeState; pickups: Pickup[]; severed: Severed[]; shelf: Candy[];
   customers: Customer[]; score: number; lives: number;
   streak: number; elapsedMs: number; served: number; over: boolean;
+  tutorialIndex: number;   // opening levels done; gates spawn stock and the next order
 }
 ```
 
@@ -135,7 +144,9 @@ and plays effects per event. Events carry the data needed for presentation
   difficulty knob). A cut piece — crumbling or chopping — gives up one segment
   per grid move, so the board runs on a single clock and needs no second knob.
 - Patience bars and arrival timers tick in real ms (accumulated per step) so
-  they stay smooth and frame-rate independent.
+  they stay smooth and frame-rate independent. The serving window is advanced
+  *after* the move loop, so a child arriving on a step sees a rack that already
+  holds whatever was chopped on the way in.
 - **Rendering runs at a different granularity than logic:** sprites are only
   re-targeted when a move tick lands, but are drawn every frame at
   `moveProgress()` of the way between cells (see §7).
@@ -155,8 +166,10 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   summary.
 - **UIScene** runs in parallel (`scene.launch`) above GameScene — the standard
   Phaser pattern so HUD ignores any camera effects (screen shake on shatter)
-  applied to the play field. Communicates via the same `GameEvent` stream
-  (re-emitted on the scene's event emitter).
+  applied to the play field. It is handed the same `Game` and reads its state
+  read-only every frame, because patience bars drain continuously and there is
+  nothing to diff. One-shot HUD effects (serve confetti, the stale-candy toss)
+  hang off the `GameEvent` stream when the juice pass adds them.
 - Pause = `scene.pause` on GameScene only; UIScene stays interactive.
 
 ## 7. Rendering approach
@@ -229,7 +242,7 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 `persist/storage.ts` — typed, versioned wrapper:
 
 ```ts
-interface SaveData { version: 1; highScores: ScoreEntry[]; settings: Settings; seenHints: string[] }
+interface SaveData { version: 1; highScores: ScoreEntry[]; settings: Settings }
 ```
 
 Single JSON blob under one key (`candy-snake:v1`). Corrupt/missing data falls
@@ -244,9 +257,11 @@ back to defaults silently. No PII, no backend.
   incl. streak caps. Deterministic via seeded `rng.ts`. Beyond `core/`, this
   covers the pure modules the Phaser layer leans on — `input/directionQueue.ts`
   and `render/strand.ts` (rope pieces, rotations, wrapped neighbours).
-- **Simulation tests:** run `Game.step` thousands of ticks with a scripted
-  bot; assert invariants (≥1 sugar on map, no pickup on snake, no negative
-  lives, shelf ≤ 6).
+- **Simulation tests:** `core/simulation.test.ts` plays whole runs with a bot
+  that grows a segment, takes it through the jars the order needs and drives it
+  into the bench, asserting invariants on every tick (≥1 sugar on map, no
+  pickup on snake, lives in range, shelf ≤ 6, queue within cap, no child
+  waiting beside a candy they ordered, no clock on an opening-level customer).
 - **Manual/E2E:** device pass on real phones per milestone (Chrome DevTools
   device emulation is the daily driver, real-device check before release).
   Playwright smoke test (page loads, canvas mounts, menu → game transition)

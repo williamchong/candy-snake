@@ -273,11 +273,29 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 - Appear at the serving window (the right side of the kitchen, beside the
   chopping block and the shelf), up to a cap that grows with difficulty
   (start 1, later up to 3–4 queue slots).
-- Each shows: candy icon in the requested color, component dots, and a
-  **patience bar** draining in real time.
+- Each shows: candy icon in the requested color, the jars that go into it, and
+  a **patience bar** draining in real time. (The component dots of §4 are drawn
+  as dye jars: a jar is the thing the player actually has to drive through, so
+  the card names the route rather than just the recipe.)
 - Serving is automatic the moment a matching candy exists (just produced or on
   the shelf). Served customer → score + happy walk-off.
 - Patience reaches zero → customer leaves angry, **−1 life**.
+
+#### Who gets the candy
+
+Matching is **exact** — a purple order takes purple and nothing else, and brown
+matches no regular order — and the two directions resolve differently:
+
+- **A candy leaving the block is offered to the queue first**, and goes to the
+  **most impatient** of whoever wants it (ties to whoever has waited longest).
+  A candy that could have saved a life must never go to someone with time to
+  spare. Only what nobody wants is racked.
+- **A customer walking up sweeps the shelf first**, taking the **oldest**
+  match — the same end staleness eats from, so a candy is never stepped over
+  and left to go stale behind a newer twin.
+
+Together those make one state unreachable: a customer waiting beside a candy
+they ordered. The simulation tests assert it on every tick.
 
 ## 6. Movement, collision & failure rules
 
@@ -305,6 +323,47 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 
 Order tiers map to color tiers: Tier 1 = raw, Tier 2 = primary, Tier 3 =
 secondary (mix required).
+
+### Opening levels (built-in tutorial)
+
+Every run — not only the first — starts with three scripted levels. Each is a
+single customer, and the board is stocked with exactly what that order needs
+and nothing else:
+
+| Level | Order                   | On the board           | What it teaches                       |
+| ----- | ----------------------- | ---------------------- | ------------------------------------- |
+| 1     | Raw                     | sugar, no jars         | pull sugar, chop at the block         |
+| 2     | One primary             | sugar + that jar       | cross the sugar *first*, then the jar |
+| 3     | That primary + one more | sugar + those two jars | two dyes blend into one color         |
+
+A restricted board teaches better than any text can: in level 2 the only jar on
+the floor is the one the order wants, so "wrong dye" is not yet a mistake the
+player is able to make. Difficulty here is authored by removing options.
+
+- The orders are **rolled from the run's seed**, so the levels teach the rule
+  rather than a memorised answer. Level 3 deliberately *extends* level 2's
+  primary instead of drawing a fresh pair — it reads as a progression (you made
+  yellow, now add red for orange), and it means the stocked set only ever grows,
+  so no jar is ever taken off the board mid-run. Nothing on this board
+  teleports, and that includes the tutorial's own furniture.
+- **Opening customers have no patience at all**: no bar, no countdown, no way
+  to lose a life. A tutorial that plays on every single run must not be able to
+  cost the run, and a bar that drained toward nothing would be a lie about the
+  rules. They pay base points with no patience bonus (§9) and do build the
+  streak.
+- A level ends when its customer is served; the next child walks up a second
+  later. Nothing can be soft-locked: a jar wasted on a bodiless strand simply
+  respawns, because the stock rule keeps it on the board — the level-2 lesson is
+  taught by retry rather than by text.
+- These three levels are where the three contextual hints of §11 live, as
+  captions on levels that always run rather than first-run toasts that can be
+  missed or dismissed.
+
+The endless ramp below starts only once level 3 is served, and it starts at the
+**Mixing** row rather than Warm-up: the opening levels have already taught raw,
+primary and secondary, so dropping back to 100% raw orders would read as going
+backwards. (Warm-up's row is kept in the table as the shape of what the ramp
+grew out of.)
 
 Endless ramp, driven by elapsed time and/or candies served (whichever fires
 first — keeps both slow and fast players on curve):
@@ -353,6 +412,11 @@ and the pity spawner replaces it rather than adding to it.
 | Patience bonus                 | + up to 50% of base, scaled by bar left   |
 | Serve streak (no losses)       | ×1.1 per consecutive serve, cap ×2        |
 | Shelf serve                    | Same as normal (planning ahead is valid)  |
+| Serve an opening-level customer| Base only — no clock, so no bonus (§7)    |
+
+The streak multiplier is the run standing *before* the serve, so the first
+serve after a loss pays flat and the bonus has to be earned back. Points are
+rounded once, at the end, rather than per term.
 
 High scores (top 10, with date) persist in `localStorage`.
 
@@ -387,14 +451,17 @@ High scores (top 10, with date) persist in `localStorage`.
 
 ## 11. HUD & screens
 
-- **HUD:** score, lives (candy hearts), customer queue with patience bars,
-  shelf contents (6 slots), cheat-sheet tab, pause.
+- **HUD:** score, lives (heart pips), customer queue with patience bars, shelf
+  contents (6 slots), cheat-sheet tab, pause. The hearts are inked in the
+  symbol's own dark value rather than red: a life is not a candy, and hue in
+  this game belongs to candies alone (§4, palette constraints).
 - **Screens:** Boot/loading → Menu (play, settings, high scores) → Game →
   Game Over (score breakdown, high-score entry-free — auto-saved, restart CTA).
-- **First-run teaching:** no modal tutorial. Three contextual hint toasts:
-  "Eat sugar to grow" (on first spawn), "Dye colors your whole strand" (first
-  dye near), "Chop at the block to serve" (first time body ≥ 3). Each shows
-  once, persisted.
+- **First-run teaching:** no modal tutorial, and no toasts either. The three
+  hints — pull sugar and chop, sugar before the jar, two dyes make one color —
+  are the three opening levels of §7 and their captions. Levels that always run
+  cannot be missed or dismissed, which is what the persisted seen-once flags
+  were working around.
 
 ## 12. Audio & juice (polish targets)
 
