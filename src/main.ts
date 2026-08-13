@@ -14,7 +14,7 @@ new Phaser.Game({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: '#d8cbe4',
-  // Nearest-neighbour filtering keeps the 8×8 source sprites hard-edged when
+  // Nearest-neighbour filtering keeps the 16×16 source sprites hard-edged when
   // scaled up (see render/textures.ts). Phaser also forces roundPixels on with
   // it, which is what quantises the interpolated positions to whole pixels as
   // sprites slide between cells.

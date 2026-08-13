@@ -11,11 +11,14 @@ import {
   type Pickup,
   type Segment,
   type Severed,
+  type SnakeState,
   type Vec2,
 } from '../core/types';
+import { strandSpriteAt } from './strand';
 import {
   CELL_SIZE,
   PIXEL_SCALE,
+  STRAND_TEXTURES,
   TextureKey,
   glyphTextureKey,
   type GlyphTextureKey,
@@ -30,6 +33,14 @@ import {
 const BOARD_X = 64;
 const BOARD_Y = 64;
 const BORDER = 0xc9b4dd;
+/**
+ * Chrome thickness in screen pixels. Held separately from `PIXEL_SCALE`: how
+ * thick an outline should look is not a function of how many source texels a
+ * sprite is authored at, and tying the two means re-authoring the sprites
+ * silently redraws the furniture.
+ */
+const BOARD_BORDER_WIDTH = 4;
+const SLOT_BORDER_WIDTH = 2;
 
 /**
  * Hue carries meaning in this game, so only candies may spend it (design §4,
@@ -108,6 +119,14 @@ const Depth = {
 interface Placed {
   readonly pos: Vec2;
   readonly color?: ColorMask;
+  /**
+   * Overrides the pool's texture for this item. The strand needs it: which
+   * piece of rope a cell draws depends on where its neighbours are, so one
+   * pool stamps straights, elbows and the end cap (see `strand.ts`).
+   */
+  readonly key?: TextureKey;
+  /** Rotation in degrees, for pieces authored in one orientation and turned. */
+  readonly angle?: number;
 }
 
 /** A sprite and the accessibility symbol stamped on it, moved as one. */
@@ -279,6 +298,10 @@ class SpritePool {
       }
 
       paint(entry, item.color);
+      entry.image.setTexture(item.key ?? this.config.key);
+      // Only the sprite turns. The glyph riding on it stays upright, because a
+      // symbol the player has to read must not rotate with the rope (design §4).
+      entry.image.setAngle(item.angle ?? 0);
       show(entry, true);
       place(entry, entry.from.x, entry.from.y);
     });
@@ -384,6 +407,27 @@ const splitByFate = (
 };
 
 /**
+ * Resolves the strand into rope pieces. Each segment is drawn from where its
+ * neighbours sit — the segment ahead of it (the head, for the first) and the
+ * one behind (nothing, for the loose end) — which is what makes the body one
+ * continuous pull of sugar rather than a row of beads (design §2).
+ */
+const strandPieces = ({ head, body }: SnakeState): Placed[] =>
+  body.map((segment, index) => {
+    // At index 0 there is no `body[-1]`, so this already falls back to the
+    // head — which is exactly the segment ahead of the first one.
+    const ahead = body[index - 1]?.pos ?? head;
+    const sprite = strandSpriteAt(segment.pos, ahead, body[index + 1]?.pos);
+
+    return {
+      pos: segment.pos,
+      color: segment.color,
+      key: STRAND_TEXTURES[sprite.piece],
+      angle: sprite.angle,
+    };
+  });
+
+/**
  * The candy cache, drawn beside the board: one sprite per slot, shown only
  * while a candy occupies it. Oldest sits at the top, which is the order the
  * core keeps the shelf in (design §5).
@@ -401,7 +445,7 @@ class ShelfStrip {
         .rectangle(at.x, at.y, SLOT_SIZE, SLOT_SIZE)
         // The board's own outline: an empty slot is chrome, and chrome on this
         // board is one color.
-        .setStrokeStyle(PIXEL_SCALE / 2, BORDER)
+        .setStrokeStyle(SLOT_BORDER_WIDTH, BORDER)
         .setDepth(Depth.Floor);
 
       this.slots.push(
@@ -465,11 +509,11 @@ export class BoardView {
       slides: false,
       glyphDepth: Depth.PickupGlyph,
     });
-    // Severed sugar is still sugar, so it reuses the strand's sprite and
-    // keeps its color — but it is frozen where it broke and never slides.
-    // Faded, because a block the player no longer steers must not read as
-    // part of the strand: hue is spoken for by the color system (design §4),
-    // so the separation has to come from value.
+    // Severed sugar is still sugar and keeps its color, but it is no longer
+    // rope: a broken piece comes apart as lozenges, frozen where it broke, and
+    // never slides. Faded too, because a block the player no longer steers
+    // must not read as part of the strand — hue is spoken for by the color
+    // system (design §4), so the separation has to come from value.
     this.debris = new SpritePool(scene, {
       key: TextureKey.Segment,
       depth: Depth.Cut,
@@ -486,8 +530,10 @@ export class BoardView {
       slides: false,
       glyphDepth: Depth.CutGlyph,
     });
+    // Every item overrides this with the rope piece its neighbours call for;
+    // the straight is only the pool's starting texture.
     this.segments = new SpritePool(scene, {
-      key: TextureKey.Segment,
+      key: TextureKey.StrandStraight,
       depth: Depth.Segment,
       slides: true,
       glyphDepth: Depth.SegmentGlyph,
@@ -505,7 +551,7 @@ export class BoardView {
   /** Call when the core has moved the snake to a new set of cells. */
   syncToState(state: GameState): void {
     this.head.retarget([{ pos: state.snake.head }]);
-    this.segments.retarget(state.snake.body);
+    this.segments.retarget(strandPieces(state.snake));
 
     const { crumble, chop } = splitByFate(state.severed);
     this.debris.retarget(crumble);
@@ -593,7 +639,7 @@ export class BoardView {
     this.scene.add
       .rectangle(BOARD_X, BOARD_Y, COLS * CELL_SIZE, ROWS * CELL_SIZE)
       .setOrigin(0)
-      .setStrokeStyle(PIXEL_SCALE, BORDER)
+      .setStrokeStyle(BOARD_BORDER_WIDTH, BORDER)
       .setDepth(Depth.Floor);
   }
 }
