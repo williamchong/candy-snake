@@ -392,7 +392,8 @@ export class Game {
    * Brings the next child to the window once the wait is up. The clock only
    * runs while there is room, so clearing a full queue cannot dump the backlog
    * all at once — and the interval is read fresh each time, so the wait a
-   * tutorial level started carries over into the endless game's own pacing.
+   * tutorial level started carries over into the next one. The handover to the
+   * endless ramp sets the clock itself, in `finishOpeningLevel`.
    */
   private admitCustomer(dtMs: number, events: GameEvent[]): void {
     const level = this.openingLevel;
@@ -414,6 +415,8 @@ export class Game {
 
     this.waitMs += dtMs;
     if (this.waitMs < window.intervalMs) return;
+    // Before the serve below, which is the last opening level's way of ending:
+    // clearing the clock after it would wipe the handover's own setting.
     this.waitMs = 0;
 
     const customer = createCustomer(
@@ -458,7 +461,7 @@ export class Game {
     this.state.served += 1;
     // While the tutorial runs the queue holds nothing but its own child, so a
     // serve is exactly what finishes a level.
-    if (this.openingLevel !== undefined) this.state.tutorialIndex += 1;
+    if (this.openingLevel !== undefined) this.finishOpeningLevel();
 
     events.push({
       type: 'customer-served',
@@ -467,6 +470,27 @@ export class Game {
       streak: this.state.streak,
       fromShelf,
     });
+  }
+
+  /**
+   * Closes an opening level, and hands the window over to the endless ramp on
+   * the last of them — `openingLevel` is read again *after* the index moves,
+   * so it coming up empty is exactly "that was the third".
+   *
+   * The arrival clock has stood still all level: a queue with no room never
+   * counts (see `admitCustomer`), so it reads 0 at every opening serve. Left
+   * there, the window would stand empty for a whole interval — 12s at Mixing —
+   * right after three levels paced a second apart. Crediting the wait already
+   * served brings the first real child on that same beat instead. A window
+   * with no interval to speak of has no wait to credit: `Infinity` would sit
+   * level with the guard rather than under it, and admit a child at once.
+   */
+  private finishOpeningLevel(): void {
+    this.state.tutorialIndex += 1;
+    if (this.openingLevel !== undefined) return;
+
+    const served = this.config.stage.arrivalIntervalMs - TUTORIAL_ARRIVAL_GAP_MS;
+    this.waitMs = Number.isFinite(served) ? Math.max(0, served) : 0;
   }
 
   private spawnPickups(events: GameEvent[]): void {

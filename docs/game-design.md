@@ -371,7 +371,10 @@ player is able to make. Difficulty here is authored by removing options.
   is authored by. (The endless game keeps §8.1's floor of one cube on the map
   at all times.)
 - A level ends when its customer is served; the next child walks up a second
-  later. Nothing can be soft-locked: a jar wasted on a bodiless strand simply
+  later — and so does the endless game's first, which inherits that beat rather
+  than opening on a whole arrival interval of empty window (12s at Mixing,
+  which would read as the game having ended rather than started). Nothing can
+  be soft-locked: a jar wasted on a bodiless strand simply
   respawns, because the stock rule keeps it on the board — the level-2 lesson is
   taught by retry rather than by text.
 - These three levels **are** the teaching, on their own: no captions, no

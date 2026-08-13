@@ -782,14 +782,19 @@ describe('Game opening levels', () => {
       .map((pickup) => pickup.primary)
       .sort();
 
+  /** Grid moves in the beat between a serve and the next child walking up. */
+  const GAP_MOVES = Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / DEFAULT_CONFIG.moveIntervalMs);
+
+  /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
+  const chopOne = (game: Game, want: ColorMask): void => {
+    layBatchAtBlock(game, [want]);
+    run(game, chopThrough([want]));
+  };
+
   /** Chops one candy of `want`, then waits for the next child to walk up. */
   const serveLevel = (game: Game, want: ColorMask): void => {
-    layBatchAtBlock(game, [want]);
-    run(
-      game,
-      chopThrough([want]) +
-        Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / DEFAULT_CONFIG.moveIntervalMs),
-    );
+    chopOne(game, want);
+    run(game, GAP_MOVES);
   };
 
   it('has the first child at the window before the run has started', () => {
@@ -823,8 +828,7 @@ describe('Game opening levels', () => {
     run(game, 25);
     expect(cubes()).toBe(0);
 
-    layBatchAtBlock(game, [RAW]);
-    run(game, chopThrough([RAW]));
+    chopOne(game, RAW);
 
     expect(game.state.tutorialIndex).toBe(1);
     expect(cubes()).toBe(1);
@@ -865,8 +869,50 @@ describe('Game opening levels', () => {
 
     expect(game.state.tutorialIndex).toBe(3);
     expect(jarsOn(game)).toEqual([...PRIMARIES].sort());
-    // The endless game gives itself a breather before the first real order.
+  });
+
+  it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {
+    const game = opening();
+    const [, second, third] = game.tutorial;
+
+    serveLevel(game, RAW);
+    serveLevel(game, second?.want ?? RAW);
+    // Not `serveLevel`: the wait after the third serve is the subject, so the
+    // last chop is driven without it. The serving window runs after the move
+    // loop, so that chop's own final step has already counted against the gap.
+    chopOne(game, third?.want ?? RAW);
+    const left = GAP_MOVES - 1;
+
+    expect(game.state.tutorialIndex).toBe(3);
     expect(game.state.customers).toEqual([]);
+
+    run(game, left - 1);
+    expect(game.state.customers).toEqual([]);
+
+    // One beat, not MIXING_STAGE's 12s — and on a clock, unlike the three
+    // children before it.
+    run(game, 1);
+    expect(game.state.customers).toHaveLength(1);
+    expect(game.state.customers[0]?.patience?.totalMs).toBe(MIXING_STAGE.patienceMs);
+  });
+
+  it('hands over to a window that never opens by leaving it shut', () => {
+    // The handover credits the wait already served, and a clock that never
+    // comes round has none to credit — an interval it could be counted
+    // against is the whole premise.
+    const game = new Game({ ...DEFAULT_CONFIG, seed: 1, stage: CLOSED_WINDOW });
+    const [, second, third] = game.tutorial;
+
+    serveLevel(game, RAW);
+    serveLevel(game, second?.want ?? RAW);
+    serveLevel(game, third?.want ?? RAW);
+    // Short of a patience, so a child wrongly let in is still standing there
+    // to be caught rather than having quietly timed out again.
+    run(game, 60);
+
+    expect(game.state.tutorialIndex).toBe(3);
+    expect(game.state.customers).toEqual([]);
+    expect(game.state.lives).toBe(STARTING_LIVES);
   });
 
   it('gives the endless game’s children the clock the opening ones lacked', () => {
