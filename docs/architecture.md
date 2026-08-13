@@ -213,8 +213,11 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   create and on `resize` events.
 - The 16×16 board renders at the largest integer-friendly cell size that fits
   the available rectangle; HUD regions anchor around it:
-  - **Landscape:** customers top, shelf + score right column.
-  - **Portrait:** customers top (compact), shelf + score bottom bar.
+  - **Landscape:** customers + shelf + score in the right column, beside the
+    chopping block's wall (design §10).
+  - **Portrait:** the same strip, narrowed and compacted beside the grid.
+- The serving side stays on the block's wall in both orientations: the block's
+  cells are a game rule, so they must never depend on the layout.
 - MVP shortcut (early phases only): fixed `Scale.FIT` at 960×640 landscape;
   the responsive pass replaces it in the mobile phase. `layout.ts` is the only
   file that knows about screen geometry.

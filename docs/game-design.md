@@ -31,7 +31,9 @@ Traditional candy making, step by step, mapped onto game verbs:
 | Serving the shop window    | Auto-matching candies to **customer orders**   |
 
 The board is the kitchen floor. The chopping block is a fixed bench along the
-top wall, beside the serving window where customers (children) appear.
+right wall, beside the serving window where customers (children) appear. The
+shelf and the queue share that side of the board, so a candy's whole path —
+bench, shelf, child — stays in one place (§10).
 
 ### Art direction — pastel cotton candy (chosen in Phase 1)
 
@@ -235,9 +237,13 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 
 ### Chopping block
 
-- A fixed station occupying a small run of cells along the top wall, next to
-  the serving window. Only a few cells wide, so the row it sits in is still a
-  lane the player can use — crossing the bench must be a decision, not a toll.
+- A fixed station occupying a small run of cells down the right wall, next to
+  the serving window. Only a few cells tall, so the column it sits in is still
+  a lane the player can use — crossing the bench must be a decision, not a toll.
+  It sits off the row the maker spawns in rather than centred on the wall. The
+  maker starts empty-handed and drives straight until the player turns, so a
+  bench in that lane would chop the first strand they build a few cells after
+  they built it — the spawn lane has to be somewhere to gather.
 - **Reaching it cuts the strand loose.** The head entering a bench cell severs
   the whole strand there and keeps going: the maker drives on, empty-handed
   and immediately free to start pulling the next batch.
@@ -264,8 +270,9 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 
 ### Customers (children)
 
-- Appear at the serving window (top of the kitchen), up to a cap that grows
-  with difficulty (start 1, later up to 3–4 queue slots).
+- Appear at the serving window (the right side of the kitchen, beside the
+  chopping block and the shelf), up to a cap that grows with difficulty
+  (start 1, later up to 3–4 queue slots).
 - Each shows: candy icon in the requested color, component dots, and a
   **patience bar** draining in real time.
 - Serving is automatic the moment a matching candy exists (just produced or on
@@ -367,9 +374,14 @@ High scores (top 10, with date) persist in `localStorage`.
   which is what makes the game viable on mobile.
 
 ### Responsiveness
-- Landscape: customer window across the top, HUD right or bottom.
-- Portrait: customer window on top, grid below, HUD bottom; grid stays
-  square-ish so both orientations share one logical board.
+- The serving side is whichever side of the grid the chopping block is on, in
+  both orientations: customer window, shelf and score anchor there, so the
+  candy's path (bench → shelf → child) never doubles back across the screen.
+- Landscape: bench on the right wall, customer window + shelf + score in the
+  right column.
+- Portrait: same right column, narrowed — grid on the left, serving strip
+  beside it; grid stays square-ish so both orientations share one logical
+  board.
 - Board is a fixed logical grid (target **16 × 16** playfield cells) scaled to
   fit; no gameplay difference between devices.
 

@@ -55,7 +55,8 @@ and the strand visibly turns one segment at a time as it crosses a jar.
 
 ## Phase 3 — Chopping block & shelf (M)
 
-- Chopping block station cells along the top wall. Reaching one cuts the whole
+- Chopping block station cells down the right wall, on the serving side of the
+  board with the shelf and (Phase 4) the queue. Reaching one cuts the whole
   strand loose (design §5): the maker drives on empty-handed, and the batch
   freezes where it lay and is drawn into the block one segment per move, block
   end first. No chop mode, no halt — the strand is never dragged or teleported.
@@ -63,7 +64,7 @@ and the strand visibly turns one segment at a time as it crosses a jar.
   `chop` share the frozen-and-consumed-one-per-move machinery, and differ only
   in what each segment becomes.
 - Shelf model (6 slots, oldest-evicted) + minimal shelf strip in a temporary
-  HUD corner.
+  HUD corner, in the right column level with the block.
 - Events wired to placeholder effects (pop per chop).
 - Unit tests: chop ordering & colors, batch drain, pickups re-closed by a cut,
   shelf eviction, block cells excluded from spawns.
