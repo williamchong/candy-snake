@@ -25,3 +25,7 @@ your shop window — before their patience runs out.
 - **Structure:** endless arcade run with a ramping difficulty curve, 3 lives,
   local high scores.
 - **Scope:** client-side only — static hosting, `localStorage`, no backend.
+
+## License
+
+[GPL-3.0-only](LICENSE)
