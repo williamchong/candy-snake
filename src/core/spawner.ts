@@ -1,19 +1,20 @@
-import { cellKey, eq, freeCells, stepCell } from './board';
+import { CHOP_BLOCK_CELLS, cellKey, eq, freeCells, stepCell } from './board';
 import { PRIMARIES, type Primary } from './colors';
 import type { Rng } from './rng';
 import type { GameState, Pickup, Vec2 } from './types';
 
 /**
  * Cells a pickup may not spawn on (design §8.4): the snake itself, existing
- * pickups, still-crumbling debris, and the cell directly in front of the head
- * — no free accidental pickups. Kind-agnostic, so a dye jar can no more land
- * on sugar than on the strand.
+ * pickups, any cut piece still on the floor, the chopping block, and the cell directly
+ * in front of the head — no free accidental pickups. Kind-agnostic, so a dye
+ * jar can no more land on sugar than on the strand.
  */
 const blockedCells = (state: GameState): Set<number> => {
   const blocked = new Set<number>([cellKey(state.snake.head)]);
+  for (const cell of CHOP_BLOCK_CELLS) blocked.add(cellKey(cell));
   for (const segment of state.snake.body) blocked.add(cellKey(segment.pos));
   for (const pickup of state.pickups) blocked.add(cellKey(pickup.pos));
-  for (const pile of state.debris) {
+  for (const pile of state.severed) {
     for (const segment of pile.segments) blocked.add(cellKey(segment.pos));
   }
   blocked.add(cellKey(stepCell(state.snake.head, state.snake.dir)));

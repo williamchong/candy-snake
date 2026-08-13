@@ -71,19 +71,38 @@ export type Pickup =
     };
 
 /**
- * A length of strand cut loose by a self-hit. It freezes where it broke and
- * crumbles one segment per move, `segments[0]` (the impact end) first —
- * design §6.
+ * A length of strand no longer attached to the maker. Either way it is cut it
+ * freezes where it lay and is consumed one segment per move from
+ * `segments[0]` — the two fates differ only in what that segment becomes:
+ *
+ * - `crumble`: a self-hit break, coming apart from the impact end (design §6).
+ * - `chop`: a batch cut loose at the chopping block, drawn in from the block
+ *   end and coming out as candy (design §5).
  */
-export interface Debris {
+export interface Severed {
   readonly segments: readonly Segment[];
+  readonly fate: 'crumble' | 'chop';
+}
+
+/**
+ * A finished candy: one body segment that has been through the chopping block
+ * (design §5). Shelf order is positional — oldest first, newest last — so
+ * `bornAt` is not what sorts it; it is the tick the candy was made, kept
+ * because it is a simulation clock and never a wall clock, so a seeded replay
+ * produces an identical shelf. Phase 4 reads it for staleness.
+ */
+export interface Candy {
+  readonly color: ColorMask;
+  readonly bornAt: number;
 }
 
 export interface GameState {
   snake: SnakeState;
   pickups: Pickup[];
-  /** One entry per break still crumbling; each crumbles independently. */
-  debris: Debris[];
+  /** One entry per piece still being consumed; each goes at its own pace. */
+  severed: Severed[];
+  /** Candies waiting for a customer, oldest first (design §5). */
+  shelf: Candy[];
   /**
    * Grid moves elapsed — a simulation clock that does not depend on
    * `moveIntervalMs` (which difficulty varies from Phase 5). The view watches
@@ -125,8 +144,14 @@ export type GameEvent =
   | { readonly type: 'dye-spawned'; readonly pos: Vec2; readonly primary: Primary }
   /** The strand broke; `severed` is the piece now frozen as debris, impact end first. */
   | { readonly type: 'strand-broken'; readonly severed: readonly Segment[] }
+  /** The block cut the strand loose; `batch` is frozen where it lay, block end first. */
+  | { readonly type: 'strand-cut'; readonly batch: readonly Segment[] }
   /** Carries the whole segment, so the puff can show the color that was lost. */
-  | { readonly type: 'debris-crumbled'; readonly segment: Segment };
+  | { readonly type: 'debris-crumbled'; readonly segment: Segment }
+  /** A candy left the block; `pos` is the cell it was drawn in from, where the batch lies. */
+  | { readonly type: 'candy-chopped'; readonly pos: Vec2; readonly color: ColorMask }
+  /** A full shelf pushed its oldest candy off to make room (design §5). */
+  | { readonly type: 'candy-staled'; readonly color: ColorMask };
 
 /**
  * How the core pulls a buffered turn at the exact moment a move tick fires.

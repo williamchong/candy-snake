@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CELL_COUNT,
+  CHOP_BLOCK_CELLS,
   COLS,
   ROWS,
   cellKey,
   eq,
   freeCells,
+  isChopBlock,
   keyToCell,
   stepCell,
   wrap,
@@ -62,5 +64,27 @@ describe('board', () => {
     for (const cell of taken) {
       expect(free.some((candidate) => eq(candidate, cell))).toBe(false);
     }
+  });
+});
+
+describe('chopping block', () => {
+  it('runs along the top wall, by the serving window', () => {
+    expect(CHOP_BLOCK_CELLS.every((cell) => cell.y === 0)).toBe(true);
+    // A bench, not scattered cells: consecutive and inside the row.
+    CHOP_BLOCK_CELLS.forEach((cell, index) => {
+      expect(cell.x).toBe(CHOP_BLOCK_CELLS[0]!.x + index);
+      expect(cell.x).toBeLessThan(COLS);
+    });
+    // Small enough that the top row is still a lane the player can use.
+    expect(CHOP_BLOCK_CELLS.length).toBeLessThan(COLS / 2);
+  });
+
+  it('knows its own cells and no others', () => {
+    for (const cell of CHOP_BLOCK_CELLS) expect(isChopBlock(cell)).toBe(true);
+
+    const [first] = CHOP_BLOCK_CELLS;
+    expect(isChopBlock({ x: first!.x, y: 1 })).toBe(false);
+    expect(isChopBlock({ x: first!.x - 1, y: 0 })).toBe(false);
+    expect(isChopBlock({ x: CHOP_BLOCK_CELLS.at(-1)!.x + 1, y: 0 })).toBe(false);
   });
 });

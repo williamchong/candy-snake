@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { CELL_COUNT, cellKey, eq, keyToCell, stepCell } from './board';
+import { CELL_COUNT, cellKey, eq, isChopBlock, keyToCell, stepCell } from './board';
 import { BLUE, PRIMARIES, RED, YELLOW, type Primary } from './colors';
 import { createRng } from './rng';
 import { createDye, createSugar, ensurePickups, pickupIndexAt } from './spawner';
@@ -31,8 +31,11 @@ const stateWith = (
   },
   pickups,
   // The core splices a pile out the move it empties, so never fake an empty one.
-  debris:
-    debris.length === 0 ? [] : [{ segments: debris.map((pos) => ({ pos, color: RAW })) }],
+  severed:
+    debris.length === 0
+      ? []
+      : [{ segments: debris.map((pos) => ({ pos, color: RAW })), fate: 'crumble' }],
+  shelf: [],
   tick: 0,
   elapsedMs: 0,
 });
@@ -50,6 +53,16 @@ describe('spawner placement', () => {
     for (let seed = 0; seed < 200; seed += 1) {
       for (const spawned of ensurePickups(state, createRng(seed))) {
         expect(forbidden.has(cellKey(spawned.pos))).toBe(false);
+      }
+    }
+  });
+
+  it('never spawns on the chopping block', () => {
+    const state = stateWith();
+
+    for (let seed = 0; seed < 200; seed += 1) {
+      for (const spawned of ensurePickups(state, createRng(seed))) {
+        expect(isChopBlock(spawned.pos)).toBe(false);
       }
     }
   });

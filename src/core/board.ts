@@ -35,3 +35,21 @@ export const freeCells = (occupied: ReadonlySet<number>): Vec2[] => {
   }
   return cells;
 };
+
+/**
+ * The chopping block: a short run along the top wall, where the serving window
+ * and its customers go in Phase 4 (design §5). Deliberately only 3 of the 16
+ * cells in that row, so the top row stays usable as a lane — crossing the
+ * block always chops, and that has to be a choice rather than a toll.
+ */
+const CHOP_BLOCK_WIDTH = 3;
+const CHOP_BLOCK_LEFT = Math.floor((COLS - CHOP_BLOCK_WIDTH) / 2);
+
+export const CHOP_BLOCK_CELLS: readonly Vec2[] = Array.from(
+  { length: CHOP_BLOCK_WIDTH },
+  (_unused, index) => ({ x: CHOP_BLOCK_LEFT + index, y: 0 }),
+);
+
+const CHOP_BLOCK_KEYS = new Set(CHOP_BLOCK_CELLS.map(cellKey));
+
+export const isChopBlock = (pos: Vec2): boolean => CHOP_BLOCK_KEYS.has(cellKey(pos));

@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { COLS, ROWS, cellKey, eq, stepCell } from './board';
+import { CHOP_BLOCK_CELLS, COLS, ROWS, cellKey, eq, stepCell } from './board';
 import { BLUE, BROWN, PRIMARIES, RED, YELLOW, type Primary } from './colors';
 import { DEFAULT_CONFIG, Game } from './game';
 import { createRng } from './rng';
+import { SHELF_SLOTS } from './shelf';
 import { snakeLength } from './snake';
 import { createDye, createSugar } from './spawner';
 import {
@@ -11,6 +12,7 @@ import {
   RAW,
   type ColorMask,
   type GameEvent,
+  type Segment,
   type TurnSource,
   type Vec2,
 } from './types';
@@ -394,7 +396,7 @@ describe('Game shatter', () => {
 
     drive(game, 1);
 
-    expect(game.state.debris).toEqual([{ segments: severed }]);
+    expect(game.state.severed).toEqual([{ segments: severed, fate: 'crumble' }]);
   });
 
   it('crumbles one block per move, from the impact toward the tail', () => {
@@ -403,11 +405,11 @@ describe('Game shatter', () => {
 
     const first = drive(game, 1);
     expect(first).toContainEqual({ type: 'debris-crumbled', segment: severed[0] });
-    expect(game.state.debris).toEqual([{ segments: [severed[1]] }]);
+    expect(game.state.severed).toEqual([{ segments: [severed[1]], fate: 'crumble' }]);
 
     const second = drive(game, 1);
     expect(second).toContainEqual({ type: 'debris-crumbled', segment: severed[1] });
-    expect(game.state.debris).toEqual([]);
+    expect(game.state.severed).toEqual([]);
   });
 
   it('closes a pickup the lost length was still carrying', () => {
@@ -425,6 +427,130 @@ describe('Game shatter', () => {
   });
 });
 
+describe('Game chopping block', () => {
+  /** The bench is a run of cells; its first is as good as any to drive into. */
+  const bench = CHOP_BLOCK_CELLS[0]!;
+
+  /**
+   * The strand laid out below the bench — and, because a cut piece stands
+   * still on the cells it was *leaving*, exactly where the batch ends up. The
+   * tests assert against the same list they started from, which is the claim.
+   */
+  const frozen = (colors: ColorMask[]): Segment[] =>
+    colors.map((color, index) => ({ pos: at(bench.x, 2 + index), color }));
+
+  /**
+   * A strand one move below the bench, heading up, with nothing else on the
+   * board: the next move puts the head on the block and the batch behind it.
+   */
+  const aboutToReachBlock = (colors: ColorMask[]): Game => {
+    const game = new Game();
+    game.state.pickups = [];
+    game.state.snake = { head: at(bench.x, 1), dir: Dir.Up, body: frozen(colors) };
+    return game;
+  };
+
+  it('cuts the whole strand loose where it lay', () => {
+    const colors = [RED, RAW];
+    const game = aboutToReachBlock(colors);
+
+    const events = drive(game, 1);
+
+    expect(events).toContainEqual({ type: 'strand-cut', batch: frozen(colors) });
+    expect(game.state.severed).toEqual([{ segments: frozen(colors), fate: 'chop' }]);
+    expect(game.state.snake.body).toEqual([]);
+  });
+
+  it('leaves the maker steering, empty-handed, instead of halting', () => {
+    const game = aboutToReachBlock([RED, RAW]);
+    drive(game, 1);
+
+    expect(game.state.snake.head).toEqual(at(bench.x, 0));
+
+    drive(game, 2);
+
+    // Two more cells travelled — up through the service door and on down.
+    expect(game.state.snake.head).toEqual(at(bench.x, ROWS - 2));
+    expect(game.state.snake.body).toEqual([]);
+  });
+
+  it('draws the batch in one segment per move, block end first', () => {
+    const colors = [RED, RAW];
+    const game = aboutToReachBlock(colors);
+    drive(game, 1);
+
+    const first = drive(game, 1);
+    expect(first).toContainEqual({
+      type: 'candy-chopped',
+      pos: at(bench.x, 2),
+      color: RED,
+    });
+    expect(game.state.shelf).toEqual([{ color: RED, bornAt: 2 }]);
+    expect(game.state.severed).toEqual([
+      { segments: frozen(colors).slice(1), fate: 'chop' },
+    ]);
+
+    const second = drive(game, 1);
+    expect(second).toContainEqual({
+      type: 'candy-chopped',
+      pos: at(bench.x, 3),
+      color: RAW,
+    });
+    expect(game.state.shelf).toEqual([
+      { color: RED, bornAt: 2 },
+      { color: RAW, bornAt: 3 },
+    ]);
+    expect(game.state.severed).toEqual([]);
+  });
+
+  it('keeps the dyed batch in production order, oldest sugar first', () => {
+    const colors = [BROWN, RED | BLUE, RED, RAW];
+    const game = aboutToReachBlock(colors);
+
+    const events = drive(game, 1 + colors.length);
+
+    expect(
+      events
+        .filter((event) => event.type === 'candy-chopped')
+        .map((event) => event.color),
+    ).toEqual(colors);
+  });
+
+  it('has nothing to cut when the maker crosses it alone', () => {
+    const game = aboutToReachBlock([]);
+
+    const events = drive(game, 2);
+
+    expect(events.some((event) => event.type === 'strand-cut')).toBe(false);
+    expect(game.state.severed).toEqual([]);
+    expect(game.state.shelf).toEqual([]);
+  });
+
+  it('closes a pickup the batch was still carrying', () => {
+    const game = aboutToReachBlock([RAW, RAW]);
+    // A cube the strand was passing through, two cells back: once the batch is
+    // cut loose no tail will ever clear it.
+    const pos = at(bench.x, 3);
+    game.state.pickups = [{ kind: 'sugar', pos, open: true }];
+
+    drive(game, 1);
+
+    expect(game.state.pickups).toEqual([{ kind: 'sugar', pos, open: false }]);
+    expect(game.state.snake.body).toEqual([]);
+  });
+
+  it('pushes the oldest candy off once the shelf is full', () => {
+    const colors = [RED, ...Array<ColorMask>(SHELF_SLOTS - 1).fill(RAW), YELLOW];
+    const game = aboutToReachBlock(colors);
+
+    const events = drive(game, 1 + colors.length);
+
+    expect(events).toContainEqual({ type: 'candy-staled', color: RED });
+    expect(game.state.shelf).toHaveLength(SHELF_SLOTS);
+    expect(game.state.shelf.at(-1)?.color).toBe(YELLOW);
+  });
+});
+
 describe('Game simulation', () => {
   it('keeps its invariants over a long scripted run', () => {
     const game = new Game({ seed: 7, moveIntervalMs: 200 });
@@ -437,10 +563,16 @@ describe('Game simulation', () => {
 
     for (let tick = 0; tick < 4000; tick += 1) {
       game.step(20, bot);
-      const { snake, pickups } = game.state;
+      const { snake, pickups, shelf } = game.state;
 
       if (!pickups.some((pickup) => pickup.kind === 'sugar')) {
         violations.push(`tick ${tick}: no sugar on the map`);
+      }
+
+      if (shelf.length > SHELF_SLOTS) {
+        violations.push(
+          `tick ${tick}: ${shelf.length} candies on a ${SHELF_SLOTS}-slot shelf`,
+        );
       }
 
       for (const primary of PRIMARIES) {

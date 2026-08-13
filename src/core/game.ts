@@ -1,5 +1,6 @@
-import { COLS, ROWS } from './board';
+import { COLS, ROWS, isChopBlock } from './board';
 import { createRng, type Rng } from './rng';
+import { pushCandy } from './shelf';
 import {
   coversCell,
   createSnake,
@@ -17,6 +18,8 @@ import {
   type GameConfig,
   type GameEvent,
   type GameState,
+  type Segment,
+  type Severed,
   type SnakeState,
   type TurnSource,
   type Vec2,
@@ -48,7 +51,8 @@ export class Game {
     this.state = {
       snake: createSnake({ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }, Dir.Right),
       pickups: [],
-      debris: [],
+      severed: [],
+      shelf: [],
       tick: 0,
       elapsedMs: 0,
     };
@@ -100,9 +104,13 @@ export class Game {
     state.snake = moveSnake(state.snake, dir);
     state.tick += 1;
 
-    this.crumbleDebris(events);
+    this.consumeSevered(events);
     this.openPickupAt(state.snake.head);
     this.kneadOpenDyes(events);
+    // Before the cubes are spent, not after: a chop can abandon an open cube
+    // mid-pass, and it has to be closed again before `spendClearedPickups`
+    // would plant its segment at a cell the tail is no longer heading for.
+    this.cutAtBlock(before, events);
     this.spendClearedPickups(events);
 
     const hitIndex = findSelfHit(state.snake);
@@ -143,6 +151,24 @@ export class Game {
   }
 
   /**
+   * The head reaching the chopping block cuts the whole strand loose there
+   * (design §5). The maker drives on empty-handed while the batch stays
+   * exactly where it lay and is drawn into the block one segment per move,
+   * block end first — see `consumeSevered`.
+   *
+   * Cutting the strand off entirely, rather than chopping the segments that
+   * cross the block while the head runs on, is what keeps the body
+   * follow-the-leader: a segment removed from the middle of a live strand
+   * leaves the one behind it two cells adrift, and next move it teleports to
+   * close the gap. Nothing on this board teleports.
+   */
+  private cutAtBlock(before: SnakeState, events: GameEvent[]): void {
+    if (!isChopBlock(this.state.snake.head) || this.state.snake.body.length === 0) return;
+
+    events.push({ type: 'strand-cut', batch: this.sever(0, 'chop', before) });
+  }
+
+  /**
    * Retires every open pickup the strand has just moved off. The last segment
    * to leave is always the tail, so a sugar cube's cell is exactly the cell
    * the tail vacated this move — which is why the new segment can be planted
@@ -177,44 +203,85 @@ export class Game {
   /**
    * Cuts the strand at the impact. The severed piece stops where it is and
    * becomes debris rather than disappearing (design §6).
-   *
-   * A pickup the lost length was still carrying is left on the board, closed
-   * again: the strand that was passing through it no longer exists, so the
-   * head has to come back for it. Without this, a sugar cube would later
-   * plant its segment at a cell nowhere near the tail.
    */
   private breakStrand(hitIndex: number, before: SnakeState, events: GameEvent[]): void {
-    const { snake, severed } = shatterAt(this.state.snake, hitIndex);
+    events.push({
+      type: 'strand-broken',
+      severed: this.sever(hitIndex, 'crumble', before),
+    });
+  }
+
+  /**
+   * Takes everything from `cutIndex` back off the strand and stands it still.
+   * The piece stops dead on the cells it was *leaving*, not the ones it was
+   * entering — which is also where the view last drew it, so it settles
+   * without jumping a cell. Colors come from the cut itself, which may have
+   * been dyed after the move; a segment a cube planted this move has no
+   * earlier cell and is already standing still.
+   *
+   * Both cuts end here: a self-hit and a chop differ only in where the strand
+   * parts and what becomes of the piece afterwards (design §5, §6).
+   */
+  private sever(cutIndex: number, fate: Severed['fate'], before: SnakeState): Segment[] {
+    const { snake, severed } = shatterAt(this.state.snake, cutIndex);
     this.state.snake = snake;
 
-    // A cut length stops dead, so it freezes on the cells it was *leaving*,
-    // not the ones it was entering — which is also where the view last drew
-    // it, so the piece settles without jumping a cell. Colors come from
-    // `severed`, which may have been dyed after the move. A segment a cube
-    // planted this move has no earlier cell and is already standing still.
     const segments = severed.map((segment, index) => ({
       ...segment,
-      pos: before.body[hitIndex + index]?.pos ?? segment.pos,
+      pos: before.body[cutIndex + index]?.pos ?? segment.pos,
     }));
-    this.state.debris.push({ segments });
-    events.push({ type: 'strand-broken', severed: segments });
+    this.state.severed.push({ segments, fate });
 
+    this.recloseAbandonedPickups();
+    return segments;
+  }
+
+  /**
+   * Closes every open pickup the strand no longer covers, leaving it on the
+   * board for the head to come back for. Both ways a strand can lose length —
+   * a break, a chop — can abandon a pickup mid-pass, and an open cube whose
+   * cell no tail will ever clear would otherwise plant its segment at a cell
+   * nowhere near the tail (design §6).
+   */
+  private recloseAbandonedPickups(): void {
     this.state.pickups = this.state.pickups.map((pickup) =>
-      pickup.open && !coversCell(snake, pickup.pos) ? { ...pickup, open: false } : pickup,
+      pickup.open && !coversCell(this.state.snake, pickup.pos)
+        ? { ...pickup, open: false }
+        : pickup,
     );
   }
 
   /**
-   * Every pile loses its impact-end segment, so piles from separate breaks
-   * crumble side by side rather than queueing behind each other (design §6).
+   * Every cut piece loses its front segment, so pieces cut at different
+   * moments come apart side by side rather than queueing behind each other
+   * (design §6). What that segment becomes is the piece's fate: a break puffs
+   * away as sugar, a chopped batch leaves the block as a candy.
    */
-  private crumbleDebris(events: GameEvent[]): void {
-    this.state.debris = this.state.debris.flatMap(({ segments: [segment, ...rest] }) => {
+  private consumeSevered(events: GameEvent[]): void {
+    this.state.severed = this.state.severed.flatMap((piece) => {
+      const [segment, ...rest] = piece.segments;
       if (segment === undefined) return [];
 
-      events.push({ type: 'debris-crumbled', segment });
-      return rest.length > 0 ? [{ segments: rest }] : [];
+      if (piece.fate === 'crumble') events.push({ type: 'debris-crumbled', segment });
+      else this.shelveCandy(segment, events);
+
+      return rest.length > 0 ? [{ ...piece, segments: rest }] : [];
     });
+  }
+
+  /**
+   * Racks a finished candy, and reports the one a full shelf had to let go of
+   * (design §5). Phase 4 gives waiting customers first refusal here.
+   */
+  private shelveCandy(segment: Segment, events: GameEvent[]): void {
+    const { shelf, staled } = pushCandy(this.state.shelf, {
+      color: segment.color,
+      bornAt: this.state.tick,
+    });
+    this.state.shelf = shelf;
+
+    events.push({ type: 'candy-chopped', pos: segment.pos, color: segment.color });
+    if (staled !== undefined) events.push({ type: 'candy-staled', color: staled.color });
   }
 
   private spawnPickups(events: GameEvent[]): void {
