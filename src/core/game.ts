@@ -45,6 +45,16 @@ export class Game {
   }
 
   /**
+   * How far the snake stands between its last cell and its next, 0…1.
+   * Movement is discrete here but must not look it, so the view draws the
+   * snake at this fraction of the way across. `extraMs` lets a caller add
+   * time it has accumulated but not yet handed to `step`.
+   */
+  moveProgress(extraMs = 0): number {
+    return Math.min((this.moveAccMs + extraMs) / this.config.moveIntervalMs, 1);
+  }
+
+  /**
    * Accumulates real time and moves the snake one cell every
    * `moveIntervalMs`, so timers stay smooth while movement stays on-grid.
    */

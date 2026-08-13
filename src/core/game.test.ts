@@ -37,6 +37,20 @@ describe('Game.step timing', () => {
     expect(game.state.elapsedMs).toBe(DEFAULT_CONFIG.moveIntervalMs * 3);
   });
 
+  it('reports how far the snake stands between cells', () => {
+    const game = new Game();
+    expect(game.moveProgress()).toBe(0);
+
+    game.step(DEFAULT_CONFIG.moveIntervalMs / 2, NO_TURNS);
+    expect(game.moveProgress()).toBeCloseTo(0.5);
+
+    // Unspent time the caller is holding counts toward the next cell too.
+    expect(game.moveProgress(DEFAULT_CONFIG.moveIntervalMs / 2)).toBe(1);
+
+    game.step(DEFAULT_CONFIG.moveIntervalMs / 2, NO_TURNS);
+    expect(game.moveProgress()).toBe(0);
+  });
+
   it('banks the leftover time instead of dropping it', () => {
     const game = new Game();
 

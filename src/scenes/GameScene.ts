@@ -12,7 +12,13 @@ import { SceneKey } from './keys';
  */
 const TICK_MS = 20;
 
-/** Ceiling on catch-up after a stall (tab switch), instead of a death spiral. */
+/**
+ * Ceiling on catch-up after a stall (tab switch), instead of a death spiral.
+ * It must also stay under `moveIntervalMs`, or a single frame can advance two
+ * grid moves and the view has nothing adjacent to slide between — the strand
+ * would teleport. Safe down to 100 ms/cell, well past the 125 ms floor the
+ * difficulty ramp reaches (design §7).
+ */
 const MAX_CATCHUP_MS = TICK_MS * 5;
 
 export class GameScene extends Phaser.Scene {
@@ -20,7 +26,6 @@ export class GameScene extends Phaser.Scene {
   private turns!: DirectionQueue;
   private view!: BoardView;
   private accumulatorMs = 0;
-  private renderedTick = -1;
 
   constructor() {
     super(SceneKey.Game);
@@ -33,29 +38,27 @@ export class GameScene extends Phaser.Scene {
     this.turns = new DirectionQueue(this.core.state.snake.dir);
     this.view = new BoardView(this);
     this.accumulatorMs = 0;
-    this.renderedTick = this.core.state.tick;
 
     bindKeyboard(this, this.turns);
-    this.view.render(this.core.state);
+    this.view.syncToState(this.core.state);
   }
 
   update(_time: number, delta: number): void {
     this.accumulatorMs = Math.min(this.accumulatorMs + delta, MAX_CATCHUP_MS);
+    const tickBefore = this.core.state.tick;
 
     while (this.accumulatorMs >= TICK_MS) {
       this.accumulatorMs -= TICK_MS;
 
       for (const event of this.core.step(TICK_MS, this.turns)) {
-        // Placeholder feedback until the juice pass.
-        if (event.type === 'body-shattered') this.cameras.main.flash(120, 255, 240, 200);
+        if (event.type === 'body-shattered') this.view.shatter(event.positions);
       }
     }
 
-    // The snake only moves every moveIntervalMs, so most frames have nothing
-    // new to draw.
-    if (this.renderedTick !== this.core.state.tick) {
-      this.renderedTick = this.core.state.tick;
-      this.view.render(this.core.state);
-    }
+    // New cells to aim at only arrive on a move tick, but the sprites travel
+    // toward them every frame — hence the split.
+    if (this.core.state.tick !== tickBefore) this.view.syncToState(this.core.state);
+
+    this.view.render(this.core.moveProgress(this.accumulatorMs));
   }
 }

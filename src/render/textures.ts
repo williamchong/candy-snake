@@ -3,10 +3,11 @@ import type Phaser from 'phaser';
 import { COLS, ROWS } from '../core/board';
 
 /**
- * 8-bit arcade art direction: sprites are authored at 8×8 source pixels and
- * blown up by an integer factor, so upscaling stays chunky and crisp (Phaser's
- * `pixelArt: true` supplies the nearest-neighbour filtering). There are no
- * image assets — textures are baked at boot (architecture §7).
+ * Cotton-candy art direction: soft pastels, minimal detail. Sprites are still
+ * authored as 8×8 pixel maps and blown up by an integer factor (Phaser's
+ * `pixelArt: true` supplies the nearest-neighbour filtering), but they are
+ * flat shapes — a fill and a soft edge — rather than shaded blocks. There are
+ * no image assets; textures are baked at boot (architecture §7).
  */
 export const TEXTURE_SIZE = 8;
 export const CELL_SIZE = 32;
@@ -24,26 +25,29 @@ export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 const UNUSED = '#ff00ff';
 
 /**
- * One fixed 16-color palette for the whole game, the way an 8-bit machine had
- * — pixel maps index into it by character ('.' is transparent).
+ * One fixed 16-color palette for the whole game — pixel maps index into it by
+ * character ('.' is transparent).
  *
- * The sprite grays run darkest (1) to brightest (9) and exist to be tinted:
- * tinting multiplies, so white reads as the full tint color and gray as a
- * darker shade of it. That is what lets one sprite recolor to any Phase 2
- * candy color without losing its shading.
+ * Sprite pixels are grays because they exist to be tinted: tinting
+ * multiplies, so white takes the full candy color and the gray edge becomes a
+ * slightly deeper shade of that same color. That keeps every sprite readable
+ * without drawing a hard outline, and lets one texture serve every color the
+ * palette in design §4 can produce.
+ *
+ * The floor colors are pale rainbow bands, used as-is and never tinted.
  */
 const PALETTE: Phaser.Types.Create.Palette = {
   '0': UNUSED,
-  '1': '#2a2440', // sprite outline
-  '2': '#1a1430', // floor, dark tile
-  '3': '#231b41', // floor, light tile
-  '4': '#8c8c8c', // sprite shadow
-  '5': UNUSED,
-  '6': UNUSED,
-  '7': '#dcdcdc', // sprite fill
-  '8': UNUSED,
-  '9': '#ffffff', // sprite highlight
-  A: UNUSED,
+  '1': '#f0e4ec', // floor, pink
+  '2': '#f2e8de', // floor, peach
+  '3': '#f0ecd9', // floor, lemon
+  '4': '#e2eee6', // floor, mint
+  '5': '#e2eaf4', // floor, sky
+  '6': '#eae3f2', // floor, lilac
+  '7': UNUSED,
+  '8': '#9a9a9a', // sprite detail (eyes)
+  '9': '#ffffff', // sprite fill
+  A: '#cfcfcf', // sprite soft edge
   B: UNUSED,
   C: UNUSED,
   D: UNUSED,
@@ -51,47 +55,61 @@ const PALETTE: Phaser.Types.Create.Palette = {
   F: UNUSED,
 };
 
+/** A soft rounded lozenge — the whole strand is made of these. */
 const SEGMENT = [
-  '.111111.',
-  '19977741',
-  '19777741',
-  '17777741',
-  '17777741',
-  '17777441',
-  '14444441',
-  '.111111.',
+  '.AAAAAA.',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  '.AAAAAA.',
 ];
 
-/** The candy maker: the same block with a face, so the head reads at a glance. */
+/** The candy maker: the same lozenge, two dots for eyes, nothing more. */
 const HEAD = [
-  '.111111.',
-  '19777741',
-  '17177171',
-  '17777771',
-  '17777741',
-  '17111171',
-  '14444441',
-  '.111111.',
+  '.AAAAAA.',
+  'A999999A',
+  'A989989A',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  '.AAAAAA.',
 ];
 
+/** Smaller than a segment, so a pickup never reads as part of the strand. */
 const SUGAR = [
   '........',
-  '..1111..',
-  '.199771.',
-  '.197771.',
-  '.177741.',
-  '.177441.',
-  '..1111..',
+  '..AAAA..',
+  '.A9999A.',
+  '.A9999A.',
+  '.A9999A.',
+  '.A9999A.',
+  '..AAAA..',
   '........',
 ];
 
+const FLOOR_BANDS = ['1', '2', '3', '4', '5', '6'];
+const BAND_WIDTH = 3;
+
 /**
- * The kitchen floor, one source pixel per board cell. Baking it beats drawing
- * the checkerboard with a Graphics: a Graphics replays its whole command
- * buffer every frame, whereas this is a single quad.
+ * The kitchen floor, one source pixel per board cell: broad diagonal bands of
+ * pale rainbow. Two rules hold it in place — the bands stay within a couple
+ * of percent of each other in lightness so the floor reads as a soft wash
+ * rather than competing with the candy, and the whole floor sits a clear step
+ * *below* the palest candy, because raw sugar is off-white and has to remain
+ * visible on it (design §4, palette constraints).
+ *
+ * Baking it beats drawing a grid with a Graphics, which would replay its
+ * whole command buffer every frame; this is a single quad.
  */
 const FLOOR = Array.from({ length: ROWS }, (_, y) =>
-  Array.from({ length: COLS }, (_, x) => ((x + y) % 2 === 0 ? '2' : '3')).join(''),
+  Array.from(
+    { length: COLS },
+    (_, x) => FLOOR_BANDS[Math.floor((x + y) / BAND_WIDTH) % FLOOR_BANDS.length] ?? '1',
+  ).join(''),
 );
 
 /** Typed by TextureKey, so a new key without a pixel map is a compile error. */
