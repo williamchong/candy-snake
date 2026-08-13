@@ -31,13 +31,14 @@ The one structural rule that matters (architecture.md §2):
 - Phaser scenes (`src/scenes/`) are a thin presentation layer: they feed input in, advance the core on a fixed timestep via `Game.step(dtMs)`, and render state / play effects from the returned `GameEvent[]`. Scenes never mutate core state, and effects are triggered by events, never by polling state.
 - Scene keys are constants in `src/scenes/keys.ts` — never raw string literals.
 - The color palette (mask → hex/symbol/name/tier) lives only in `core/colors.ts`; HUD and rendering look it up there so they can never disagree.
-- Textures are generated at runtime in BootScene (`Graphics.generateTexture`) — there are no image assets in v1.
+- Textures are generated at runtime in BootScene: `render/textures.ts` holds ASCII pixel maps baked through `scene.textures.generate` against one fixed palette — there are no image assets in v1.
 
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —
 `input/directionQueue.ts` and `render/strand.ts` (no Phaser import in either).
-Phaser-touching code (`scenes/`, `render/boardView.ts`, `render/textures.ts`,
-`input/keyboard.ts`) is verified by the run-candy-snake smoke driver instead.
+Everything that does import Phaser — `scenes/`, `ui/`, and the rest of
+`render/` and `input/` — is verified by the run-candy-snake smoke driver
+instead. The dividing line is the import, not the directory.
 
 ## Conventions
 

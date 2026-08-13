@@ -120,7 +120,7 @@ export class GameScene extends Phaser.Scene {
 
       // The serving window is UIScene's: it draws who is waiting from state,
       // but a child walking on and walking off are one-shots, so they are
-      // handed over rather than left to be inferred (architecture §7).
+      // handed over rather than left to be inferred (architecture §6).
       case 'customer-arrived':
       case 'customer-served':
       case 'customer-left':

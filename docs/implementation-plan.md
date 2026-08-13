@@ -6,7 +6,11 @@ Sizes are relative (S < M < L), not calendar promises.
 
 References: [game-design.md](./game-design.md), [architecture.md](./architecture.md).
 
-## Phase 0 — Scaffold (S)
+> **Status: Phase 5 is the current phase**; 0–4 are done and marked ✅ below.
+> This plan is where phase status is tracked — anything else that mentions it
+> (the README) links here rather than restating it.
+
+## Phase 0 — Scaffold (S) ✅
 
 - Vite + TypeScript (strict) + Phaser 3 project; ESLint, Prettier, Vitest.
 - `npm run dev / build / test / lint / typecheck` all green.
@@ -16,7 +20,7 @@ References: [game-design.md](./game-design.md), [architecture.md](./architecture
 
 **Done when:** `npm run dev` shows a Phaser canvas; CI-ready scripts pass.
 
-## Phase 1 — Gray-box snake core (M)
+## Phase 1 — Gray-box snake core (M) ✅
 
 The engine-free core plus minimal rendering. No colors, no customers yet.
 
@@ -33,7 +37,7 @@ The engine-free core plus minimal rendering. No colors, no customers yet.
 self-hit — and `core/` tests pass. **This is the "does steering feel right?"
 checkpoint; tune tick rate before moving on.**
 
-## Phase 2 — Color system (M)
+## Phase 2 — Color system (M) ✅
 
 - `core/colors.ts` palette table (mask → hex, symbol, name, tier) + `blend`.
   The values are constrained, not free — see game-design §4 "Palette
@@ -53,7 +57,7 @@ checkpoint; tune tick rate before moving on.**
 every color state renders distinctly (check symbols with grayscale filter),
 and the strand visibly turns one segment at a time as it crosses a jar.
 
-## Phase 3 — Chopping block & shelf (M)
+## Phase 3 — Chopping block & shelf (M) ✅
 
 - Chopping block station cells down the right wall, on the serving side of the
   board with the shelf and (Phase 4) the queue. Reaching one cuts the whole
@@ -72,7 +76,7 @@ and the strand visibly turns one segment at a time as it crosses a jar.
 **Done when:** grow → dye → chop produces the right candies in the right
 order, visible on the shelf.
 
-## Phase 4 — Customers, orders, lives → first real game (L)
+## Phase 4 — Customers, orders, lives → first real game (L) ✅
 
 The phase where it becomes a *game*.
 
@@ -95,7 +99,7 @@ The phase where it becomes a *game*.
 **Done when:** a full run — opening levels, serve customers, lose lives, game
 over, restart — is playable start to finish with keyboard.
 
-## Phase 5 — Difficulty ramp & spawn fairness (M)
+## Phase 5 — Difficulty ramp & spawn fairness (M) ◀ current
 
 - `core/difficulty.ts`: continuous curve over (time, serves) driving order
   tier mix, arrival interval, patience, queue cap, snake speed (per the table
@@ -149,8 +153,9 @@ fix, and §8.3's 5 s guarantee caps how hard it can ever bite.
   optional virtual D-pad behind a setting.
 - Replace fixed FIT with `Scale.RESIZE` + `ui/layout.ts` (landscape/portrait
   anchoring per architecture §9).
-- Page hardening: `touch-action: none`, viewport meta, no pull-to-refresh,
-  ≥44 px HUD hit areas.
+- Page hardening: the document-level half already sits in `index.html`
+  (`touch-action: none`, `viewport-fit=cover`, no zoom, no pull-to-refresh),
+  so what is left here is ≥44 px HUD hit areas.
 - Real-device pass (at least one iOS Safari + one Android Chrome): input feel,
   perf (60 fps target), safe-area insets.
 
@@ -181,11 +186,12 @@ every core event has audiovisual feedback.
   (wire-up — earlier phases used in-memory defaults). No seen-hints: the
   opening levels replaced them.
 - Game-over score breakdown + high-score table on menu.
-- Favicon/title/meta (social card), lighthouse sanity pass.
-- Deploy: GitHub Actions → GitHub Pages (or Netlify); verify the deployed
-  build on desktop + phone.
+- Social-card meta and a lighthouse sanity pass. (Title and an inline favicon
+  are already in `index.html`, and the Pages workflow has been deploying `main`
+  since well before this phase — what is left is verifying that build on
+  desktop and phone, not standing it up.)
 
-**Done when:** a public URL serves the game; scores survive reload.
+**Done when:** the public URL serves the finished game; scores survive reload.
 
 ## Milestone summary
 

@@ -9,7 +9,7 @@
 | Build/dev      | **Vite**                           | Fast HMR, trivial static build                  |
 | Tests          | **Vitest**                         | Runs the engine-free core logic in Node         |
 | Lint/format    | ESLint + Prettier                  | Standard                                        |
-| Hosting        | Static (GitHub Pages / Netlify)    | Client-side only, no backend                    |
+| Hosting        | Static (GitHub Pages)              | Client-side only, no backend                    |
 | Persistence    | `localStorage`                     | High scores and settings                        |
 
 No other runtime dependencies. Art for v1 is generated at boot from Phaser
@@ -52,7 +52,7 @@ candy-snake/
 ├── index.html
 ├── package.json / tsconfig.json / vite.config.ts
 ├── docs/                      # these documents
-├── public/                    # favicon, (later) audio files
+├── public/                    # (later) audio; the favicon is inline in index.html
 └── src/
     ├── main.ts                # Phaser.Game config + scene registration
     ├── core/                  # ENGINE-FREE game logic (unit tested)
@@ -70,6 +70,7 @@ candy-snake/
     │   ├── rng.ts             # small seedable PRNG (mulberry32)
     │   └── game.ts            # Game: owns state, step(), emits GameEvents
     ├── scenes/
+    │   ├── keys.ts            # scene keys as constants — never raw strings
     │   ├── BootScene.ts       # generate textures, load settings
     │   ├── MenuScene.ts
     │   ├── GameScene.ts       # renders board+snake, owns the Game instance
@@ -96,6 +97,10 @@ candy-snake/
     └── persist/
         └── storage.ts         # typed localStorage wrapper (scores, settings)
 ```
+
+This is the finished layout: a file appears when its phase lands, so entries a
+later phase owns are not on disk yet. The rule runs one way only — what is on
+disk must appear here, so a file with no entry means one of the two is wrong.
 
 ## 4. Core model (key types)
 
@@ -125,13 +130,14 @@ interface GameState {
   customers: Customer[]; score: number; lives: number;
   streak: number; elapsedMs: number; served: number; over: boolean;
   tutorialIndex: number;   // opening levels done; gates spawn stock and the next order
+  tick: number;            // grid moves elapsed — a sim clock independent of moveIntervalMs
 }
 ```
 
 `Game.step(dtMs, inputs)` advances everything and returns `GameEvent[]`
-(`sugar-pulled`, `sugar-spawned`, `dye-kneaded`, `dye-spent`, `dye-spawned`,
-`strand-broken`, `debris-crumbled`, `strand-cut`, `candy-chopped`,
-`candy-staled`,
+(`sugar-pulled`, `sugar-spawned`, `dye-opened`, `dye-kneaded`, `dye-spent`,
+`dye-spawned`, `strand-broken`, `debris-crumbled`, `strand-cut`,
+`candy-chopped`, `candy-staled`,
 `customer-arrived`, `customer-served`, `customer-left`, `life-lost`,
 `game-over`, …). The Phaser layer never mutates core state; it only renders it
 and plays effects per event. Events carry the data needed for presentation
@@ -163,8 +169,10 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 ```
 
 - **GameScene** owns the `Game` core instance, the input adapters, and the
-  board view. On `game-over` it sleeps and wakes `GameOverScene` with the run
-  summary.
+  board view. On `game-over` it stops the HUD it launched and starts
+  `GameOverScene` with the run summary. Nothing is kept asleep for reuse: a
+  restart builds a fresh `Game`, so a lingering scene would only hold the last
+  run's core alive.
 - **UIScene** runs in parallel (`scene.launch`) above GameScene — the standard
   Phaser pattern so HUD ignores any camera effects (screen shake on shatter)
   applied to the play field. It is handed the same `Game` and reads its state
@@ -210,8 +218,8 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   accessibility **symbol glyph** (bitmap text) per the design doc.
 - Effects are Phaser particle emitters + tweens, all triggered by GameEvents,
   never by polling state.
-- Palette lives in one table in `core/colors.ts` (mask → hex + symbol + name)
-  so core, HUD, and cheat sheet can never disagree.
+- Palette lives in one table in `core/colors.ts` (mask → hex, symbol, name,
+  tier) so core, HUD, and cheat sheet can never disagree.
 
 ## 8. Input
 
@@ -266,18 +274,23 @@ back to defaults silently. No PII, no backend.
   into the bench, asserting invariants on every tick (≥1 sugar on map, no
   pickup on snake, lives in range, shelf ≤ 6, queue within cap, no child
   waiting beside a candy they ordered, no clock on an opening-level customer).
+- **Smoke (Playwright):** `.claude/skills/run-candy-snake/driver.mjs` boots
+  Vite in-process, loads the page headless, fails on any console error or a
+  missing canvas, and saves a screenshot. Not a nice-to-have: nothing that
+  imports Phaser runs under Vitest, so this is the only automated check those
+  files get, and the one to run after touching them.
 - **Manual/E2E:** device pass on real phones per milestone (Chrome DevTools
   device emulation is the daily driver, real-device check before release).
-  Playwright smoke test (page loads, canvas mounts, menu → game transition)
-  is a nice-to-have, not v1-blocking.
 
 ## 12. Build & deploy
 
 - `npm run dev` (Vite), `npm run build` → `dist/` static bundle,
-  `npm run test` / `lint` / `typecheck` gate commits.
+  `npm run test` / `lint` / `typecheck` / `format:check` gate commits, and
+  `.github/workflows/ci.yml` runs the same set on every push and PR.
 - Deploy `dist/` to GitHub Pages via Actions on push to `main`
   (`.github/workflows/deploy.yml`, using `upload-pages-artifact` /
   `deploy-pages`; repo Settings → Pages source must be "GitHub Actions").
+  Live at <https://williamchong.github.io/candy-snake/>.
   Vite's `base: './'` keeps asset URLs relative so the bundle works both at the
   `/candy-snake/` project-page path and under `vite preview`.
 - Phaser is the only heavy dependency (~1.1 MB min+gz ~300 KB); acceptable for

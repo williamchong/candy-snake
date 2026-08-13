@@ -8,7 +8,25 @@ in red/yellow/blue dye to color it (colors blend like real paint), then chop
 the strand into candies at the chopping block to serve the children queuing at
 your shop window — before their patience runs out.
 
-**Status:** planning complete, implementation not started.
+**Play it:** <https://williamchong.github.io/candy-snake/> (deployed from `main`).
+
+**Status:** playable end to end on desktop — opening levels, customers, lives,
+score, game over, restart. Mobile, the cheat sheet and persistence are still
+ahead; the [implementation plan](docs/implementation-plan.md) tracks which
+phase the work is on.
+
+## Develop
+
+```sh
+npm install
+npm run dev                          # Vite dev server
+npm run test                         # Vitest over the engine-free logic
+npm run typecheck && npm run lint && npm run format:check
+```
+
+`npm run build` runs the typecheck and writes `dist/`. See
+[CLAUDE.md](CLAUDE.md) for the one structural rule (`src/core/` imports no
+Phaser) and the smoke driver that covers the Phaser layer.
 
 ## Documentation
 

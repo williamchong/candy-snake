@@ -419,11 +419,12 @@ rules, so nothing respawns until the whole snake has cleared it.
 4. Pickups never spawn on the snake, stations, or the cell directly in front
    of the head (no "free" accidental pickups).
 
-Rule 3 needs orders to spawn against, so until they exist (Phase 5) rule 2's
-cap doubles as a floor: one jar of each primary is kept on the map at all
-times. That is deliberately more generous than the finished game — it makes
-every color reachable while the color system is the only thing being judged,
-and the pity spawner replaces it rather than adding to it.
+Rule 3 is not built yet (Phase 5), so until it lands rule 2's cap doubles as a
+floor: one jar of each primary is kept on the map at all times, and the opening
+levels narrow that to their own stock (§7). That floor is deliberately more
+generous than the finished game — it makes every color reachable without asking
+what anyone ordered — and the pity spawner replaces it rather than adding to
+it, taking its stock list from the orders actually waiting.
 
 ## 9. Scoring
 
