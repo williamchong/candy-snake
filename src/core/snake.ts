@@ -1,5 +1,6 @@
 import { eq, stepCell } from './board';
-import { RAW, type Dir, type SnakeState, type Vec2 } from './types';
+import { blend, type Primary } from './colors';
+import { RAW, type Dir, type Segment, type SnakeState, type Vec2 } from './types';
 
 /** Starting length is head-only — no body until the first sugar (design §5). */
 export const createSnake = (head: Vec2, dir: Dir): SnakeState => ({
@@ -33,6 +34,22 @@ export const moveSnake = (snake: SnakeState, dir: Dir, grow: boolean): SnakeStat
 };
 
 /**
+ * Kneads a primary into every current body segment (design §4). Each segment
+ * blends from its own mix, so a `[red, raw]` strand eating blue becomes
+ * `[purple, blue]` rather than one uniform color — that per-segment
+ * independence is the whole production line.
+ *
+ * The head is the candy maker, not sugar, so it holds no color.
+ */
+export const dyeBody = (snake: SnakeState, primary: Primary): SnakeState => ({
+  ...snake,
+  body: snake.body.map((segment) => ({
+    ...segment,
+    color: blend(segment.color, primary),
+  })),
+});
+
+/**
  * Index of the body segment the head has run into, or -1. Called *after* the
  * move so the tail has already vacated: entering the cell the tail just left
  * is legal, which is the classic snake behaviour.
@@ -48,7 +65,7 @@ export const findSelfHit = (snake: SnakeState): number =>
 export const shatterAt = (
   snake: SnakeState,
   index: number,
-): { snake: SnakeState; destroyed: Vec2[] } => ({
+): { snake: SnakeState; destroyed: Segment[] } => ({
   snake: { ...snake, body: snake.body.slice(0, index) },
-  destroyed: snake.body.slice(index).map((segment) => segment.pos),
+  destroyed: snake.body.slice(index),
 });

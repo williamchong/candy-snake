@@ -1,6 +1,8 @@
 import type Phaser from 'phaser';
 
 import { COLS, ROWS } from '../core/board';
+import { COLORS, colorIndex } from '../core/colors';
+import type { ColorMask } from '../core/types';
 
 /**
  * Cotton-candy art direction: soft pastels, minimal detail. Sprites are still
@@ -17,9 +19,20 @@ export const TextureKey = {
   Head: 'head',
   Segment: 'segment',
   Sugar: 'sugar',
+  Dye: 'dye',
   Floor: 'floor',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
+
+/**
+ * Glyph textures are keyed by color mask rather than listed in `TextureKey`,
+ * because they are baked from the palette in `core/colors.ts` rather than from
+ * a pixel map here. Still a checked type, so a sprite can only ever be handed
+ * a key that something generates.
+ */
+export type GlyphTextureKey = `glyph-${number}`;
+export const glyphTextureKey = (color: ColorMask): GlyphTextureKey =>
+  `glyph-${colorIndex(color)}`;
 
 /** Loud magenta, so a typo in a pixel map below is impossible to miss. */
 const UNUSED = '#ff00ff';
@@ -91,6 +104,22 @@ const SUGAR = [
   '........',
 ];
 
+/**
+ * A dye jar: a narrow neck flaring into a round belly. The silhouette is what
+ * separates it from both the strand's lozenge and sugar's square pastille —
+ * the tint only says *which* primary it is, never *that* it is a jar.
+ */
+const DYE = [
+  '..AAAA..',
+  '..A99A..',
+  '..A99A..',
+  '.A9999A.',
+  'A999999A',
+  'A999999A',
+  'A999999A',
+  '.AAAAAA.',
+];
+
 const FLOOR_BANDS = ['1', '2', '3', '4', '5', '6'];
 const BAND_WIDTH = 3;
 
@@ -117,11 +146,50 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.Segment]: SEGMENT,
   [TextureKey.Head]: HEAD,
   [TextureKey.Sugar]: SUGAR,
+  [TextureKey.Dye]: DYE,
   [TextureKey.Floor]: FLOOR,
 };
+
+/** Half a cell: big enough to read, small enough to sit inside the lozenge. */
+const GLYPH_SIZE = 16;
 
 export const generateTextures = (scene: Phaser.Scene): void => {
   for (const [key, data] of Object.entries(PIXEL_MAPS)) {
     scene.textures.generate(key, { data, palette: PALETTE });
   }
+};
+
+/**
+ * Bakes the eight accessibility symbols (design §4) into textures, once, at
+ * boot. They are font glyphs rather than pixel maps — at 8×8 these shapes are
+ * illegible — but baking them means the board stamps pooled Images like every
+ * other sprite instead of carrying a Text object per segment, and Phaser backs
+ * every Text with its own canvas.
+ *
+ * Drawn white so a tint can ink them dark, and baked at their display size so
+ * `pixelArt: true`'s nearest-neighbour filtering samples them 1:1.
+ */
+export const generateGlyphTextures = (scene: Phaser.Scene): void => {
+  COLORS.forEach((info, color) => {
+    const label = scene.make.text(
+      {
+        text: info.symbol,
+        style: { fontFamily: 'sans-serif', fontSize: '13px', color: '#ffffff' },
+        origin: { x: 0.5, y: 0.5 },
+      },
+      false,
+    );
+
+    const baked = scene.make.renderTexture(
+      { width: GLYPH_SIZE, height: GLYPH_SIZE },
+      false,
+    );
+    baked.draw(label, GLYPH_SIZE / 2, GLYPH_SIZE / 2);
+    baked.saveTexture(glyphTextureKey(color));
+
+    // A saved RenderTexture leaves its texture registered when destroyed, so
+    // neither object has to outlive this loop.
+    baked.destroy();
+    label.destroy();
+  });
 };

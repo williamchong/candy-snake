@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { COLS, ROWS, cellKey, eq, stepCell } from './board';
+import { BLUE, BROWN, PRIMARIES, RED, YELLOW, type Primary } from './colors';
 import { DEFAULT_CONFIG, Game } from './game';
 import { createRng } from './rng';
 import { snakeLength } from './snake';
-import { Dir, RAW, type TurnSource, type Vec2 } from './types';
+import { Dir, RAW, type ColorMask, type TurnSource, type Vec2 } from './types';
 
 const at = (x: number, y: number): Vec2 => ({ x, y });
 
@@ -12,8 +13,22 @@ const NO_TURNS: TurnSource = { take: () => undefined };
 
 const alwaysTurning = (dir: Dir): TurnSource => ({ take: () => dir });
 
-const sugarAheadOf = (game: Game): Vec2 =>
+/** The cell the snake will enter next — where a scripted pickup must sit. */
+const cellAheadOf = (game: Game): Vec2 =>
   stepCell(game.state.snake.head, game.state.snake.dir);
+
+const colorsOf = (game: Game): ColorMask[] =>
+  game.state.snake.body.map((segment) => segment.color);
+
+/** Drives one grid move with the given pickup sitting in the snake's path. */
+const eatAhead = (game: Game, primary?: Primary) => {
+  const pos = cellAheadOf(game);
+  game.state.pickups = [
+    primary === undefined ? { kind: 'sugar', pos } : { kind: 'dye', pos, primary },
+  ];
+
+  return { pos, events: game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS) };
+};
 
 describe('Game.step timing', () => {
   it('holds the snake still until a full move interval has passed', () => {
@@ -86,32 +101,98 @@ describe('Game turning', () => {
 });
 
 describe('Game sugar', () => {
-  it('starts with sugar on the map', () => {
-    expect(new Game().state.pickups).toHaveLength(1);
+  it('starts with sugar and one jar of each primary on the map', () => {
+    const pickups = new Game().state.pickups;
+
+    expect(pickups.filter((pickup) => pickup.kind === 'sugar')).toHaveLength(1);
+    expect(pickups.filter((pickup) => pickup.kind === 'dye')).toHaveLength(3);
   });
 
-  it('announces the opening sugar, so no spawn goes unrendered', () => {
+  it('announces every opening spawn, so none goes unrendered', () => {
     const game = new Game();
-    const opening = game.state.pickups[0];
+    const opening = game.state.pickups;
+    const announced = game
+      .step(1, NO_TURNS)
+      .filter((event) => event.type === 'sugar-spawned' || event.type === 'dye-spawned');
 
-    expect(opening).toBeDefined();
-    expect(game.step(1, NO_TURNS)).toContainEqual({
-      type: 'sugar-spawned',
-      pos: opening?.pos,
-    });
+    expect(announced).toHaveLength(opening.length);
   });
 
   it('eats sugar in its path, grows, and replaces it', () => {
     const game = new Game();
-    const target = sugarAheadOf(game);
-    game.state.pickups = [{ kind: 'sugar', pos: target }];
+    const { pos, events } = eatAhead(game);
 
-    const events = game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS);
-
-    expect(events).toContainEqual({ type: 'sugar-eaten', pos: target, length: 2 });
+    expect(events).toContainEqual({ type: 'sugar-eaten', pos, length: 2 });
     expect(events.some((event) => event.type === 'sugar-spawned')).toBe(true);
     expect(snakeLength(game.state.snake)).toBe(2);
-    expect(game.state.pickups).toHaveLength(1);
+  });
+});
+
+describe('Game dye', () => {
+  /** Grows the strand to `length` segments without coloring it. */
+  const grownTo = (length: number): Game => {
+    const game = new Game();
+    for (let index = 0; index < length; index += 1) eatAhead(game);
+    return game;
+  };
+
+  it('colors the whole strand without lengthening it', () => {
+    const game = grownTo(2);
+    const before = snakeLength(game.state.snake);
+
+    const { pos, events } = eatAhead(game, RED);
+
+    expect(events).toContainEqual({
+      type: 'dye-eaten',
+      pos,
+      primary: RED,
+      wasted: false,
+    });
+    expect(snakeLength(game.state.snake)).toBe(before);
+    expect(colorsOf(game)).toEqual([RED, RED]);
+  });
+
+  it('takes the jar off the board and puts a fresh one back', () => {
+    const game = grownTo(1);
+
+    const { events } = eatAhead(game, BLUE);
+
+    expect(events.some((event) => event.type === 'dye-spawned')).toBe(true);
+    const jars = game.state.pickups.filter(
+      (pickup) => pickup.kind === 'dye' && pickup.primary === BLUE,
+    );
+    expect(jars).toHaveLength(1);
+  });
+
+  it('wastes a dye eaten with no strand to knead it into', () => {
+    const game = new Game();
+
+    const { pos, events } = eatAhead(game, RED);
+
+    expect(events).toContainEqual({ type: 'dye-eaten', pos, primary: RED, wasted: true });
+    expect(game.state.snake.body).toHaveLength(0);
+  });
+
+  it('appends raw sugar behind dyed segments — the production line', () => {
+    const game = grownTo(2);
+    eatAhead(game, RED);
+    eatAhead(game, BLUE);
+
+    expect(colorsOf(game)).toEqual([RED | BLUE, RED | BLUE]);
+
+    eatAhead(game);
+
+    // Design §4: segments gained after a dye keep no color.
+    expect(colorsOf(game)).toEqual([RED | BLUE, RED | BLUE, RAW]);
+  });
+
+  it('over-mixes to brown when a third primary lands', () => {
+    const game = grownTo(1);
+    eatAhead(game, RED);
+    eatAhead(game, YELLOW);
+    eatAhead(game, BLUE);
+
+    expect(colorsOf(game)).toEqual([BROWN]);
   });
 });
 
@@ -132,7 +213,10 @@ describe('Game shatter', () => {
 
     expect(events).toContainEqual({
       type: 'body-shattered',
-      positions: [at(0, 1), at(0, 2)],
+      destroyed: [
+        { pos: at(0, 1), color: RAW },
+        { pos: at(0, 2), color: RAW },
+      ],
     });
     expect(game.state.snake.body).toHaveLength(3);
     expect(game.state.snake.head).toEqual(at(0, 1));
@@ -155,6 +239,25 @@ describe('Game simulation', () => {
 
       if (!pickups.some((pickup) => pickup.kind === 'sugar')) {
         violations.push(`tick ${tick}: no sugar on the map`);
+      }
+
+      for (const primary of PRIMARIES) {
+        const jars = pickups.filter(
+          (pickup) => pickup.kind === 'dye' && pickup.primary === primary,
+        );
+        if (jars.length > 1) {
+          violations.push(`tick ${tick}: ${jars.length} jars of primary ${primary}`);
+        }
+      }
+
+      for (const segment of snake.body) {
+        if (
+          !Number.isInteger(segment.color) ||
+          segment.color < 0 ||
+          segment.color > BROWN
+        ) {
+          violations.push(`tick ${tick}: segment mask ${segment.color} out of range`);
+        }
       }
 
       const occupied = new Set([

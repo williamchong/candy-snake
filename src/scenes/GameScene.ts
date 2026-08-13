@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 
 import { DEFAULT_CONFIG, Game } from '../core/game';
+import type { GameEvent } from '../core/types';
 import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
 import { BoardView } from '../render/boardView';
@@ -51,7 +52,7 @@ export class GameScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
 
       for (const event of this.core.step(TICK_MS, this.turns)) {
-        if (event.type === 'body-shattered') this.view.shatter(event.positions);
+        this.play(event);
       }
     }
 
@@ -60,5 +61,32 @@ export class GameScene extends Phaser.Scene {
     if (this.core.state.tick !== tickBefore) this.view.syncToState(this.core.state);
 
     this.view.render(this.core.moveProgress(this.accumulatorMs));
+  }
+
+  /** Effects are driven by events, never by polling state (architecture §7). */
+  private play(event: GameEvent): void {
+    switch (event.type) {
+      case 'body-shattered':
+        this.view.shatter(event.destroyed);
+        return;
+
+      case 'dye-eaten':
+        // A dye that lands needs nothing here — the strand visibly recolors.
+        // A wasted one has to say so itself (design §5).
+        if (event.wasted) this.view.splash(event.pos, event.primary);
+        return;
+
+      // Nothing to play yet; the juice pass (Phase 7) fills these in.
+      case 'sugar-eaten':
+      case 'sugar-spawned':
+      case 'dye-spawned':
+        return;
+
+      default:
+        // A new GameEvent member becomes a type error here rather than
+        // quietly going unrendered.
+        event satisfies never;
+        return;
+    }
   }
 }

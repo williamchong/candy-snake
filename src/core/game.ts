@@ -1,13 +1,21 @@
 import { COLS, ROWS, stepCell } from './board';
 import { createRng, type Rng } from './rng';
-import { createSnake, findSelfHit, moveSnake, shatterAt, snakeLength } from './snake';
-import { ensureSugar, pickupIndexAt } from './spawner';
+import {
+  createSnake,
+  dyeBody,
+  findSelfHit,
+  moveSnake,
+  shatterAt,
+  snakeLength,
+} from './snake';
+import { ensurePickups, pickupIndexAt } from './spawner';
 import {
   Dir,
   OPPOSITE,
   type GameConfig,
   type GameEvent,
   type GameState,
+  type Pickup,
   type TurnSource,
 } from './types';
 
@@ -41,7 +49,7 @@ export class Game {
       elapsedMs: 0,
     };
 
-    this.spawnSugar(this.pending);
+    this.spawnPickups(this.pending);
   }
 
   /**
@@ -79,36 +87,56 @@ export class Game {
 
     const nextHead = stepCell(state.snake.head, dir);
     const pickupIndex = pickupIndexAt(state, nextHead);
-    const ate = state.pickups[pickupIndex]?.kind === 'sugar';
+    const eaten = state.pickups[pickupIndex];
 
-    state.snake = moveSnake(state.snake, dir, ate);
+    // Only sugar lengthens the strand; a dye jar colors what is already there.
+    state.snake = moveSnake(state.snake, dir, eaten?.kind === 'sugar');
     state.tick += 1;
 
-    if (ate) {
+    if (eaten !== undefined) {
       state.pickups.splice(pickupIndex, 1);
-      events.push({
-        type: 'sugar-eaten',
-        pos: nextHead,
-        length: snakeLength(state.snake),
-      });
+      this.consume(eaten, events);
     }
 
     const hitIndex = findSelfHit(state.snake);
     if (hitIndex >= 0) {
       const { snake, destroyed } = shatterAt(state.snake, hitIndex);
       state.snake = snake;
-      events.push({ type: 'body-shattered', positions: destroyed });
+      events.push({ type: 'body-shattered', destroyed });
     }
 
-    this.spawnSugar(events);
+    this.spawnPickups(events);
   }
 
-  private spawnSugar(events: GameEvent[]): void {
-    const sugar = ensureSugar(this.state, this.rng);
-    if (!sugar) return;
+  /**
+   * Applies a pickup to the strand. Called after the move, so "every current
+   * body segment" (design §4) means the body as it now stands — including the
+   * raw segment sugar just appended.
+   */
+  private consume(pickup: Pickup, events: GameEvent[]): void {
+    const pos = pickup.pos;
 
-    this.state.pickups.push(sugar);
-    events.push({ type: 'sugar-spawned', pos: sugar.pos });
+    if (pickup.kind === 'sugar') {
+      events.push({ type: 'sugar-eaten', pos, length: snakeLength(this.state.snake) });
+      return;
+    }
+
+    // A dye with no strand to knead it into is simply lost (design §5).
+    const wasted = this.state.snake.body.length === 0;
+    if (!wasted) this.state.snake = dyeBody(this.state.snake, pickup.primary);
+
+    events.push({ type: 'dye-eaten', pos, primary: pickup.primary, wasted });
+  }
+
+  private spawnPickups(events: GameEvent[]): void {
+    for (const pickup of ensurePickups(this.state, this.rng)) {
+      this.state.pickups.push(pickup);
+      events.push(
+        pickup.kind === 'sugar'
+          ? { type: 'sugar-spawned', pos: pickup.pos }
+          : { type: 'dye-spawned', pos: pickup.pos, primary: pickup.primary },
+      );
+    }
   }
 
   /**

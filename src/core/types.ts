@@ -3,6 +3,10 @@
  * Phaser — see docs/architecture.md §2.
  */
 
+// Type-only, so the colors.ts ↔ types.ts pairing is erased at compile time
+// and never becomes a runtime import cycle.
+import type { Primary } from './colors';
+
 /** A board cell coordinate (integer cell indices, never pixels). */
 export interface Vec2 {
   readonly x: number;
@@ -46,8 +50,9 @@ export interface SnakeState {
   readonly body: readonly Segment[];
 }
 
-/** A union of one for now — `kind` is what dye jars will discriminate on. */
-export type Pickup = { readonly kind: 'sugar'; readonly pos: Vec2 };
+export type Pickup =
+  | { readonly kind: 'sugar'; readonly pos: Vec2 }
+  | { readonly kind: 'dye'; readonly pos: Vec2; readonly primary: Primary };
 
 export interface GameState {
   snake: SnakeState;
@@ -71,7 +76,20 @@ export interface GameConfig {
 export type GameEvent =
   | { readonly type: 'sugar-eaten'; readonly pos: Vec2; readonly length: number }
   | { readonly type: 'sugar-spawned'; readonly pos: Vec2 }
-  | { readonly type: 'body-shattered'; readonly positions: readonly Vec2[] };
+  /**
+   * `wasted` marks a dye eaten with no body to knead it into — design §5 asks
+   * for a splash and no effect, and the view needs to tell the two apart
+   * without re-reading state (architecture §4).
+   */
+  | {
+      readonly type: 'dye-eaten';
+      readonly pos: Vec2;
+      readonly primary: Primary;
+      readonly wasted: boolean;
+    }
+  | { readonly type: 'dye-spawned'; readonly pos: Vec2; readonly primary: Primary }
+  /** Carries whole segments, so the puff can show the colors that were lost. */
+  | { readonly type: 'body-shattered'; readonly destroyed: readonly Segment[] };
 
 /**
  * How the core pulls a buffered turn at the exact moment a move tick fires.
