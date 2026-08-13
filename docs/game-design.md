@@ -104,7 +104,11 @@ Rules:
   body retraces the head's path exactly, every segment on the strand when the
   head opened the jar *will* cross it — so the strand ends up uniformly
   blended, but it turns visibly, one segment at a time, from the head end
-  back. The head is the candy maker, not sugar, so it takes no color.
+  back. The head is the candy maker, not sugar, so it takes no color — it only
+  **flashes** the jar's hue as it passes through, then washes back to its own
+  dark tint. That is confirmation, not color: nothing about the head is dyed,
+  and the flash lasts less than one grid move at the ramp's fastest speed, so
+  it is always gone before the first segment turns.
 - **New sugar is raw.** A cube taken *after* the head passed a jar plants its
   segment only once the tail has cleared the cube — which is a move later than
   the jar is spent, so it can never catch that dye. The body therefore becomes
@@ -151,7 +155,10 @@ has to earn its palette rather than pick pretty values:
   cubes, HUD chrome and the floor are not candies. They are separated by
   *value* — the head is the darkest thing on the board, the floor the palest —
   which leaves the whole hue range free to carry meaning. Picking a "spare"
-  hue does not work: the eight states already span most of the wheel.
+  hue does not work: the eight states already span most of the wheel. The one
+  exception is momentary: the head borrows a jar's hue for the length of its
+  pickup flash (§4). A borrowed hue is readable precisely *because* the head
+  never otherwise has one, and it must always end back at its own value.
 - **Raw is off-white, so a raw strand and a sugar cube share a color.** That
   is correct — they are the same material. Size and symbol separate them.
 - Symbols are the fallback wherever two pastels read alike, which is why they

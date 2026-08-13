@@ -252,6 +252,22 @@ describe('Game dye', () => {
     expect(colorsOf(game)).toEqual([RED, RED, RED]);
   });
 
+  it('announces the jar on the move the head opens it, once', () => {
+    const game = grownTo(2);
+    const pos = cellAheadOf(game);
+    game.state.pickups = [createDye(pos, RED)];
+
+    const opening = drive(game, 1);
+    expect(opening).toContainEqual({ type: 'dye-opened', pos, primary: RED });
+    // The head takes no color, so the jar is open a move before it kneads.
+    expect(opening.some((event) => event.type === 'dye-kneaded')).toBe(false);
+
+    // It stays open while the rest of the strand crosses; only the head
+    // entering opens it, so it must not announce itself again.
+    const rest = drive(game, 2);
+    expect(rest.some((event) => event.type === 'dye-opened')).toBe(false);
+  });
+
   it('keeps the jar on the board until the strand has cleared it', () => {
     const game = grownTo(2);
     const pos = cellAheadOf(game);

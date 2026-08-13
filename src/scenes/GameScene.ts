@@ -79,6 +79,12 @@ export class GameScene extends Phaser.Scene {
         this.view.splash(event.pos, event.color);
         return;
 
+      case 'dye-opened':
+        // The strand behind the head does not start turning until the next
+        // move, so without this the pickup reads as a move late.
+        this.view.flashHead(event.primary);
+        return;
+
       case 'dye-spent':
         // A dye that landed needs nothing here — the strand visibly recolored
         // segment by segment. One that kneaded nothing has to say so (§5).

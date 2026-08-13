@@ -142,6 +142,13 @@ export type GameEvent =
       readonly kneaded: number;
     }
   | { readonly type: 'dye-spawned'; readonly pos: Vec2; readonly primary: Primary }
+  /**
+   * The head just entered a jar's cell and opened it. Nothing is colored yet —
+   * the head is the maker and takes no color, so the first segment does not
+   * turn until the move after (design §4). It exists so the view can confirm
+   * the pickup at the moment the player made it, rather than a move late.
+   */
+  | { readonly type: 'dye-opened'; readonly pos: Vec2; readonly primary: Primary }
   /** The strand broke; `severed` is the piece now frozen as debris, impact end first. */
   | { readonly type: 'strand-broken'; readonly severed: readonly Segment[] }
   /** The block cut the strand loose; `batch` is frozen where it lay, block end first. */

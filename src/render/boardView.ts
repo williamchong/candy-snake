@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS } from '../core/board';
-import { colorInfo } from '../core/colors';
+import { colorInfo, type Primary } from '../core/colors';
 import { SHELF_SLOTS } from '../core/shelf';
 import {
   RAW,
@@ -53,6 +53,17 @@ const SUGAR_TINT = colorInfo(RAW).hex;
 const NO_TINT = 0xffffff;
 
 const SHATTER_MS = 280;
+
+/**
+ * How long the head wears a jar's hue after opening it. It is a confirmation,
+ * not a state — hue belongs to candies (design §4) — so it has to be over
+ * before the first segment turns behind it, or the head is showing a candy
+ * hue at the moment the player looks at the strand to read one. That deadline
+ * is one grid move, and the difficulty ramp takes that down to 125 ms/cell
+ * (design §7), so the flash stays under the *fastest* move rather than the
+ * current one.
+ */
+const DYE_FLASH_MS = 120;
 
 /** Enough to read debris as spilled sugar rather than as live strand. */
 const DEBRIS_ALPHA = 0.5;
@@ -178,6 +189,19 @@ const show = (entry: Drawn, visible: boolean): void => {
   entry.glyph?.setVisible(visible);
 };
 
+/**
+ * Blends two packed 0xRRGGBB tints channel by channel: `t` of 0 gives `from`,
+ * 1 gives `to`. Hand-rolled rather than taken from `Phaser.Display.Color`
+ * because this module imports Phaser for types only, and one lerp is not worth
+ * pulling the runtime in for.
+ */
+const mixTint = (from: number, to: number, t: number): number => {
+  const channel = (shift: number): number =>
+    Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t) << shift;
+
+  return channel(16) | channel(8) | channel(0);
+};
+
 /** Colorless items keep whatever tint they were built with. */
 const paint = (entry: Drawn, color: ColorMask | undefined): void => {
   if (color === undefined) return;
@@ -264,6 +288,17 @@ class SpritePool {
       if (entry !== undefined) show(entry, false);
     }
     this.active = items.length;
+  }
+
+  /**
+   * Overrides the tint of every live sprite. Only a pool whose items carry no
+   * color of their own can use this — `retarget` repaints the others from
+   * state on the next move and would wipe it out.
+   */
+  wash(tint: number): void {
+    for (let index = 0; index < this.active; index += 1) {
+      this.entries[index]?.image.setTint(tint);
+    }
   }
 
   draw(progress: number): void {
@@ -411,6 +446,8 @@ export class BoardView {
   private readonly shelf: ShelfStrip;
   private readonly shards: ShardBurst;
   private previousPickups: readonly Pickup[] | undefined;
+  /** The head's dye flash, held so a second jar can cut the first one short. */
+  private headFlash: Phaser.Tweens.Tween | undefined;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.drawFloor();
@@ -506,6 +543,32 @@ export class BoardView {
    */
   splash(pos: Vec2, color: ColorMask): void {
     this.shards.burst({ pos, color });
+  }
+
+  /**
+   * The maker takes the jar's color for a moment and washes back to its own —
+   * confirmation that the pickup landed, on the move it landed, since the
+   * strand itself does not start turning until the move after (design §4).
+   * Borrowed, never kept: `HEAD_TINT` is where it always ends up, so the head
+   * cannot be mistaken for a candy hue once the tween is done.
+   */
+  flashHead(primary: Primary): void {
+    // Taking a second jar mid-flash restarts from that jar's color rather than
+    // leaving two tweens writing the same tint on the same frame.
+    this.headFlash?.stop();
+
+    const wash = { t: 0 };
+    const from = colorInfo(primary).hex;
+
+    this.head.wash(from);
+    this.headFlash = this.scene.tweens.add({
+      targets: wash,
+      t: 1,
+      duration: DYE_FLASH_MS,
+      ease: 'Quad.easeIn',
+      onUpdate: () => this.head.wash(mixTint(from, HEAD_TINT, wash.t)),
+      onComplete: () => this.head.wash(HEAD_TINT),
+    });
   }
 
   private drawStations(): void {

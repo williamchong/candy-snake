@@ -105,7 +105,7 @@ export class Game {
     state.tick += 1;
 
     this.consumeSevered(events);
-    this.openPickupAt(state.snake.head);
+    this.openPickupAt(state.snake.head, events);
     this.kneadOpenDyes(events);
     // Before the cubes are spent, not after: a chop can abandon an open cube
     // mid-pass, and it has to be closed again before `spendClearedPickups`
@@ -119,12 +119,19 @@ export class Game {
     this.spawnPickups(events);
   }
 
-  private openPickupAt(pos: Vec2): void {
+  private openPickupAt(pos: Vec2, events: GameEvent[]): void {
     const index = pickupIndexAt(this.state, pos);
     const pickup = this.state.pickups[index];
     if (pickup === undefined || pickup.open) return;
 
     this.state.pickups[index] = { ...pickup, open: true };
+
+    // A jar only announces itself the first time it is opened, so a strand
+    // that abandons one mid-pass and comes back for it says so twice — which
+    // is right: the player made the pickup twice.
+    if (pickup.kind === 'dye') {
+      events.push({ type: 'dye-opened', pos: pickup.pos, primary: pickup.primary });
+    }
   }
 
   /**
