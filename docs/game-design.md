@@ -33,6 +33,17 @@ Traditional candy making, step by step, mapped onto game verbs:
 The board is the kitchen floor. The chopping block sits in a fixed corner next
 to the serving window where customers (children) appear.
 
+### Art direction (potential — suggestion only, not locked)
+
+"Candy snake" is a real candy — the segmented, multi-colored gummy snake —
+and it maps neatly onto this game's per-segment color model. A possible art
+direction: render body segments as glossy, translucent gummy pieces (rounded
+shape, white specular highlight, slight squash-and-stretch), so the strand
+reads as a gummy snake and shatter/chop naturally reads as it breaking into
+gummy chunks. The *narrative* would stay the candy-maker fiction (dye jars,
+chopping block); the gummy look is purely aesthetic. Affects only the
+generated textures (Phase 2) and juice pass (Phase 7) if adopted.
+
 ## 3. Core loop
 
 ```
