@@ -45,19 +45,20 @@ type PickupMaker = (pos: Vec2) => Pickup;
  * counts here too: nothing respawns until the whole snake has cleared it.
  *
  * Design §8.1 keeps at least one sugar on the map, and §8.2 caps dye at one
- * jar per primary. Phase 2 treats that cap as a floor too: one jar of each is
- * always present, which is enough to make every color reachable. Phase 5
- * replaces this with the pity spawner, which spawns against what the current
- * orders actually need.
+ * jar per primary. `stocked` says which jars are wanted at all, and doubles
+ * that cap into a floor: the opening levels stock only the dyes their order
+ * needs (design §7), and the endless game stocks every primary — which is
+ * enough to make every color reachable, and is what Phase 5's pity spawner
+ * replaces with a stock list driven by the orders actually waiting.
  */
-const missingPickups = (state: GameState): PickupMaker[] => {
+const missingPickups = (state: GameState, stocked: readonly Primary[]): PickupMaker[] => {
   const makers: PickupMaker[] = [];
 
   if (!state.pickups.some((pickup) => pickup.kind === 'sugar')) {
     makers.push(createSugar);
   }
 
-  for (const primary of PRIMARIES) {
+  for (const primary of stocked) {
     const onMap = state.pickups.some(
       (pickup) => pickup.kind === 'dye' && pickup.primary === primary,
     );
@@ -75,8 +76,12 @@ const missingPickups = (state: GameState): PickupMaker[] => {
  * two pickups spawned in the same tick cannot land on top of each other — a
  * stale free-list is a correctness bug here, not just wasted work.
  */
-export const ensurePickups = (state: GameState, rng: Rng): Pickup[] => {
-  const makers = missingPickups(state);
+export const ensurePickups = (
+  state: GameState,
+  rng: Rng,
+  stocked: readonly Primary[] = PRIMARIES,
+): Pickup[] => {
+  const makers = missingPickups(state, stocked);
   if (makers.length === 0) return [];
 
   const blocked = blockedCells(state);

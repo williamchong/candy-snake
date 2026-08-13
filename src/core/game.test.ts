@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, cellKey, eq, stepCell } from './board';
 import { BLUE, BROWN, PRIMARIES, RED, YELLOW, type Primary } from './colors';
-import { DEFAULT_CONFIG, Game } from './game';
+import { createCustomer } from './customers';
+import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
+import { MIXING_STAGE, type StageConfig } from './orders';
 import { createRng } from './rng';
 import { SHELF_SLOTS } from './shelf';
 import { snakeLength } from './snake';
 import { createDye, createSugar } from './spawner';
+import { TUTORIAL_ARRIVAL_GAP_MS } from './tutorial';
 import {
   Dir,
   RAW,
   type ColorMask,
+  type GameConfig,
   type GameEvent,
   type Segment,
   type TurnSource,
@@ -27,6 +31,18 @@ const isAdjacent = (a: Vec2, b: Vec2): boolean =>
   Object.values(Dir).some((dir) => eq(stepCell(a, dir), b));
 
 const NO_TURNS: TurnSource = { take: () => undefined };
+
+/**
+ * The endless game with nobody at the window: no opening levels, and an
+ * arrival clock that never comes round. Every test that predates the serving
+ * window wants that board — a child waiting would take candies the test is
+ * about to count on the shelf. The window's own behaviour is exercised in
+ * "Game serving window" and "Game opening levels" below.
+ */
+const CLOSED_WINDOW: StageConfig = { ...MIXING_STAGE, arrivalIntervalMs: Infinity };
+
+const newGame = (config: Partial<GameConfig> = {}): Game =>
+  new Game({ ...DEFAULT_CONFIG, openingLevels: false, stage: CLOSED_WINDOW, ...config });
 
 const alwaysTurning = (dir: Dir): TurnSource => ({ take: () => dir });
 
@@ -59,6 +75,34 @@ const drive = (game: Game, moves: number): GameEvent[] => {
 /** Moves needed for the whole strand to enter a pickup's cell and clear it. */
 const passThrough = (game: Game): number => snakeLength(game.state.snake) + 1;
 
+/** The bench is a run of cells; its first is as good as any to drive into. */
+const BENCH = CHOP_BLOCK_CELLS[0]!;
+
+/**
+ * Where a batch of `colors` lies once it has been cut loose — and where it lay
+ * before, since a cut piece stands still on the cells it was *leaving*. Tests
+ * assert against the same list they started from, which is the claim.
+ */
+const batchCells = (colors: ColorMask[]): Segment[] =>
+  colors.map((color, index) => ({ pos: at(BENCH.x - 2 - index, BENCH.y), color }));
+
+/**
+ * Puts the maker one move short of the bench with that batch in tow and
+ * nothing else on the board: the next move cuts it loose, and one more per
+ * segment draws it in.
+ */
+const layBatchAtBlock = (game: Game, colors: ColorMask[]): void => {
+  game.state.pickups = [];
+  game.state.snake = {
+    head: at(BENCH.x - 1, BENCH.y),
+    dir: Dir.Right,
+    body: batchCells(colors),
+  };
+};
+
+/** Moves needed to cut a batch loose and draw every segment of it in. */
+const chopThrough = (colors: ColorMask[]): number => 1 + colors.length;
+
 /** Lays one cube in the path and drives until it has become the new tail. */
 const eatSugar = (game: Game): { pos: Vec2; events: GameEvent[] } => {
   const pos = cellAheadOf(game);
@@ -77,7 +121,7 @@ const passDye = (game: Game, primary: Primary): { pos: Vec2; events: GameEvent[]
 
 describe('Game.step timing', () => {
   it('holds the snake still until a full move interval has passed', () => {
-    const game = new Game();
+    const game = newGame();
     const start = game.state.snake.head;
 
     game.step(DEFAULT_CONFIG.moveIntervalMs - 1, NO_TURNS);
@@ -88,7 +132,7 @@ describe('Game.step timing', () => {
   });
 
   it('catches up on a large delta', () => {
-    const game = new Game();
+    const game = newGame();
     const start = game.state.snake.head;
 
     game.step(DEFAULT_CONFIG.moveIntervalMs * 3, NO_TURNS);
@@ -98,7 +142,7 @@ describe('Game.step timing', () => {
   });
 
   it('reports how far the snake stands between cells', () => {
-    const game = new Game();
+    const game = newGame();
     expect(game.moveProgress()).toBe(0);
 
     game.step(DEFAULT_CONFIG.moveIntervalMs / 2, NO_TURNS);
@@ -112,7 +156,7 @@ describe('Game.step timing', () => {
   });
 
   it('banks the leftover time instead of dropping it', () => {
-    const game = new Game();
+    const game = newGame();
 
     game.step(DEFAULT_CONFIG.moveIntervalMs * 1.5, NO_TURNS);
     expect(game.state.tick).toBe(1);
@@ -125,7 +169,7 @@ describe('Game.step timing', () => {
 
 describe('Game turning', () => {
   it('applies a queued turn on the next move', () => {
-    const game = new Game();
+    const game = newGame();
     const start = game.state.snake.head;
 
     game.step(DEFAULT_CONFIG.moveIntervalMs, alwaysTurning(Dir.Up));
@@ -135,7 +179,7 @@ describe('Game turning', () => {
   });
 
   it('refuses a 180° reversal even from a TurnSource that offers one', () => {
-    const game = new Game();
+    const game = newGame();
     const start = game.state.snake.head;
 
     game.step(DEFAULT_CONFIG.moveIntervalMs, alwaysTurning(Dir.Left));
@@ -146,15 +190,16 @@ describe('Game turning', () => {
 });
 
 describe('Game sugar', () => {
-  it('starts with sugar and one jar of each primary on the map', () => {
-    const pickups = new Game().state.pickups;
+  // The opening levels stock a narrower board; see "Game opening levels".
+  it('keeps sugar and one jar of each primary on the endless board', () => {
+    const pickups = newGame().state.pickups;
 
     expect(pickups.filter((pickup) => pickup.kind === 'sugar')).toHaveLength(1);
     expect(pickups.filter((pickup) => pickup.kind === 'dye')).toHaveLength(3);
   });
 
   it('announces every opening spawn, so none goes unrendered', () => {
-    const game = new Game();
+    const game = newGame();
     const opening = game.state.pickups;
     const announced = game
       .step(1, NO_TURNS)
@@ -164,7 +209,7 @@ describe('Game sugar', () => {
   });
 
   it('pulls the cube into the strand and replaces it', () => {
-    const game = new Game();
+    const game = newGame();
     const { pos, events } = eatSugar(game);
 
     expect(events).toContainEqual({ type: 'sugar-pulled', pos, length: 2 });
@@ -173,7 +218,7 @@ describe('Game sugar', () => {
   });
 
   it('leaves the cube on the board until the whole snake has passed it', () => {
-    const game = new Game();
+    const game = newGame();
     const pos = cellAheadOf(game);
     game.state.pickups = [createSugar(pos)];
 
@@ -188,7 +233,7 @@ describe('Game sugar', () => {
   });
 
   it('plants the new segment on the cube’s own cell, not at the far tail', () => {
-    const game = new Game();
+    const game = newGame();
     for (let cube = 0; cube < 3; cube += 1) eatSugar(game);
 
     const { pos } = eatSugar(game);
@@ -198,7 +243,7 @@ describe('Game sugar', () => {
   });
 
   it('holds a longer strand on the cube for proportionally more moves', () => {
-    const game = new Game();
+    const game = newGame();
     eatSugar(game);
     eatSugar(game); // body of two segments
 
@@ -217,7 +262,7 @@ describe('Game sugar', () => {
 describe('Game dye', () => {
   /** Grows the strand to `length` segments without coloring it. */
   const grownTo = (length: number): Game => {
-    const game = new Game();
+    const game = newGame();
     for (let index = 0; index < length; index += 1) eatSugar(game);
     return game;
   };
@@ -308,7 +353,7 @@ describe('Game dye', () => {
   });
 
   it('wastes a dye with no strand to knead it into', () => {
-    const game = new Game();
+    const game = newGame();
 
     const { pos, events } = passDye(game, RED);
 
@@ -374,7 +419,7 @@ describe('Game dye', () => {
 describe('Game shatter', () => {
   /** Coiled so the next move walks the head into its own fourth segment. */
   const aboutToHitItself = (): Game => {
-    const game = new Game();
+    const game = newGame();
     game.state.pickups = [createSugar(at(8, 8))];
     game.state.snake = {
       head: at(1, 1),
@@ -444,30 +489,12 @@ describe('Game shatter', () => {
 });
 
 describe('Game chopping block', () => {
-  /** The bench is a run of cells; its first is as good as any to drive into. */
-  const bench = CHOP_BLOCK_CELLS[0]!;
+  const bench = BENCH;
+  const frozen = batchCells;
 
-  /**
-   * The strand laid out to the left of the bench — and, because a cut piece
-   * stands still on the cells it was *leaving*, exactly where the batch ends
-   * up. The tests assert against the same list they started from, which is the
-   * claim.
-   */
-  const frozen = (colors: ColorMask[]): Segment[] =>
-    colors.map((color, index) => ({ pos: at(bench.x - 2 - index, bench.y), color }));
-
-  /**
-   * A strand one move short of the bench, heading right, with nothing else on
-   * the board: the next move puts the head on the block and the batch behind it.
-   */
   const aboutToReachBlock = (colors: ColorMask[]): Game => {
-    const game = new Game();
-    game.state.pickups = [];
-    game.state.snake = {
-      head: at(bench.x - 1, bench.y),
-      dir: Dir.Right,
-      body: frozen(colors),
-    };
+    const game = newGame();
+    layBatchAtBlock(game, colors);
     return game;
   };
 
@@ -542,7 +569,7 @@ describe('Game chopping block', () => {
     // between them: the lane the player starts in is theirs to gather in, not
     // a run at the chopper (§5). Nothing else would catch the bench drifting
     // back across it.
-    const { head } = new Game().state.snake;
+    const { head } = newGame().state.snake;
 
     expect(CHOP_BLOCK_CELLS.some((cell) => cell.y === head.y)).toBe(false);
   });
@@ -582,9 +609,256 @@ describe('Game chopping block', () => {
   });
 });
 
+describe('Game serving window', () => {
+  /** Nobody is due to arrive, so a test's own queue is the whole queue. */
+  const withCustomers = (...wants: ColorMask[]): Game => {
+    const game = newGame();
+    game.state.customers = wants.map((want, index) =>
+      createCustomer(index + 1, want, MIXING_STAGE.patienceMs),
+    );
+    return game;
+  };
+
+  /** Cuts a batch loose at the bench and draws every segment of it in. */
+  const chop = (game: Game, colors: ColorMask[]): GameEvent[] => {
+    layBatchAtBlock(game, colors);
+    return drive(game, chopThrough(colors));
+  };
+
+  it('hands a candy straight off the block to whoever wants it', () => {
+    const game = withCustomers(RED);
+
+    const served = chop(game, [RED]).filter((event) => event.type === 'customer-served');
+
+    expect(served).toHaveLength(1);
+    expect(served[0]?.customer.want).toBe(RED);
+    expect(served[0]?.fromShelf).toBe(false);
+    expect(served[0]?.points).toBeGreaterThan(0);
+    expect(game.state.customers).toEqual([]);
+    expect(game.state.served).toBe(1);
+    expect(game.state.score).toBe(served[0]?.points);
+    // Served straight from the block: it never touched the rack.
+    expect(game.state.shelf).toEqual([]);
+  });
+
+  it('racks a candy nobody is waiting for', () => {
+    const game = withCustomers(BLUE);
+
+    chop(game, [RED]);
+
+    expect(game.state.shelf.map((candy) => candy.color)).toEqual([RED]);
+    expect(game.state.customers).toHaveLength(1);
+    expect(game.state.score).toBe(0);
+  });
+
+  it('gives it to the most impatient of the children who want it', () => {
+    const game = newGame();
+    game.state.customers = [
+      createCustomer(1, RED, 30_000),
+      createCustomer(2, RED, 5_000),
+    ];
+
+    chop(game, [RED]);
+
+    expect(game.state.customers.map((customer) => customer.id)).toEqual([1]);
+  });
+
+  it('splits a batch across everyone it fits, and racks the rest', () => {
+    const game = withCustomers(RED, BLUE);
+
+    chop(game, [RED, BLUE, RAW]);
+
+    expect(game.state.customers).toEqual([]);
+    expect(game.state.served).toBe(2);
+    expect(game.state.shelf.map((candy) => candy.color)).toEqual([RAW]);
+  });
+
+  it('lets a child arriving take the oldest match off the rack', () => {
+    const game = newGame({
+      stage: { ...MIXING_STAGE, mix: [100, 0, 0], arrivalIntervalMs: 1_000 },
+    });
+    game.state.shelf = [
+      { color: RAW, bornAt: 1 },
+      { color: RAW, bornAt: 2 },
+    ];
+
+    const served = game
+      .step(1_000, NO_TURNS)
+      .filter((event) => event.type === 'customer-served');
+
+    expect(served[0]?.fromShelf).toBe(true);
+    expect(game.state.customers).toEqual([]);
+    expect(game.state.shelf).toEqual([{ color: RAW, bornAt: 2 }]);
+  });
+
+  it('leaves a child waiting when nothing on the rack matches', () => {
+    const game = newGame({
+      stage: { ...MIXING_STAGE, mix: [100, 0, 0], arrivalIntervalMs: 1_000 },
+    });
+    game.state.shelf = [{ color: BROWN, bornAt: 1 }];
+
+    game.step(1_000, NO_TURNS);
+
+    expect(game.state.customers.map((customer) => customer.want)).toEqual([RAW]);
+    expect(game.state.shelf).toHaveLength(1);
+  });
+
+  it('costs a life and the streak when patience runs out', () => {
+    const game = newGame();
+    game.state.customers = [createCustomer(1, RED, 500)];
+    game.state.streak = 4;
+
+    const events = game.step(500, NO_TURNS);
+
+    expect(events.some((event) => event.type === 'customer-left')).toBe(true);
+    expect(events).toContainEqual({ type: 'life-lost', lives: STARTING_LIVES - 1 });
+    expect(game.state.lives).toBe(STARTING_LIVES - 1);
+    expect(game.state.streak).toBe(0);
+    expect(game.state.customers).toEqual([]);
+  });
+
+  it('ends the run when the last life goes', () => {
+    const game = newGame();
+    game.state.lives = 1;
+    game.state.customers = [createCustomer(1, RED, 100)];
+
+    const events = game.step(100, NO_TURNS);
+
+    expect(events).toContainEqual({
+      type: 'game-over',
+      score: 0,
+      served: 0,
+      elapsedMs: 100,
+    });
+    expect(game.state.over).toBe(true);
+  });
+
+  it('stops the kitchen once the run is over', () => {
+    const game = newGame();
+    game.state.lives = 1;
+    game.state.customers = [createCustomer(1, RED, 100)];
+    game.step(100, NO_TURNS);
+
+    const { head } = game.state.snake;
+    const events = game.step(5_000, NO_TURNS);
+
+    expect(events).toEqual([]);
+    expect(game.state.snake.head).toEqual(head);
+    expect(game.state.tick).toBe(0);
+    expect(game.state.elapsedMs).toBe(100);
+  });
+
+  it('never lets more children in than the stage allows', () => {
+    const game = newGame({ stage: { ...MIXING_STAGE, arrivalIntervalMs: 100 } });
+
+    for (let step = 0; step < 50; step += 1) {
+      game.step(200, NO_TURNS);
+      expect(game.state.customers.length).toBeLessThanOrEqual(MIXING_STAGE.maxQueue);
+    }
+
+    expect(game.state.customers).toHaveLength(MIXING_STAGE.maxQueue);
+  });
+});
+
+describe('Game opening levels', () => {
+  /** A real run: the three teaching levels, exactly as a player gets them. */
+  const opening = (seed = 1): Game => new Game({ ...DEFAULT_CONFIG, seed });
+
+  /**
+   * Steps without `drive`'s pickup filtering — what the board stocks is the
+   * whole point of these tests.
+   */
+  const run = (game: Game, moves: number): GameEvent[] => {
+    const events: GameEvent[] = [];
+    for (let move = 0; move < moves; move += 1) {
+      events.push(...game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS));
+    }
+    return events;
+  };
+
+  const jarsOn = (game: Game): Primary[] =>
+    game.state.pickups
+      .filter((pickup) => pickup.kind === 'dye')
+      .map((pickup) => pickup.primary)
+      .sort();
+
+  /** Chops one candy of `want`, then waits for the next child to walk up. */
+  const serveLevel = (game: Game, want: ColorMask): void => {
+    layBatchAtBlock(game, [want]);
+    run(
+      game,
+      chopThrough([want]) +
+        Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / DEFAULT_CONFIG.moveIntervalMs),
+    );
+  };
+
+  it('has the first child at the window before the run has started', () => {
+    const game = opening();
+
+    expect(game.state.customers).toHaveLength(1);
+    expect(game.state.customers[0]?.want).toBe(RAW);
+  });
+
+  it('opens on sugar and no dye at all', () => {
+    const game = opening();
+
+    expect(game.state.pickups.filter((pickup) => pickup.kind === 'sugar')).toHaveLength(
+      1,
+    );
+    expect(jarsOn(game)).toEqual([]);
+  });
+
+  it('never lets an opening child run out', () => {
+    const game = opening();
+
+    // Five minutes — past every patience in the difficulty table (design §7).
+    run(game, 1_500);
+
+    expect(game.state.lives).toBe(STARTING_LIVES);
+    expect(game.state.over).toBe(false);
+    expect(game.state.customers[0]?.want).toBe(RAW);
+  });
+
+  it('teaches one dye, then the mix built on it', () => {
+    const game = opening();
+    const [, second, third] = game.tutorial;
+
+    serveLevel(game, RAW);
+    expect(game.state.tutorialIndex).toBe(1);
+    expect(game.state.customers[0]?.want).toBe(second?.want);
+    expect(jarsOn(game)).toEqual([...(second?.stock ?? [])].sort());
+
+    serveLevel(game, second?.want ?? RAW);
+    expect(game.state.customers[0]?.want).toBe(third?.want);
+    expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
+  });
+
+  it('opens the board up to every dye once the third order is served', () => {
+    const game = opening();
+    const [, second, third] = game.tutorial;
+
+    serveLevel(game, RAW);
+    serveLevel(game, second?.want ?? RAW);
+    serveLevel(game, third?.want ?? RAW);
+
+    expect(game.state.tutorialIndex).toBe(3);
+    expect(jarsOn(game)).toEqual([...PRIMARIES].sort());
+    // The endless game gives itself a breather before the first real order.
+    expect(game.state.customers).toEqual([]);
+  });
+
+  it('gives the endless game’s children the clock the opening ones lacked', () => {
+    const game = newGame({ stage: { ...MIXING_STAGE, arrivalIntervalMs: 1_000 } });
+
+    game.step(1_000, NO_TURNS);
+
+    expect(game.state.customers[0]?.patience?.totalMs).toBe(MIXING_STAGE.patienceMs);
+  });
+});
+
 describe('Game simulation', () => {
   it('keeps its invariants over a long scripted run', () => {
-    const game = new Game({ seed: 7, moveIntervalMs: 200 });
+    const game = newGame({ seed: 7 });
     const rng = createRng(1234);
     const dirs = [Dir.Up, Dir.Down, Dir.Left, Dir.Right];
     const bot: TurnSource = {

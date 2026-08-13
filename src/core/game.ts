@@ -1,5 +1,8 @@
 import { COLS, ROWS, isChopBlock } from './board';
+import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
+import { MIXING_STAGE, rollOrder } from './orders';
 import { createRng, type Rng } from './rng';
+import { scoreServe } from './scoring';
 import { pushCandy } from './shelf';
 import {
   coversCell,
@@ -13,8 +16,15 @@ import {
 } from './snake';
 import { ensurePickups, pickupIndexAt } from './spawner';
 import {
+  TUTORIAL_ARRIVAL_GAP_MS,
+  rollTutorial,
+  stockedPrimaries,
+  type TutorialLevel,
+} from './tutorial';
+import {
   Dir,
   OPPOSITE,
+  type Customer,
   type GameConfig,
   type GameEvent,
   type GameState,
@@ -25,10 +35,15 @@ import {
   type Vec2,
 } from './types';
 
+/** Lost only to a customer walking out on you (design §6). */
+export const STARTING_LIVES = 3;
+
 /** 200 ms/cell = the 5 cells/s Warm-up speed (design §7). Tuning knob. */
 export const DEFAULT_CONFIG: GameConfig = {
   seed: 1,
   moveIntervalMs: 200,
+  stage: MIXING_STAGE,
+  openingLevels: true,
 };
 
 /**
@@ -38,26 +53,46 @@ export const DEFAULT_CONFIG: GameConfig = {
  */
 export class Game {
   readonly state: GameState;
+  /** The run's three opening levels, rolled from the seed (design §7). */
+  readonly tutorial: readonly TutorialLevel[];
 
   private readonly config: GameConfig;
   private readonly rng: Rng;
   private moveAccMs = 0;
+  /** Time the window has been empty, against the current arrival interval. */
+  private waitMs = 0;
+  private nextCustomerId = 1;
   /** Events raised before the first step, so no spawn goes unannounced. */
   private pending: GameEvent[] = [];
 
   constructor(config: GameConfig = DEFAULT_CONFIG) {
     this.config = config;
     this.rng = createRng(config.seed);
+    // Before the first spawn: which jars the board stocks is the opening
+    // level's to decide (design §7).
+    this.tutorial = config.openingLevels ? rollTutorial(this.rng) : [];
     this.state = {
       snake: createSnake({ x: Math.floor(COLS / 2), y: Math.floor(ROWS / 2) }, Dir.Right),
       pickups: [],
       severed: [],
       shelf: [],
+      customers: [],
+      score: 0,
+      lives: STARTING_LIVES,
+      streak: 0,
+      served: 0,
+      over: false,
+      tutorialIndex: 0,
       tick: 0,
       elapsedMs: 0,
     };
 
     this.spawnPickups(this.pending);
+    // The first level's child *is* the instruction, so they are at the window
+    // before the run starts rather than a few seconds into it. A game opening
+    // straight into the endless ramp waits out its own interval instead.
+    if (this.tutorial.length > 0) this.waitMs = TUTORIAL_ARRIVAL_GAP_MS;
+    this.admitCustomer(0, this.pending);
   }
 
   /**
@@ -77,6 +112,7 @@ export class Game {
   step(dtMs: number, input: TurnSource): GameEvent[] {
     const events = this.pending;
     this.pending = [];
+    if (this.state.over) return events;
 
     this.state.elapsedMs += dtMs;
     this.moveAccMs += dtMs;
@@ -85,6 +121,8 @@ export class Game {
       this.moveAccMs -= this.config.moveIntervalMs;
       this.advance(input, events);
     }
+
+    this.serveWindow(dtMs, events);
 
     return events;
   }
@@ -270,29 +308,152 @@ export class Game {
       if (segment === undefined) return [];
 
       if (piece.fate === 'crumble') events.push({ type: 'debris-crumbled', segment });
-      else this.shelveCandy(segment, events);
+      else this.deliverCandy(segment, events);
 
       return rest.length > 0 ? [{ ...piece, segments: rest }] : [];
     });
   }
 
   /**
-   * Racks a finished candy, and reports the one a full shelf had to let go of
-   * (design §5). Phase 4 gives waiting customers first refusal here.
+   * A candy leaving the block. Whoever is waiting gets first refusal, and only
+   * what nobody wants is racked — reporting the one a full shelf had to let go
+   * of (design §5).
+   *
+   * Because every candy is offered to the queue as it is made, and every child
+   * arriving sweeps the rack, "a waiting customer next to a matching candy on
+   * the shelf" is a state this game cannot reach.
    */
-  private shelveCandy(segment: Segment, events: GameEvent[]): void {
+  private deliverCandy(segment: Segment, events: GameEvent[]): void {
+    events.push({ type: 'candy-chopped', pos: segment.pos, color: segment.color });
+
+    const waiting = matchIndex(this.state.customers, segment.color);
+    if (waiting >= 0) {
+      this.serveCustomer(waiting, false, events);
+      return;
+    }
+
     const { shelf, staled } = pushCandy(this.state.shelf, {
       color: segment.color,
       bornAt: this.state.tick,
     });
     this.state.shelf = shelf;
 
-    events.push({ type: 'candy-chopped', pos: segment.pos, color: segment.color });
     if (staled !== undefined) events.push({ type: 'candy-staled', color: staled.color });
   }
 
+  /**
+   * The serving window runs on its own clock: patience and arrivals are counted
+   * in real ms rather than grid moves, so the bars stay smooth however fast the
+   * ramp is driving the snake (architecture §5).
+   *
+   * It runs after the move loop, so a child arriving this step sees a rack that
+   * already holds whatever was chopped on the way in.
+   */
+  private serveWindow(dtMs: number, events: GameEvent[]): void {
+    const { customers, expired } = tickPatience(this.state.customers, dtMs);
+    this.state.customers = customers;
+    for (const customer of expired) this.loseCustomer(customer, events);
+
+    if (!this.state.over) this.admitCustomer(dtMs, events);
+  }
+
+  /**
+   * A child gives up and walks out — the only way a life is ever lost
+   * (design §6), and the only thing that breaks a streak.
+   */
+  private loseCustomer(customer: Customer, events: GameEvent[]): void {
+    this.state.streak = 0;
+    this.state.lives -= 1;
+    events.push({ type: 'customer-left', customer });
+    events.push({ type: 'life-lost', lives: this.state.lives });
+
+    if (this.state.lives > 0) return;
+
+    this.state.over = true;
+    events.push({
+      type: 'game-over',
+      score: this.state.score,
+      served: this.state.served,
+      elapsedMs: this.state.elapsedMs,
+    });
+  }
+
+  /**
+   * Brings the next child to the window once the wait is up. The clock only
+   * runs while there is room, so clearing a full queue cannot dump the backlog
+   * all at once — and the interval is read fresh each time, so the wait a
+   * tutorial level started carries over into the endless game's own pacing.
+   */
+  private admitCustomer(dtMs: number, events: GameEvent[]): void {
+    const level = this.tutorial[this.state.tutorialIndex];
+    // One child at a time while the tutorial runs: each level is a single
+    // order, and the next does not walk up until this one has been served.
+    const maxQueue = level === undefined ? this.config.stage.maxQueue : 1;
+    if (this.state.customers.length >= maxQueue) return;
+
+    this.waitMs += dtMs;
+    const interval =
+      level === undefined ? this.config.stage.arrivalIntervalMs : TUTORIAL_ARRIVAL_GAP_MS;
+    if (this.waitMs < interval) return;
+    this.waitMs = 0;
+
+    const customer = createCustomer(
+      this.nextCustomerId,
+      level?.want ?? rollOrder(this.config.stage, this.rng),
+      // A tutorial customer never runs out: the opening levels play on every
+      // run, and a tutorial must not be able to cost you the run (design §7).
+      level === undefined ? this.config.stage.patienceMs : undefined,
+    );
+    this.nextCustomerId += 1;
+    this.state.customers = [...this.state.customers, customer];
+    events.push({ type: 'customer-arrived', customer });
+
+    this.serveFromShelf(this.state.customers.length - 1, events);
+  }
+
+  /**
+   * A child walking up checks the rack first (design §5). The oldest match
+   * goes, which is the end staleness eats from — so a candy is never stepped
+   * over and left to go stale behind a newer twin.
+   */
+  private serveFromShelf(index: number, events: GameEvent[]): void {
+    const customer = this.state.customers[index];
+    if (customer === undefined) return;
+
+    const slot = this.state.shelf.findIndex((candy) => candy.color === customer.want);
+    if (slot < 0) return;
+
+    this.state.shelf = this.state.shelf.filter((_unused, at) => at !== slot);
+    this.serveCustomer(index, true, events);
+  }
+
+  /** Pays for a serve and sends the child off happy (design §9). */
+  private serveCustomer(index: number, fromShelf: boolean, events: GameEvent[]): void {
+    const customer = this.state.customers[index];
+    if (customer === undefined) return;
+
+    const points = scoreServe(customer, this.state.streak);
+    this.state.customers = removeAt(this.state.customers, index);
+    this.state.score += points;
+    this.state.streak += 1;
+    this.state.served += 1;
+    // While the tutorial runs the queue holds nothing but its own child, so a
+    // serve is exactly what finishes a level.
+    if (this.state.tutorialIndex < this.tutorial.length) this.state.tutorialIndex += 1;
+
+    events.push({
+      type: 'customer-served',
+      customer,
+      points,
+      streak: this.state.streak,
+      fromShelf,
+    });
+  }
+
   private spawnPickups(events: GameEvent[]): void {
-    for (const pickup of ensurePickups(this.state, this.rng)) {
+    const stocked = stockedPrimaries(this.tutorial, this.state.tutorialIndex);
+
+    for (const pickup of ensurePickups(this.state, this.rng, stocked)) {
       this.state.pickups.push(pickup);
       events.push(
         pickup.kind === 'sugar'

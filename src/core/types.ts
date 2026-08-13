@@ -3,9 +3,10 @@
  * Phaser — see docs/architecture.md §2.
  */
 
-// Type-only, so the colors.ts ↔ types.ts pairing is erased at compile time
-// and never becomes a runtime import cycle.
+// Type-only, so the colors.ts ↔ types.ts and orders.ts ↔ types.ts pairings are
+// erased at compile time and never become runtime import cycles.
 import type { Primary } from './colors';
+import type { StageConfig } from './orders';
 
 /** A board cell coordinate (integer cell indices, never pixels). */
 export interface Vec2 {
@@ -124,6 +125,20 @@ export interface GameState {
   severed: Severed[];
   /** Candies waiting for a customer, oldest first (design §5). */
   shelf: Candy[];
+  /** The queue at the serving window, in arrival order (design §5). */
+  customers: Customer[];
+  score: number;
+  lives: number;
+  /** Consecutive serves with nobody lost — the scoring multiplier (design §9). */
+  streak: number;
+  served: number;
+  over: boolean;
+  /**
+   * How many of the three opening levels are done (design §7). It is state
+   * rather than a counter on `Game` because it gates what the spawner stocks
+   * and what the next customer wants, so a seeded replay has to reproduce it.
+   */
+  tutorialIndex: number;
   /**
    * Grid moves elapsed — a simulation clock that does not depend on
    * `moveIntervalMs` (which difficulty varies from Phase 5). The view watches
@@ -138,6 +153,16 @@ export interface GameConfig {
   readonly seed: number;
   /** Milliseconds per grid move; the steering-feel knob (design §7). */
   readonly moveIntervalMs: number;
+  /**
+   * The difficulty row in force once the opening levels are done. Phase 5
+   * replaces this fixed row with a continuous curve.
+   */
+  readonly stage: StageConfig;
+  /**
+   * Every real run opens with the three teaching levels (design §7). Off only
+   * for tests and balancing sims, which want the endless game directly.
+   */
+  readonly openingLevels: boolean;
 }
 
 export type GameEvent =
@@ -179,7 +204,31 @@ export type GameEvent =
   /** A candy left the block; `pos` is the cell it was drawn in from, where the batch lies. */
   | { readonly type: 'candy-chopped'; readonly pos: Vec2; readonly color: ColorMask }
   /** A full shelf pushed its oldest candy off to make room (design §5). */
-  | { readonly type: 'candy-staled'; readonly color: ColorMask };
+  | { readonly type: 'candy-staled'; readonly color: ColorMask }
+  /** A child walked up to the window. The whole customer, since the card needs all of it. */
+  | { readonly type: 'customer-arrived'; readonly customer: Customer }
+  /**
+   * Served and gone happy. `streak` is the run *including* this serve — what
+   * the HUD shows — while `points` was already paid at the multiplier the
+   * streak stood at before it (design §9). `fromShelf` separates a candy taken
+   * straight off the block from one that was waiting on the rack.
+   */
+  | {
+      readonly type: 'customer-served';
+      readonly customer: Customer;
+      readonly points: number;
+      readonly streak: number;
+      readonly fromShelf: boolean;
+    }
+  /** Patience ran out; the child leaves angry (design §5). */
+  | { readonly type: 'customer-left'; readonly customer: Customer }
+  | { readonly type: 'life-lost'; readonly lives: number }
+  | {
+      readonly type: 'game-over';
+      readonly score: number;
+      readonly served: number;
+      readonly elapsedMs: number;
+    };
 
 /**
  * How the core pulls a buffered turn at the exact moment a move tick fires.

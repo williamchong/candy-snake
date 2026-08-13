@@ -91,6 +91,16 @@ export class GameScene extends Phaser.Scene {
         if (event.kneaded === 0) this.view.splash(event.pos, event.primary);
         return;
 
+      // The serving window is drawn by UIScene, which listens to the same
+      // events; the board itself has nothing to play for them. `game-over`
+      // hands off to GameOverScene once the scene flow lands.
+      case 'customer-arrived':
+      case 'customer-served':
+      case 'customer-left':
+      case 'life-lost':
+      case 'game-over':
+        return;
+
       // Nothing to play yet; the juice pass (Phase 7) fills these in.
       // `candy-staled` gets the stale-candy toss (design §5) when the shelf
       // strip moves into UIScene in Phase 4.

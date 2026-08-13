@@ -36,6 +36,14 @@ const stateWith = (
       ? []
       : [{ segments: debris.map((pos) => ({ pos, color: RAW })), fate: 'crumble' }],
   shelf: [],
+  // The window plays no part in where a pickup lands.
+  customers: [],
+  score: 0,
+  lives: 3,
+  streak: 0,
+  served: 0,
+  over: false,
+  tutorialIndex: 0,
   tick: 0,
   elapsedMs: 0,
 });
