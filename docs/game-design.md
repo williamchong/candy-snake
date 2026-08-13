@@ -33,21 +33,29 @@ Traditional candy making, step by step, mapped onto game verbs:
 The board is the kitchen floor. The chopping block sits in a fixed corner next
 to the serving window where customers (children) appear.
 
-### Art direction — 8-bit arcade (chosen in Phase 1)
+### Art direction — pastel cotton candy (chosen in Phase 1)
 
-Everything is drawn as **old-style 8-bit arcade pixel art**: sprites authored
-at 8×8 source pixels and scaled up by an integer factor with nearest-neighbour
-filtering, over a dark cabinet-style backdrop and a checkerboard kitchen floor.
+Pixel art in an **8-bit format** — sprites authored at 8×8 source pixels and
+scaled up by an integer factor with nearest-neighbour filtering — but styled
+as **pale cotton candy** rather than arcade neon: soft pastels, minimal
+detail, and a floor of faint diagonal rainbow bands that never competes with
+the candy sitting on it.
 
 - Sprites are ASCII pixel maps in `render/textures.ts` — still zero image
   assets, still generated at boot.
-- Shading uses three grays (highlight / fill / shadow) over a near-black
-  outline. Phaser tinting *multiplies*, so one sprite recolors to any §4
-  palette color while keeping its shading — this is what lets the Phase 2
-  per-segment colors ride on the same textures.
+- Detail is deliberately minimal: a flat fill and one soft edge, no interior
+  shading. The head adds two dots for eyes and nothing else.
+- Sprite pixels are grays because Phaser tinting *multiplies*: white takes the
+  full candy color and the gray edge becomes a deeper shade of it. One texture
+  therefore serves every color in §4 and stays readable without a hard outline.
+- **Comfort is a constraint, not a polish item.** The snake occupies whole
+  cells five times a second, but the view slides sprites between them —
+  teleporting a high-contrast sprite a whole cell at 5 Hz reads as a strobe
+  and is genuinely painful to look at. For the same reason effects stay local
+  and soft: a self-hit puffs at the cells that broke, never a screen flash.
 - The narrative stays the candy-maker fiction (dye jars, chopping block); the
-  8-bit look is purely aesthetic. It constrains the generated textures and the
-  juice pass (Phase 7) — chunky pixel shards rather than smooth particles.
+  look is purely aesthetic and constrains only the generated textures and the
+  juice pass (Phase 7).
 
 ## 3. Core loop
 
@@ -119,6 +127,28 @@ Color-matching gameplay must not rely on hue alone:
 - Every color pairs with a **symbol** shown on dyes, body segments, candies,
   and order cards (e.g. R=♥, Y=★, B=●, O=▲, G=♣, P=◆, Raw=○, Brown=✖).
 - A "high-contrast symbols" toggle in settings makes symbols larger.
+
+### Palette constraints (binding on the Phase 2 `colors.ts` table)
+
+A segment's color *is* the thing the player produces and matches, so the eight
+states are mechanics, not decoration. The pastel art direction (§2) therefore
+has to earn its palette rather than pick pretty values:
+
+- **All eight states stay mutually distinguishable at pastel saturation.**
+  Pale tints compress exactly the differences that separate red from orange
+  and blue from purple. If a pair collides, the palette gives way, not the
+  mechanic.
+- **Non-candy elements must not use candy hues.** The maker's head, sugar
+  cubes, HUD chrome and the floor are not candies. They are separated by
+  *value* — the head is the darkest thing on the board, the floor the palest —
+  which leaves the whole hue range free to carry meaning. Picking a "spare"
+  hue does not work: the eight states already span most of the wheel.
+- **Raw is off-white, so a raw strand and a sugar cube share a color.** That
+  is correct — they are the same material. Size and symbol separate them.
+- Symbols are the fallback wherever two pastels read alike, which is why they
+  are in from Phase 2 rather than bolted on during polish.
+- The table lives only in `core/colors.ts`; board, HUD and cheat sheet all read
+  it from there, so they cannot drift apart (architecture §7).
 
 ## 5. Entities & stations
 

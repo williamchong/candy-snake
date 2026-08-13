@@ -126,6 +126,9 @@ and plays effects per event. Events carry the data needed for presentation
   difficulty knob), chop mode consumes one segment per chop interval.
 - Patience bars and arrival timers tick in real ms (accumulated per step) so
   they stay smooth and frame-rate independent.
+- **Rendering runs at a different granularity than logic:** sprites are only
+  re-targeted when a move tick lands, but are drawn every frame at
+  `moveProgress()` of the way between cells (see §7).
 - Rationale: identical simulation on a 60 Hz desktop and a 120 Hz phone, and
   the core stays testable with synthetic `step()` calls.
 
@@ -149,12 +152,17 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 ## 7. Rendering approach
 
 - **Runtime-generated textures** in BootScene: each sprite is an 8×8 ASCII
-  pixel map in `render/textures.ts`, painted a pixel at a time with `Graphics`
-  + `generateTexture` and drawn at an integer scale with `pixelArt: true` —
-  the 8-bit arcade direction (design §2). Ships v1 with zero art files.
-- Sprites are drawn in grays (highlight / fill / shadow) over a near-black
-  outline so that tinting — which multiplies — recolors them to any
-  `ColorMask` palette entry without flattening the shading.
+  pixel map in `render/textures.ts`, baked through Phaser's
+  `textures.generate` against one fixed 16-color palette and drawn at an
+  integer scale with `pixelArt: true` (design §2). Ships v1 with zero art
+  files.
+- Sprite pixels are grays — a fill plus a soft edge — so that tinting, which
+  multiplies, recolors them to any `ColorMask` palette entry while the edge
+  stays a deeper shade of that same color.
+- **The view interpolates; the core does not.** `Game.moveProgress()` reports
+  how far the snake stands between cells (0…1) and `BoardView.render` slides
+  sprites that fraction of the way, so the simulation stays discrete and
+  testable while the motion on screen is continuous.
 - Segment sprites are tinted with the palette color and stamped with the
   accessibility **symbol glyph** (bitmap text) per the design doc.
 - Effects are Phaser particle emitters + tweens, all triggered by GameEvents,

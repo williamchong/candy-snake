@@ -36,6 +36,8 @@ checkpoint; tune tick rate before moving on.**
 ## Phase 2 — Color system (M)
 
 - `core/colors.ts` palette table (mask → hex, symbol, name, tier) + `blend`.
+  The values are constrained, not free — see game-design §4 "Palette
+  constraints" before picking any.
 - Dye pickups (primaries, ≤1 per color on map); eating applies blend to all
   segments; new sugar appends raw.
 - Rendering: per-segment tint + symbol glyph; dye jars on board.
