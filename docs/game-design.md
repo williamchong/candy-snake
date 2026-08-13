@@ -250,6 +250,12 @@ first — keeps both slow and fast players on curve):
 4. Pickups never spawn on the snake, stations, or the cell directly in front
    of the head (no "free" accidental pickups).
 
+Rule 3 needs orders to spawn against, so until they exist (Phase 5) rule 2's
+cap doubles as a floor: one jar of each primary is kept on the map at all
+times. That is deliberately more generous than the finished game — it makes
+every color reachable while the color system is the only thing being judged,
+and the pity spawner replaces it rather than adding to it.
+
 ## 9. Scoring
 
 | Event                          | Points                                    |

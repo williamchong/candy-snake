@@ -112,7 +112,8 @@ interface GameState {
 ```
 
 `Game.step(dtMs, inputs)` advances everything and returns `GameEvent[]`
-(`sugar-eaten`, `dye-applied`, `body-shattered`, `candy-chopped`,
+(`sugar-eaten`, `sugar-spawned`, `dye-eaten`, `dye-spawned`,
+`body-shattered`, `candy-chopped`,
 `customer-arrived`, `customer-served`, `customer-left`, `life-lost`,
 `game-over`, …). The Phaser layer never mutates core state; it only renders it
 and plays effects per event. Events carry the data needed for presentation
