@@ -3,11 +3,12 @@ import Phaser from 'phaser';
 import { CHOP_BLOCK_TOP } from '../core/board';
 import { RED } from '../core/colors';
 import { STARTING_LIVES, type Game } from '../core/game';
+import type { GameEvent } from '../core/types';
 import { BOARD_RIGHT, rowToPixel } from '../render/boardView';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { glyphTextureKey } from '../render/textures';
-import { GAME_WIDTH } from '../ui/layout';
-import { CARD_HEIGHT, CARD_WIDTH, OrderCard } from '../ui/orderCard';
+import { CustomerQueue } from '../ui/customerQueue';
+import { Mood } from '../ui/customerView';
 import { ShelfStrip } from '../ui/shelfStrip';
 import { textStyle } from '../ui/text';
 import { SceneKey } from './keys';
@@ -24,7 +25,6 @@ import { SceneKey } from './keys';
  */
 const COLUMN_MARGIN = 24;
 const COLUMN_X = BOARD_RIGHT + COLUMN_MARGIN;
-const COLUMN_WIDTH = GAME_WIDTH - COLUMN_X - COLUMN_MARGIN;
 
 const SCORE_Y = 40;
 const LIVES_Y = 84;
@@ -33,30 +33,26 @@ const LIVES_PITCH = 26;
 const SHELF_X = COLUMN_X + 28;
 const SHELF_TOP = rowToPixel(CHOP_BLOCK_TOP);
 
-/** Four slots: the queue cap grows to 3–4 as the ramp bites (design §7). */
-const MAX_CARDS = 4;
-const CARD_PITCH = CARD_WIDTH + 6;
-const CARDS_TOP = 424;
-const CAPTION_Y = CARDS_TOP + CARD_HEIGHT + 20;
-
 /**
- * What each opening level is teaching, in the order they are played
- * (design §7). These are the three contextual hints design §11 asks for — as
- * captions on levels that always run, rather than first-run toasts that can be
- * missed.
+ * Where the child at the head of the queue stands: a floor line set by eye just
+ * inside the bottom of the kitchen, with the line running back from there
+ * toward the door, so the whole column reads top to bottom as one path —
+ * bench, rack, child. Fixed like the rest of the geometry here until
+ * `ui/layout.ts` takes it over (architecture §9).
  */
-const LEVEL_CAPTIONS = [
-  'Drive over sugar to pull the strand, then into the block to chop it.',
-  'Sugar first, then the jar — a dye colors the strand you already have.',
-  'Two jars in one strand blend into one color.',
-];
+const QUEUE_FRONT = { x: COLUMN_X + 42, y: 556 };
+
+/** The window's own events: everything the queue plays rather than draws. */
+type WindowEvent = Extract<
+  GameEvent,
+  { type: 'customer-arrived' | 'customer-served' | 'customer-left' }
+>;
 
 export class UIScene extends Phaser.Scene {
   private core!: Game;
   private scoreText!: Phaser.GameObjects.Text;
-  private caption!: Phaser.GameObjects.Text;
   private lives: Phaser.GameObjects.Image[] = [];
-  private cards: OrderCard[] = [];
+  private queue!: CustomerQueue;
   private shelf!: ShelfStrip;
   /**
    * Hearts last drawn. Reset in `create`, not at the field: Phaser reuses the
@@ -76,9 +72,6 @@ export class UIScene extends Phaser.Scene {
     this.scoreText = this.add
       .text(COLUMN_X, SCORE_Y, '0', textStyle(30))
       .setOrigin(0, 0.5);
-    this.caption = this.add
-      .text(COLUMN_X, CAPTION_Y, '', textStyle(14, { wordWrap: { width: COLUMN_WIDTH } }))
-      .setOrigin(0, 0);
 
     // Hearts in ink rather than red: a life is not a candy, and hue in this
     // game belongs to candies alone (design §4, palette constraints). The heart
@@ -91,40 +84,49 @@ export class UIScene extends Phaser.Scene {
     );
 
     this.shelf = new ShelfStrip(this, { x: SHELF_X, y: SHELF_TOP });
-
-    this.cards = Array.from(
-      { length: MAX_CARDS },
-      (_unused, slot) =>
-        new OrderCard(this, {
-          x: COLUMN_X + CARD_WIDTH / 2 + slot * CARD_PITCH,
-          y: CARDS_TOP + CARD_HEIGHT / 2,
-        }),
-    );
+    this.queue = new CustomerQueue(this, QUEUE_FRONT);
   }
 
   /**
    * Patience drains every frame, so the HUD redraws every frame — but each
    * piece guards on what it last drew, so a still queue costs a few
    * comparisons rather than a re-layout. `setText` does its own unchanged
-   * check, so score and caption need no guard here.
+   * check, so the score needs no guard here.
    */
-  update(): void {
+  update(_time: number, delta: number): void {
     const { state } = this.core;
 
     this.scoreText.setText(`${state.score}`);
     this.shelf.render(state.shelf);
-    this.cards.forEach((card, slot) => card.render(state.customers[slot]));
+    // Real elapsed time, not the core's fixed slice: the children walk on the
+    // display's clock, the way every other tween in the HUD does.
+    this.queue.render(state.customers, delta);
 
     if (state.lives !== this.shownLives) {
       this.shownLives = state.lives;
       this.lives.forEach((heart, life) => heart.setVisible(life < state.lives));
     }
+  }
 
-    // Only while the opening levels are actually running — past them the
-    // column carries the queue and nothing else.
-    const level = this.core.openingLevel;
-    this.caption.setText(
-      level === undefined ? '' : (LEVEL_CAPTIONS[state.tutorialIndex] ?? ''),
-    );
+  /**
+   * Who is waiting is state and is drawn from it, but walking on and walking
+   * off are one-shots — so they hang off the event stream GameScene is already
+   * walking, rather than being guessed at from a customer appearing in or
+   * vanishing from the queue (architecture §6, §7).
+   */
+  play(event: WindowEvent): void {
+    switch (event.type) {
+      case 'customer-arrived':
+        this.queue.admit(event.customer);
+        return;
+
+      case 'customer-served':
+        this.queue.depart(event.customer.id, Mood.Served);
+        return;
+
+      case 'customer-left':
+        this.queue.depart(event.customer.id, Mood.Walkout);
+        return;
+    }
   }
 }

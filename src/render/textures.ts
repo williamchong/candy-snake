@@ -30,6 +30,13 @@ export const TextureKey = {
   Candy: 'candy',
   Block: 'block',
   Floor: 'floor',
+  Customer: 'customer',
+  CustomerStride: 'customer-stride',
+  Bubble: 'bubble',
+  FaceCalm: 'face-calm',
+  FaceWorried: 'face-worried',
+  FaceHappy: 'face-happy',
+  FaceCross: 'face-cross',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 
@@ -91,24 +98,34 @@ const PALETTE: Phaser.Types.Create.Palette = {
 const SOURCE_SIZE = 8;
 
 /**
- * Doubles an 8×8 map to 16×16. The flat sprites are authored at the size they
- * were designed at and blown up here, so they render pixel-for-pixel as they
- * always did while sharing one texture size with the strand.
- *
  * A miscounted row or column throws here rather than leaving a silently clipped
  * sprite on the board — and it throws in the units the map is *written* in, so
  * the message points at what to go and count.
  */
-const upscale = (map: string[]): string[] => {
-  const wrong =
-    map.length !== SOURCE_SIZE || map.some((row) => row.length !== SOURCE_SIZE);
-  if (wrong) throw new Error(`pixel map is not ${SOURCE_SIZE}×${SOURCE_SIZE}`);
+const sized = (map: string[], size: number): string[] => {
+  const wrong = map.length !== size || map.some((row) => row.length !== size);
+  if (wrong) throw new Error(`pixel map is not ${size}×${size}`);
 
-  return map.flatMap((row) => {
+  return map;
+};
+
+/**
+ * Doubles an 8×8 map to 16×16. The flat sprites are authored at the size they
+ * were designed at and blown up here, so they render pixel-for-pixel as they
+ * always did while sharing one texture size with the strand.
+ */
+const upscale = (map: string[]): string[] =>
+  sized(map, SOURCE_SIZE).flatMap((row) => {
     const doubled = [...row].map((pixel) => pixel + pixel).join('');
     return [doubled, doubled];
   });
-};
+
+/**
+ * Maps authored straight at texture size, skipping `upscale`. A child is drawn
+ * there rather than at 8×8 because a face needs pixels a doubled sprite does
+ * not have: at 8×8 a whole head is four pixels across.
+ */
+const exact = (map: string[]): string[] => sized(map, TEXTURE_SIZE);
 
 /** Whether a source pixel is part of the shape at all. */
 type Shape = (x: number, y: number) => boolean;
@@ -280,6 +297,153 @@ const BLOCK = [
   'AAAAAAAA',
 ];
 
+/**
+ * A child at the serving window: big head, small body, no face — the face is
+ * its own texture stamped on top, so a mood change swaps one sprite instead of
+ * needing a whole body per expression (design §5).
+ *
+ * Drawn at 16×16 and tinted by *value*, like every other thing in this kitchen
+ * that is not a candy (design §4, palette constraints): a customer wearing a
+ * hue would read as an order.
+ */
+const CUSTOMER = [
+  '....AAAAAAAA....',
+  '..AA99999999AA..',
+  '..A9999999999A..',
+  '.A999999999999A.',
+  '.A999999999999A.',
+  '.A999999999999A.',
+  '..A9999999999A..',
+  '..AA99999999AA..',
+  '....AAAAAAAA....',
+  '.....A9999A.....',
+  '...AA999999AA...',
+  '..A9999999999A..',
+  '..A9999999999A..',
+  '...A99999999A...',
+  '...A99A..A99A...',
+  '...AAAA..AAAA...',
+];
+
+/** The other half of the walk: same child, legs mid-stride. */
+const CUSTOMER_STRIDE = [
+  ...CUSTOMER.slice(0, 14),
+  '..A99A....A99A..',
+  '..AAAA....AAAA..',
+];
+
+/**
+ * What they came in for, said the way a comic says it. The bubble is chrome,
+ * so it is tinted a shade off the page like every other slot a candy sits in —
+ * the only hue inside it is the candy itself.
+ */
+const BUBBLE = [
+  '..AAAAAAAAAAAA..',
+  '.A999999999999A.',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  'A99999999999999A',
+  '.A999999999999A.',
+  '..AAAA9999AAAA..',
+  '......A99A......',
+  '.......AA.......',
+  '................',
+  '................',
+];
+
+/**
+ * The four moods, aligned to `CUSTOMER`'s head so a face never needs its own
+ * offset. They are the game's only feedback on how a child feels, now that the
+ * queue carries no words: waiting, running out of patience, served, walked out
+ * (design §5).
+ *
+ * Every feature is drawn in the detail gray, so tinting the face with the same
+ * value as the body sinks the features a step darker than the skin they sit on.
+ */
+const FACE_CALM = [
+  '................',
+  '................',
+  '................',
+  '.....8....8.....',
+  '.....8....8.....',
+  '................',
+  '......8888......',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/** Eyes wide, mouth open: the clock is running out. */
+const FACE_WORRIED = [
+  '................',
+  '................',
+  '................',
+  '....88....88....',
+  '....88....88....',
+  '................',
+  '.......88.......',
+  '.......88.......',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/** Eyes squeezed shut over a grin — they got the candy they asked for. */
+const FACE_HAPPY = [
+  '................',
+  '................',
+  '................',
+  '.....8....8.....',
+  '....8.8..8.8....',
+  '................',
+  '.....8....8.....',
+  '......8888......',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
+/** Brows down, mouth down: patience ran out and they are walking (design §5). */
+const FACE_CROSS = [
+  '................',
+  '................',
+  '....8......8....',
+  '.....88..88.....',
+  '.....8....8.....',
+  '................',
+  '.....888888.....',
+  '....8......8....',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+];
+
 const FLOOR_BANDS = ['1', '2', '3', '4', '5', '6'];
 const BAND_WIDTH = 3;
 
@@ -314,6 +478,13 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.Candy]: upscale(CANDY),
   [TextureKey.Block]: upscale(BLOCK),
   [TextureKey.Floor]: FLOOR,
+  [TextureKey.Customer]: exact(CUSTOMER),
+  [TextureKey.CustomerStride]: exact(CUSTOMER_STRIDE),
+  [TextureKey.Bubble]: exact(BUBBLE),
+  [TextureKey.FaceCalm]: exact(FACE_CALM),
+  [TextureKey.FaceWorried]: exact(FACE_WORRIED),
+  [TextureKey.FaceHappy]: exact(FACE_HAPPY),
+  [TextureKey.FaceCross]: exact(FACE_CROSS),
 };
 
 /** Half a cell: big enough to read, small enough to sit inside the rope. */

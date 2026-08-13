@@ -5,7 +5,7 @@ import { PRIMARIES, primariesOf, type Primary } from './colors';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { MIXING_STAGE } from './orders';
 import { SHELF_SLOTS } from './shelf';
-import { stockedPrimaries } from './tutorial';
+import { stockedPrimaries, stocksSugar } from './tutorial';
 import { Dir, OPPOSITE, RAW, type GameState, type TurnSource, type Vec2 } from './types';
 
 /**
@@ -105,9 +105,12 @@ const violationsIn = (game: Game, tick: number): string[] => {
     }
   }
 
-  if (!state.pickups.some((pickup) => pickup.kind === 'sugar')) {
-    broken.push(at('no sugar on the map'));
-  }
+  // Design §8.1's floor, narrowed by design §7: an opening level hands out one
+  // cube and waits for it to come back as a candy before laying another.
+  const wantsSugar = stocksSugar(game.openingLevel, state);
+  const onMap = state.pickups.some((pickup) => pickup.kind === 'sugar');
+  if (wantsSugar && !onMap) broken.push(at('no sugar on the map'));
+  if (!wantsSugar && onMap) broken.push(at('a second cube laid out mid-level'));
 
   return broken;
 };

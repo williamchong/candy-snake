@@ -50,11 +50,18 @@ type PickupMaker = (pos: Vec2) => Pickup;
  * needs (design §7), and the endless game stocks every primary — which is
  * enough to make every color reachable, and is what Phase 5's pity spawner
  * replaces with a stock list driven by the orders actually waiting.
+ *
+ * `sugar` is the same switch for the cube, and the only thing that ever turns
+ * it off is an opening level that has already handed out its one (design §7).
  */
-const missingPickups = (state: GameState, stocked: readonly Primary[]): PickupMaker[] => {
+const missingPickups = (
+  state: GameState,
+  stocked: readonly Primary[],
+  sugar: boolean,
+): PickupMaker[] => {
   const makers: PickupMaker[] = [];
 
-  if (!state.pickups.some((pickup) => pickup.kind === 'sugar')) {
+  if (sugar && !state.pickups.some((pickup) => pickup.kind === 'sugar')) {
     makers.push(createSugar);
   }
 
@@ -82,8 +89,11 @@ export const ensurePickups = (
   /** Required: a default here would silently re-grant every jar to a caller
    * that forgot it, which is the exact bug the opening levels need ruled out. */
   stocked: readonly Primary[],
+  /** Defaulted, because §8.1's floor of one cube is the rule everywhere but
+   * inside an opening level — the narrower case is the one that must say so. */
+  sugar = true,
 ): Pickup[] => {
-  const makers = missingPickups(state, stocked);
+  const makers = missingPickups(state, stocked, sugar);
   if (makers.length === 0) return [];
 
   const blocked = blockedCells(state);

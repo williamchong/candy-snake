@@ -1,6 +1,6 @@
 import { PRIMARIES, primariesOf, type Primary } from './colors';
 import type { Rng } from './rng';
-import { RAW, type ColorMask } from './types';
+import { RAW, type ColorMask, type GameState } from './types';
 
 /**
  * The three opening levels, which every run starts with (design §7). Each is
@@ -51,3 +51,20 @@ export const rollTutorial = (rng: Rng): TutorialLevel[] => {
  */
 export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Primary[] =>
   level?.stock ?? PRIMARIES;
+
+/**
+ * Whether the board should be carrying a sugar cube. The endless game always
+ * is (design §8.1), but an opening level puts out exactly one and does not
+ * replace it until the maker's hands are empty again.
+ *
+ * Each of the three levels is one candy, so one cube is the whole of what it
+ * asks for — and a floor that restocks the moment the first is pulled offers a
+ * second the level never wanted, which is the same "remove the options" rule
+ * the jar stock is authored by. The strand is empty when nothing is on it and
+ * nothing cut from it is still being drawn in.
+ */
+export const stocksSugar = (
+  level: TutorialLevel | undefined,
+  state: Pick<GameState, 'snake' | 'severed'>,
+): boolean =>
+  level === undefined || (state.snake.body.length === 0 && state.severed.length === 0);

@@ -136,6 +136,24 @@ describe('spawner stock levels', () => {
     expect(spawned[0]?.kind).toBe('sugar');
   });
 
+  it('lays no cube at all when the caller has withheld sugar (design §7)', () => {
+    const noSugar = stocked().filter((pickup) => pickup.kind !== 'sugar');
+
+    expect(ensurePickups(stateWith([], noSugar), createRng(1), PRIMARIES, false)).toEqual(
+      [],
+    );
+  });
+
+  it('still restocks jars on a board held back from sugar', () => {
+    const spawned = ensurePickups(stateWith([], [createSugar(at(9, 9))]), createRng(1), [
+      YELLOW,
+    ]);
+    const withheld = ensurePickups(stateWith(), createRng(1), [YELLOW], false);
+
+    expect(spawned).toHaveLength(1);
+    expect(withheld.map((pickup) => pickup.kind)).toEqual(['dye']);
+  });
+
   it('keeps at most one jar per primary (design §8.2)', () => {
     const state = stateWith([], stocked());
 

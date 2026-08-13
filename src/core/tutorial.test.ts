@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { PRIMARIES, colorInfo, primariesOf } from './colors';
 import { createRng } from './rng';
-import { rollTutorial, stockedPrimaries, type TutorialLevel } from './tutorial';
-import { RAW } from './types';
+import {
+  rollTutorial,
+  stockedPrimaries,
+  stocksSugar,
+  type TutorialLevel,
+} from './tutorial';
+import { Dir, RAW, type GameState } from './types';
 
 const tutorialFor = (seed: number): TutorialLevel[] => rollTutorial(createRng(seed));
 
@@ -73,5 +78,49 @@ describe('stockedPrimaries', () => {
 
   it('opens the board up to every dye once the tutorial is over', () => {
     expect(stockedPrimaries(tutorialFor(42)[3])).toEqual(PRIMARIES);
+  });
+});
+
+describe('stocksSugar', () => {
+  const strand = (segments: number, cut = 0): Pick<GameState, 'snake' | 'severed'> => ({
+    snake: {
+      head: { x: 0, y: 0 },
+      dir: Dir.Right,
+      body: Array.from({ length: segments }, (_unused, index) => ({
+        pos: { x: index + 1, y: 0 },
+        color: RAW,
+      })),
+    },
+    severed:
+      cut === 0
+        ? []
+        : [
+            {
+              segments: Array.from({ length: cut }, (_unused, index) => ({
+                pos: { x: index, y: 1 },
+                color: RAW,
+              })),
+              fate: 'chop',
+            },
+          ],
+  });
+
+  const level = tutorialFor(42)[0];
+
+  it('lays the level its one cube while the maker is empty-handed', () => {
+    expect(stocksSugar(level, strand(0))).toBe(true);
+  });
+
+  it('lays no second cube while the first is still on the strand', () => {
+    expect(stocksSugar(level, strand(1))).toBe(false);
+  });
+
+  it('waits for a cut batch to finish going through the block', () => {
+    expect(stocksSugar(level, strand(0, 1))).toBe(false);
+  });
+
+  it('keeps the endless board stocked whatever the maker is carrying', () => {
+    expect(stocksSugar(undefined, strand(1))).toBe(true);
+    expect(stocksSugar(undefined, strand(0, 3))).toBe(true);
   });
 });

@@ -87,7 +87,8 @@ candy-snake/
     │   ├── boardView.ts       # grid → sprites, segment coloring
     │   └── effects.ts         # particles, tweens (chop pop, shatter, confetti)
     ├── ui/
-    │   ├── orderCard.ts       # candy icon + the jars that go in + patience bar
+    │   ├── customerView.ts    # one child: walk, bubble, face, patience bar
+    │   ├── customerQueue.ts   # the line at the window, keyed by customer id
     │   ├── shelfStrip.ts      # the six candy slots, level with the bench
     │   ├── text.ts            # one answer to "what does screen text look like"
     │   ├── cheatSheet.ts      # collapsible mixing strip
@@ -168,8 +169,11 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   Phaser pattern so HUD ignores any camera effects (screen shake on shatter)
   applied to the play field. It is handed the same `Game` and reads its state
   read-only every frame, because patience bars drain continuously and there is
-  nothing to diff. One-shot HUD effects (serve confetti, the stale-candy toss)
-  hang off the `GameEvent` stream when the juice pass adds them.
+  nothing to diff. One-shot HUD effects hang off the `GameEvent` stream
+  instead: GameScene hands the window's own events (`customer-arrived`,
+  `-served`, `-left`) straight to `UIScene.play`, because *who* is waiting is
+  state but walking on and walking off are moments — and which of the two a
+  child just had is not recoverable from a queue they are no longer in.
 - Pause = `scene.pause` on GameScene only; UIScene stays interactive.
 
 ## 7. Rendering approach

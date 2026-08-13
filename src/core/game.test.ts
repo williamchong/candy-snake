@@ -808,6 +808,28 @@ describe('Game opening levels', () => {
     expect(jarsOn(game)).toEqual([]);
   });
 
+  it('lays no second cube until the first has come back as a candy', () => {
+    const game = opening();
+    const cubes = (): number =>
+      game.state.pickups.filter((pickup) => pickup.kind === 'sugar').length;
+
+    // In the maker's path, rather than wherever the seed dropped it.
+    game.state.pickups = [createSugar(cellAheadOf(game))];
+    run(game, passThrough(game));
+    expect(game.state.snake.body).toHaveLength(1);
+
+    // A level is one candy, so the floor stays bare for as long as the maker
+    // is carrying it — however long they drive around with it (design §7).
+    run(game, 25);
+    expect(cubes()).toBe(0);
+
+    layBatchAtBlock(game, [RAW]);
+    run(game, chopThrough([RAW]));
+
+    expect(game.state.tutorialIndex).toBe(1);
+    expect(cubes()).toBe(1);
+  });
+
   it('never lets an opening child run out', () => {
     const game = opening();
 

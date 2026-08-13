@@ -150,21 +150,27 @@ Rules:
 
 The mixing table must always be discoverable without blocking play:
 
-1. **Order cards show component dots.** A purple order card displays two small
-   dots (red, blue) beneath the candy icon. This teaches mixing passively and
-   is the primary hint channel.
+1. **The opening levels are the primary hint channel** (§7). A stocked board
+   teaches the recipe by making the wrong dye impossible to reach; the queue
+   itself shows only the candy each child wants, never the jars that go into
+   it. A recipe printed beside every order is a table the player reads instead
+   of playing, and it makes the mixing rule someone else's answer.
 2. **Collapsible cheat-sheet panel.** A small tab at the screen edge (bottom
    corner on desktop, top edge on portrait mobile) expands into a compact
-   `R+Y=O · Y+B=G · R+B=P · all=Brown` strip. Expanded by default for the first
-   run; state persisted. Semi-transparent, never covers the play grid's active
-   area, auto-collapses after a few seconds of play input.
+   mixing wheel: the three primaries with each pair's result drawn between
+   them, in jars and candies with their symbols (§4) rather than in letters —
+   the HUD carries no prose (§11), and a wheel is read at a glance where a
+   written table has to be studied. Expanded by default for the first run;
+   state persisted. Semi-transparent, never covers the play grid's active area,
+   auto-collapses after a few seconds of play input.
 
 ### Color accessibility
 
 Color-matching gameplay must not rely on hue alone:
 
 - Every color pairs with a **symbol** shown on dyes, body segments, candies,
-  and order cards (e.g. R=♥, Y=★, B=●, O=▲, G=♣, P=◆, Raw=○, Brown=✖).
+  and the candy a waiting child holds up (e.g. R=♥, Y=★, B=●, O=▲, G=♣, P=◆,
+  Raw=○, Brown=✖).
 - A "high-contrast symbols" toggle in settings makes symbols larger.
 
 ### Palette constraints (binding on the Phase 2 `colors.ts` table)
@@ -273,13 +279,20 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 - Appear at the serving window (the right side of the kitchen, beside the
   chopping block and the shelf), up to a cap that grows with difficulty
   (start 1, later up to 3–4 queue slots).
-- Each shows: candy icon in the requested color, the jars that go into it, and
-  a **patience bar** draining in real time. (The component dots of §4 are drawn
-  as dye jars: a jar is the thing the player actually has to drive through, so
-  the card names the route rather than just the recipe.)
+- Each child is **a character, not a card**: they walk on from the door end of
+  the queue, take their place in line, and hold the candy they came for in a
+  speech bubble over their head — the color and its symbol, and nothing else.
+  The recipe is not shown (§4): what they want is an order, not instructions.
+- Their **patience** shows twice, both without words: a bar draining in real
+  time at their feet, and their own face, which turns from calm to wide-eyed
+  once the clock is into its last stretch.
 - Serving is automatic the moment a matching candy exists (just produced or on
-  the shelf). Served customer → score + happy walk-off.
-- Patience reaches zero → customer leaves angry, **−1 life**.
+  the shelf). Served customer → score, a delighted face, and a walk-off.
+- Patience reaches zero → the face turns cross, the child walks out, **−1
+  life**.
+- A child on their way out **steps clear of the line first**, and walks off in
+  front of it: the queue closes up the moment they are off it, so a leaver who
+  stayed in lane would be walked through by whoever is moving up.
 
 #### Who gets the candy
 
@@ -351,13 +364,20 @@ player is able to make. Difficulty here is authored by removing options.
   cost the run, and a bar that drained toward nothing would be a lie about the
   rules. They pay base points with no patience bonus (§9) and do build the
   streak.
+- **One cube at a time.** A level asks for one candy, so the floor carries one
+  sugar cube and does not lay another until that one has come back through the
+  block. Restocking the moment the first is pulled would offer a second segment
+  the level never asked for — the same "remove the options" rule the jar stock
+  is authored by. (The endless game keeps §8.1's floor of one cube on the map
+  at all times.)
 - A level ends when its customer is served; the next child walks up a second
   later. Nothing can be soft-locked: a jar wasted on a bodiless strand simply
   respawns, because the stock rule keeps it on the board — the level-2 lesson is
   taught by retry rather than by text.
-- These three levels are where the three contextual hints of §11 live, as
-  captions on levels that always run rather than first-run toasts that can be
-  missed or dismissed.
+- These three levels **are** the teaching, on their own: no captions, no
+  toasts, no words anywhere on the screen. What the player is shown is a board
+  holding exactly one useful move and a child holding up what they want, which
+  is a thing to try rather than a thing to read.
 
 The endless ramp below starts only once level 3 is served, and it starts at the
 **Mixing** row rather than Warm-up: the opening levels have already taught raw,
@@ -383,7 +403,8 @@ first — keeps both slow and fast players on curve):
 
 ## 8. Spawn fairness rules
 
-1. ≥1 sugar on the map at all times; respawn once spent.
+1. ≥1 sugar on the map at all times; respawn once spent. (The opening levels
+   narrow this to exactly one cube per level — see §7.)
 2. ≤1 dye jar per primary on the map at a time.
 
 A pickup the strand is still passing through counts as on the map for both
@@ -451,17 +472,22 @@ High scores (top 10, with date) persist in `localStorage`.
 
 ## 11. HUD & screens
 
-- **HUD:** score, lives (heart pips), customer queue with patience bars, shelf
-  contents (6 slots), cheat-sheet tab, pause. The hearts are inked in the
-  symbol's own dark value rather than red: a life is not a candy, and hue in
-  this game belongs to candies alone (§4, palette constraints).
+- **HUD:** score, lives (heart pips), the queue of children with their bubbles
+  and patience bars (§5), shelf contents (6 slots), cheat-sheet tab, pause. The
+  hearts are inked in the symbol's own dark value rather than red: a life is
+  not a candy, and hue in this game belongs to candies alone (§4, palette
+  constraints).
+- **No prose in the HUD.** The only text on the play screen is the score, and
+  that is a number. Everything else — what a child wants, how long they will
+  wait, how they took it — is carried by a drawn thing, because the HUD is read
+  in glances taken from steering.
 - **Screens:** Boot/loading → Menu (play, settings, high scores) → Game →
   Game Over (score breakdown, high-score entry-free — auto-saved, restart CTA).
-- **First-run teaching:** no modal tutorial, and no toasts either. The three
-  hints — pull sugar and chop, sugar before the jar, two dyes make one color —
-  are the three opening levels of §7 and their captions. Levels that always run
-  cannot be missed or dismissed, which is what the persisted seen-once flags
-  were working around.
+- **First-run teaching:** no modal tutorial, no toasts, and no captions. The
+  three lessons — pull sugar and chop, sugar before the jar, two dyes make one
+  color — are the three opening levels of §7, taught by what the board does and
+  does not hold. Levels that always run cannot be missed or dismissed, which is
+  what the persisted seen-once flags were working around.
 
 ## 12. Audio & juice (polish targets)
 

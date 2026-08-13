@@ -22,10 +22,10 @@ export type Primary = (typeof PRIMARIES)[number];
 export const blend = (color: ColorMask, dye: Primary): ColorMask => color | dye;
 
 /**
- * The primaries a mix is made of — `blend` read backwards. Order cards show
- * these as component dots, which is the game's primary channel for teaching
- * mixing (design §4), and the opening levels stock the board from them
- * (`tutorial.ts`).
+ * The primaries a mix is made of — `blend` read backwards. The queue does not
+ * show these: a recipe printed beside every order is a table the player reads
+ * instead of playing (design §4). What reads them is the opening levels, which
+ * stock the board from them (`tutorial.ts`), and Phase 7's mixing wheel.
  */
 export const primariesOf = (color: ColorMask): Primary[] =>
   PRIMARIES.filter((primary) => (color & primary) !== 0);

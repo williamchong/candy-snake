@@ -19,6 +19,7 @@ import {
   TUTORIAL_ARRIVAL_GAP_MS,
   rollTutorial,
   stockedPrimaries,
+  stocksSugar,
   type TutorialLevel,
 } from './tutorial';
 import {
@@ -469,9 +470,11 @@ export class Game {
   }
 
   private spawnPickups(events: GameEvent[]): void {
-    const stocked = stockedPrimaries(this.openingLevel);
+    const level = this.openingLevel;
+    const stocked = stockedPrimaries(level);
+    const sugar = stocksSugar(level, this.state);
 
-    for (const pickup of ensurePickups(this.state, this.rng, stocked)) {
+    for (const pickup of ensurePickups(this.state, this.rng, stocked, sugar)) {
       this.state.pickups.push(pickup);
       events.push(
         pickup.kind === 'sugar'

@@ -85,8 +85,9 @@ The phase where it becomes a *game*.
 - Matching: on candy produced and on customer arrival, serve from
   production/shelf automatically.
 - Scoring (base + patience bonus + streak), lives, game over.
-- `UIScene`: order cards (color + the jars that go in + patience bar), lives,
-  score, shelf strip moved here.
+- `UIScene`: the queue drawn as children — each walks up, holds the candy they
+  want in a bubble, drains a patience bar, and leaves pleased or cross — plus
+  lives, score, and the shelf strip moved here.
 - Menu → Game → GameOver scene flow; restart.
 - Unit + simulation tests: matching precedence, expiry → life loss, scoring
   math, opening-level stock and non-expiry, bot-run invariants.
@@ -126,9 +127,11 @@ both orientations.
 ## Phase 7 — Cheat sheet, hints & UX polish (M)
 
 - Collapsible mixing cheat sheet (edge tab, auto-collapse, persisted state) —
-  the non-obstructive requirement from design §4.
-- (The three contextual hints are already carried by Phase 4's opening levels
-  and their captions — design §11 — so no toasts and no seen-once flags.)
+  the non-obstructive requirement from design §4, drawn as the wordless mixing
+  wheel that section specifies. It is the only place in the game a recipe is
+  shown at all, now that the queue holds none.
+- (The three lessons are already carried by Phase 4's opening levels and what
+  they stock — design §11 — so no toasts, no captions, no seen-once flags.)
 - Settings screen: sound, D-pad toggle, left-hand mode, high-contrast symbols.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
   serve confetti, patience-bar urgency pulse. Now that the strand is drawn as

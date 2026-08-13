@@ -7,6 +7,7 @@ import { bindKeyboard } from '../input/keyboard';
 import { BoardView } from '../render/boardView';
 import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
+import type { UIScene } from './UIScene';
 
 /**
  * Logic advances in fixed 20 ms slices regardless of display refresh rate, so
@@ -67,6 +68,17 @@ export class GameScene extends Phaser.Scene {
     this.view.render(this.core.moveProgress(this.accumulatorMs));
   }
 
+  /**
+   * The HUD, once it is actually running. `launch` above only queues it, and
+   * the run's first customer is announced on the very first step — which can
+   * land before the HUD's own `create` has been through.
+   */
+  private hud(): UIScene | undefined {
+    return this.scene.isActive(SceneKey.UI)
+      ? (this.scene.get(SceneKey.UI) as UIScene)
+      : undefined;
+  }
+
   /** Effects are driven by events, never by polling state (architecture §7). */
   private play(event: GameEvent): void {
     switch (event.type) {
@@ -106,12 +118,17 @@ export class GameScene extends Phaser.Scene {
         } satisfies RunSummary);
         return;
 
-      // The serving window is UIScene's, and it draws the queue from state
-      // every frame — the board itself has nothing to play for these. The juice
-      // pass (Phase 7) gives serves and losses their own effects.
+      // The serving window is UIScene's: it draws who is waiting from state,
+      // but a child walking on and walking off are one-shots, so they are
+      // handed over rather than left to be inferred (architecture §7).
       case 'customer-arrived':
       case 'customer-served':
       case 'customer-left':
+        this.hud()?.play(event);
+        return;
+
+      // The board itself has nothing to play for a lost life; the column's
+      // hearts are drawn from state.
       case 'life-lost':
         return;
 

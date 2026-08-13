@@ -134,10 +134,11 @@ export interface GameState {
   served: number;
   over: boolean;
   /**
-   * How many of the three opening levels are done (design §7). It is state
-   * rather than a private counter — as the arrival clock and the id counter
-   * are — because the HUD reads it: which level is running decides the caption
-   * beside the queue.
+   * How many of the three opening levels are done (design §7) — and so which
+   * one is running, which decides what the board stocks and whether the child
+   * at the window has a clock. On the state rather than a private counter, as
+   * the arrival clock and the id counter are, so that how far into the run a
+   * game is can be read off one object.
    */
   tutorialIndex: number;
   /**

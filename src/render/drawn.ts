@@ -36,10 +36,18 @@ export const CHROME_WIDTH = 2;
  * deeper table — the two scenes never share a display list.
  */
 export const HudDepth = {
-  /** The frame a candy sits in: a shelf slot, an order card. */
+  /** The frame a candy sits in: a shelf slot, a customer's bubble. */
   Slot: 0,
   Icon: 1,
   Glyph: 2,
+  /**
+   * A child on their way out of the queue, who walks in front of the line they
+   * have just left rather than through it (design §5). Named here rather than
+   * added to `Icon` at the call site: this table is where HUD layering is
+   * decided, and arithmetic on it is how a widget ends up above its own frame.
+   */
+  LeavingIcon: 3,
+  LeavingGlyph: 4,
 } as const;
 
 export interface Drawn {
