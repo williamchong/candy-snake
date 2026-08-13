@@ -148,10 +148,13 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 
 ## 7. Rendering approach
 
-- **Runtime-generated textures** in BootScene: rounded squares for segments
-  (white base, tinted per `ColorMask` via a palette lookup), circles for
-  candies, jar shapes for dyes, sugar cubes — via `Graphics` +
-  `generateTexture`. Ships v1 with zero art files.
+- **Runtime-generated textures** in BootScene: each sprite is an 8×8 ASCII
+  pixel map in `render/textures.ts`, painted a pixel at a time with `Graphics`
+  + `generateTexture` and drawn at an integer scale with `pixelArt: true` —
+  the 8-bit arcade direction (design §2). Ships v1 with zero art files.
+- Sprites are drawn in grays (highlight / fill / shadow) over a near-black
+  outline so that tinting — which multiplies — recolors them to any
+  `ColorMask` palette entry without flattening the shading.
 - Segment sprites are tinted with the palette color and stamped with the
   accessibility **symbol glyph** (bitmap text) per the design doc.
 - Effects are Phaser particle emitters + tweens, all triggered by GameEvents,

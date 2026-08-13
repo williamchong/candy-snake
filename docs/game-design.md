@@ -33,16 +33,21 @@ Traditional candy making, step by step, mapped onto game verbs:
 The board is the kitchen floor. The chopping block sits in a fixed corner next
 to the serving window where customers (children) appear.
 
-### Art direction (potential — suggestion only, not locked)
+### Art direction — 8-bit arcade (chosen in Phase 1)
 
-"Candy snake" is a real candy — the segmented, multi-colored gummy snake —
-and it maps neatly onto this game's per-segment color model. A possible art
-direction: render body segments as glossy, translucent gummy pieces (rounded
-shape, white specular highlight, slight squash-and-stretch), so the strand
-reads as a gummy snake and shatter/chop naturally reads as it breaking into
-gummy chunks. The *narrative* would stay the candy-maker fiction (dye jars,
-chopping block); the gummy look is purely aesthetic. Affects only the
-generated textures (Phase 2) and juice pass (Phase 7) if adopted.
+Everything is drawn as **old-style 8-bit arcade pixel art**: sprites authored
+at 8×8 source pixels and scaled up by an integer factor with nearest-neighbour
+filtering, over a dark cabinet-style backdrop and a checkerboard kitchen floor.
+
+- Sprites are ASCII pixel maps in `render/textures.ts` — still zero image
+  assets, still generated at boot.
+- Shading uses three grays (highlight / fill / shadow) over a near-black
+  outline. Phaser tinting *multiplies*, so one sprite recolors to any §4
+  palette color while keeping its shading — this is what lets the Phase 2
+  per-segment colors ride on the same textures.
+- The narrative stays the candy-maker fiction (dye jars, chopping block); the
+  8-bit look is purely aesthetic. It constrains the generated textures and the
+  juice pass (Phase 7) — chunky pixel shards rather than smooth particles.
 
 ## 3. Core loop
 

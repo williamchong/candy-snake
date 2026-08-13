@@ -33,7 +33,10 @@ The one structural rule that matters (architecture.md §2):
 - The color palette (mask → hex/symbol/name/tier) lives only in `core/colors.ts`; HUD and rendering look it up there so they can never disagree.
 - Textures are generated at runtime in BootScene (`Graphics.generateTexture`) — there are no image assets in v1.
 
-Tests are colocated (`src/**/*.test.ts`) and cover `core/` only.
+Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
+`core/` plus `input/directionQueue.ts` (pure TS, no Phaser). Phaser-touching
+code (`scenes/`, `render/`, `input/keyboard.ts`) is verified by the
+run-candy-snake smoke driver instead.
 
 ## Conventions
 

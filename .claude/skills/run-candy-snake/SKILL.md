@@ -49,7 +49,7 @@ npm run dev   # prints Local: http://localhost:5173/
 ## Test / gates
 
 ```bash
-npm run test        # Vitest over src/**/*.test.ts (engine-free core only)
+npm run test        # Vitest over src/**/*.test.ts (engine-free logic only)
 npm run typecheck && npm run lint && npm run format:check
 ```
 
