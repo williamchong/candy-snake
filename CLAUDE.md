@@ -34,9 +34,10 @@ The one structural rule that matters (architecture.md §2):
 - Textures are generated at runtime in BootScene (`Graphics.generateTexture`) — there are no image assets in v1.
 
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
-`core/` plus `input/directionQueue.ts` (pure TS, no Phaser). Phaser-touching
-code (`scenes/`, `render/`, `input/keyboard.ts`) is verified by the
-run-candy-snake smoke driver instead.
+`core/` plus the pure modules the Phaser layer leans on —
+`input/directionQueue.ts` and `render/strand.ts` (no Phaser import in either).
+Phaser-touching code (`scenes/`, `render/boardView.ts`, `render/textures.ts`,
+`input/keyboard.ts`) is verified by the run-candy-snake smoke driver instead.
 
 ## Conventions
 

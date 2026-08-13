@@ -42,7 +42,9 @@ detail, and a floor of faint diagonal rainbow bands that never competes with
 the candy sitting on it.
 
 - Sprites are ASCII pixel maps in `render/textures.ts` — still zero image
-  assets, still generated at boot.
+  assets, still generated at boot. Textures are baked at 16×16 so the strand
+  (below) can sit inset from its cell and still carry the same soft edge; the
+  8×8 maps are doubled into that, so they render exactly as authored.
 - Detail is deliberately minimal: a flat fill and one soft edge, no interior
   shading. The head adds two dots for eyes and nothing else.
 - Sprite pixels are grays because Phaser tinting *multiplies*: white takes the
@@ -56,6 +58,28 @@ the candy sitting on it.
 - The narrative stays the candy-maker fiction (dye jars, chopping block); the
   look is purely aesthetic and constrains only the generated textures and the
   juice pass (Phase 7).
+
+#### The strand is drawn as one continuous rope (revised after Phase 3)
+
+The body was a chain of identical lozenges, each carrying a soft edge on all
+four sides, so every joint between two segments showed a seam — and a seamed
+chain of beads reads as a snake game however the mechanics behave. Each cell
+now draws a rope piece instead — **straight, elbow, or end cap** — chosen from
+where its neighbours sit, and rotated. The soft edge runs along the rope's
+flanks only, never across a joint, so the strand is unbroken and a color change
+simply runs along it.
+
+Everything else above still holds. The strand keeps the same flat
+fill-plus-soft-edge in the same palette — no gloss, no interior shading — and
+a piece cut loose is not rope any more, so debris and the shard puff still come
+apart as the old lozenges.
+
+**Only the shape was wrong, so only the shape changed.** A literal
+confectioner's bench (stone slab, steel cutter, dark workshop), a maker's gloved
+hand in place of the head, and a wet-sugar gloss down the rope were all built
+for this and thrown away: the pastels are the identity, *Candy Snake* is the
+joke, and photo-reference is for how the sugar behaves, never for how the room
+is painted.
 
 ## 3. Core loop
 

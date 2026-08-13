@@ -125,7 +125,9 @@ both orientations.
 - Contextual first-run hint toasts (3 hints, persisted seen-flags).
 - Settings screen: sound, D-pad toggle, left-hand mode, high-contrast symbols.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
-  serve confetti, patience-bar urgency pulse.
+  serve confetti, patience-bar urgency pulse. Now that the strand is drawn as
+  one rope (design §2), stretching it along its travel axis as it is pulled
+  belongs here too.
 - Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted.
 
 **Done when:** a new player understands mixing without leaving the game, and

@@ -79,7 +79,8 @@ candy-snake/
     │   ├── touch.ts           # swipe detector (+ optional virtual d-pad)
     │   └── directionQueue.ts  # 2-deep buffer, 180° reversal rejection
     ├── render/
-    │   ├── textures.ts        # runtime-generated candy/segment/jar textures
+    │   ├── textures.ts        # runtime-generated candy/strand/jar textures
+    │   ├── strand.ts          # segment neighbours → rope piece + rotation (pure)
     │   ├── boardView.ts       # grid → sprites, segment coloring
     │   └── effects.ts         # particles, tweens (chop pop, shatter, confetti)
     ├── ui/
@@ -160,14 +161,30 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 
 ## 7. Rendering approach
 
-- **Runtime-generated textures** in BootScene: each sprite is an 8×8 ASCII
-  pixel map in `render/textures.ts`, baked through Phaser's
-  `textures.generate` against one fixed 16-color palette and drawn at an
-  integer scale with `pixelArt: true` (design §2). Ships v1 with zero art
-  files.
+- **Runtime-generated textures** in BootScene: each sprite is an ASCII pixel
+  map in `render/textures.ts`, baked through Phaser's `textures.generate`
+  against one fixed 16-color palette and drawn at an integer scale with
+  `pixelArt: true` (design §2). Ships v1 with zero art files.
+- Textures are baked at 16×16. The hand-authored sprites are drawn at 8×8 and
+  doubled into that, so they render exactly as authored; only the strand's rope
+  pieces are authored at 16×16, because a rope has to sit inset from its cell
+  *and* still carry the same soft edge as everything else, and 8×8 has no width
+  left for both.
 - Sprite pixels are grays — a fill plus a soft edge — so that tinting, which
   multiplies, recolors them to any `ColorMask` palette entry while the edge
   stays a deeper shade of that same color.
+- The rope pieces are **generated from a boolean shape** rather than drawn by
+  hand: a solid pixel within `RIM_WIDTH` of an empty one takes the soft edge,
+  the rest take the fill. Two consequences worth knowing. Pixels outside the
+  texture count as solid, so a rope spanning its cell edge to edge grows no rim
+  along that border and two segments meet with no seam. And `RIM_WIDTH` is 2,
+  matching the doubled 8×8 sprites' edge — a one-pixel rim here would read as a
+  second art style sitting next to the first.
+- **The strand is drawn as continuous rope.** `render/strand.ts` maps a
+  segment's neighbours to a piece (straight / elbow / end cap) and a rotation,
+  so one elbow map serves all four turns. It is pure TypeScript with no Phaser
+  import — wrap-aware, so the strand stays unbroken across a service door — so
+  the geometry is unit-tested in Node like the core is (§11).
 - **The view interpolates; the core does not.** `Game.moveProgress()` reports
   how far the snake stands between cells (0…1) and `BoardView.render` slides
   sprites that fraction of the way, so the simulation stays discrete and
@@ -217,11 +234,13 @@ back to defaults silently. No PII, no backend.
 
 ## 11. Testing strategy
 
-- **Unit (Vitest, core only):** color blending table (all 8×3 dye
+- **Unit (Vitest, engine-free modules):** color blending table (all 8×3 dye
   applications), self-hit shatter boundaries (hit neck, hit tail, hit middle),
   chop ordering (block end first, colors preserved), order matching + shelf
   eviction, pity-spawner guarantees, difficulty curve monotonicity, scoring
-  incl. streak caps. Deterministic via seeded `rng.ts`.
+  incl. streak caps. Deterministic via seeded `rng.ts`. Beyond `core/`, this
+  covers the pure modules the Phaser layer leans on — `input/directionQueue.ts`
+  and `render/strand.ts` (rope pieces, rotations, wrapped neighbours).
 - **Simulation tests:** run `Game.step` thousands of ticks with a scripted
   bot; assert invariants (≥1 sugar on map, no pickup on snake, no negative
   lives, shelf ≤ 6).
