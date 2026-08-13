@@ -102,18 +102,22 @@ export const blend = (c: ColorMask, dye: ColorMask): ColorMask => c | dye;
 // types.ts
 interface Segment { pos: Vec2; color: ColorMask }
 interface SnakeState { head: Vec2; dir: Dir; body: Segment[]; mode: 'moving' | 'chopping' }
+// A pickup is opened by the head and spent when the strand clears it, so its
+// in-between state lives in core state, not in a Phaser tween (design §5).
+type Pickup = { pos: Vec2; open: boolean } & ({ kind: 'sugar' } | { kind: 'dye'; primary; kneaded: number })
+interface Debris { segments: Segment[] }   // frozen break, crumbles impact-end first
 interface Candy { color: ColorMask; bornAt: number }
 interface Customer { id: number; want: ColorMask; patienceMs: number; maxPatienceMs: number }
 interface GameState {
-  snake: SnakeState; pickups: Pickup[]; shelf: Candy[];
+  snake: SnakeState; pickups: Pickup[]; debris: Debris[]; shelf: Candy[];
   customers: Customer[]; score: number; lives: number;
   streak: number; elapsedMs: number; served: number; over: boolean;
 }
 ```
 
 `Game.step(dtMs, inputs)` advances everything and returns `GameEvent[]`
-(`sugar-eaten`, `sugar-spawned`, `dye-eaten`, `dye-spawned`,
-`body-shattered`, `candy-chopped`,
+(`sugar-pulled`, `sugar-spawned`, `dye-kneaded`, `dye-spent`, `dye-spawned`,
+`strand-broken`, `debris-crumbled`, `candy-chopped`,
 `customer-arrived`, `customer-served`, `customer-left`, `life-lost`,
 `game-over`, …). The Phaser layer never mutates core state; it only renders it
 and plays effects per event. Events carry the data needed for presentation

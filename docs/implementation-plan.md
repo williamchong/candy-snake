@@ -38,14 +38,20 @@ checkpoint; tune tick rate before moving on.**
 - `core/colors.ts` palette table (mask → hex, symbol, name, tier) + `blend`.
   The values are constrained, not free — see game-design §4 "Palette
   constraints" before picking any.
-- Dye pickups (primaries, ≤1 per color on map); eating applies blend to all
-  segments; new sugar appends raw.
-- Rendering: per-segment tint + symbol glyph; dye jars on board.
+- Dye pickups (primaries, ≤1 per color on map). Pickups are passed *through*
+  rather than eaten (design §5): the head opens one, it tints/feeds one
+  segment per move as the strand is drawn across it, and it leaves the board —
+  and only then respawns — once the strand has cleared its cell. A sugar cube
+  becomes the new tail segment on its own cell; new sugar still appends raw.
+- Self-hit breaks the strand instead of vaporising it: the severed piece
+  freezes and crumbles one block per move, impact end first (design §6).
+- Rendering: per-segment tint + symbol glyph; dye jars and debris on board.
 - Unit tests: full blend table, per-segment independence, dye-with-no-body
-  no-op.
+  no-op, pass-through timing, crumble order.
 
 **Done when:** you can build a `[purple, purple, raw]` strand on screen and
-every color state renders distinctly (check symbols with grayscale filter).
+every color state renders distinctly (check symbols with grayscale filter),
+and the strand visibly turns one segment at a time as it crosses a jar.
 
 ## Phase 3 — Chopping block & shelf (M)
 

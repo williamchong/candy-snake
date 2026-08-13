@@ -45,6 +45,9 @@ const NO_TINT = 0xffffff;
 
 const SHATTER_MS = 280;
 
+/** Enough to read debris as spilled sugar rather than as live strand. */
+const DEBRIS_ALPHA = 0.5;
+
 /**
  * Every glyph sits directly above the sprite it labels, so the layers pair up.
  */
@@ -52,10 +55,13 @@ const Depth = {
   Floor: 0,
   Pickup: 1,
   PickupGlyph: 2,
-  Segment: 3,
-  SegmentGlyph: 4,
-  Head: 5,
-  Shard: 6,
+  /** Debris lies on the floor, so the live strand passes over it. */
+  Debris: 3,
+  DebrisGlyph: 4,
+  Segment: 5,
+  SegmentGlyph: 6,
+  Head: 7,
+  Shard: 8,
 } as const;
 
 /**
@@ -88,11 +94,14 @@ interface PoolConfig {
   readonly depth: number;
   /**
    * Whether a sprite keeps its identity between ticks. The strand does — a
-   * body segment slides into the cell ahead of it. Pickups do not: eating
-   * splices the array and a fresh sugar takes the freed index, so sliding
-   * would show new sugar gliding out of the snake's mouth.
+   * body segment slides into the cell ahead of it. Pickups do not: spending
+   * one splices the array and a fresh sugar takes the freed index, so sliding
+   * would show new sugar gliding out of the snake's mouth. Debris does not
+   * either — it is frozen by definition.
    */
   readonly slides: boolean;
+  /** Drawn at this alpha, for layers that must read as inert (debris). */
+  readonly alpha?: number;
   /** Depth for the symbol glyph, or undefined to draw none (design §4). */
   readonly glyphDepth?: number;
 }
@@ -202,10 +211,10 @@ class SpritePool {
   }
 
   private spawn(at: Vec2): Sliding {
-    const { key, tint, depth, glyphDepth } = this.config;
+    const { key, tint, depth, glyphDepth, alpha } = this.config;
 
     return {
-      image: makeSprite(this.scene, key, tint ?? NO_TINT, depth, at),
+      image: makeSprite(this.scene, key, tint ?? NO_TINT, depth, at).setAlpha(alpha ?? 1),
       glyph:
         glyphDepth === undefined
           ? undefined
@@ -216,7 +225,7 @@ class SpritePool {
               glyphDepth,
               at,
               GLYPH_SCALE,
-            ),
+            ).setAlpha(alpha ?? 1),
       from: at,
       to: at,
     };
@@ -232,52 +241,45 @@ class SpritePool {
 }
 
 /**
- * The self-hit puff. Pooled like the strand: a hit near the head destroys
- * almost the whole body, so one event can light up ~250 cells at once, and
- * creating that many game objects in a single frame is exactly the churn
- * SpritePool exists to avoid.
+ * The one-cell puff: a block of debris coming apart, or a wasted dye. Pooled
+ * because these overlap — a puff fades for longer than a move lasts, so a
+ * crumbling strand always has several in flight — and creating a game object
+ * per puff is exactly the churn SpritePool exists to avoid.
  */
 class ShardBurst {
   private readonly sprites: Phaser.GameObjects.Image[] = [];
-  /**
-   * Where the next burst starts drawing from. Bursts overlap — a one-shard
-   * dye splash can land while a shatter is still fading — and always starting
-   * at index 0 would reclaim the shard that puff is mid-tween on. Walking the
-   * pool means a sprite is only reused once everything else has been.
-   */
-  private cursor = 0;
 
   constructor(private readonly scene: Phaser.Scene) {}
 
-  /** Takes whole segments, so the puff shows the colors that were lost. */
-  burst(segments: readonly Segment[]): void {
-    segments.forEach((segment) => {
-      const at = cellToPixel(segment.pos);
-      const tint = colorInfo(segment.color).hex;
-      const existing = this.sprites[this.cursor];
-      const sprite =
-        existing ?? makeSprite(this.scene, TextureKey.Segment, tint, Depth.Shard, at);
-      if (existing === undefined) this.sprites.push(sprite);
-      this.cursor = (this.cursor + 1) % this.sprites.length;
+  /** Takes a whole segment, so the puff shows the color that was lost. */
+  burst(segment: Segment): void {
+    const at = cellToPixel(segment.pos);
+    const tint = colorInfo(segment.color).hex;
 
-      // A second shatter can land while the first is still fading; without
-      // this the two tweens fight over the same sprite.
-      this.scene.tweens.killTweensOf(sprite);
-      sprite
-        .setPosition(at.x, at.y)
-        .setTint(tint)
-        .setAlpha(1)
-        .setScale(PIXEL_SCALE)
-        .setVisible(true);
+    // Only a sprite whose tween has finished — it hides itself on complete —
+    // may be reclaimed. Claiming one still fading would cut that puff short,
+    // and a puff outlives a move, so there is always one in flight. The pool
+    // therefore settles at the peak number of overlapping puffs.
+    let sprite = this.sprites.find((candidate) => !candidate.visible);
+    if (sprite === undefined) {
+      sprite = makeSprite(this.scene, TextureKey.Segment, tint, Depth.Shard, at);
+      this.sprites.push(sprite);
+    }
 
-      this.scene.tweens.add({
-        targets: sprite,
-        alpha: 0,
-        scale: PIXEL_SCALE * 1.5,
-        duration: SHATTER_MS,
-        ease: 'Quad.easeOut',
-        onComplete: () => sprite.setVisible(false),
-      });
+    sprite
+      .setPosition(at.x, at.y)
+      .setTint(tint)
+      .setAlpha(1)
+      .setScale(PIXEL_SCALE)
+      .setVisible(true);
+
+    this.scene.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      scale: PIXEL_SCALE * 1.5,
+      duration: SHATTER_MS,
+      ease: 'Quad.easeOut',
+      onComplete: () => sprite.setVisible(false),
     });
   }
 }
@@ -288,6 +290,7 @@ export class BoardView {
   private readonly segments: SpritePool;
   private readonly sugar: SpritePool;
   private readonly dyes: SpritePool;
+  private readonly debris: SpritePool;
   private readonly shards: ShardBurst;
   private previousPickups: readonly Pickup[] | undefined;
 
@@ -305,6 +308,18 @@ export class BoardView {
       depth: Depth.Pickup,
       slides: false,
       glyphDepth: Depth.PickupGlyph,
+    });
+    // Severed sugar is still sugar, so it reuses the strand's sprite and
+    // keeps its color — but it is frozen where it broke and never slides.
+    // Faded, because a block the player no longer steers must not read as
+    // part of the strand: hue is spoken for by the color system (design §4),
+    // so the separation has to come from value.
+    this.debris = new SpritePool(scene, {
+      key: TextureKey.Segment,
+      depth: Depth.Debris,
+      slides: false,
+      glyphDepth: Depth.DebrisGlyph,
+      alpha: DEBRIS_ALPHA,
     });
     this.segments = new SpritePool(scene, {
       key: TextureKey.Segment,
@@ -325,6 +340,7 @@ export class BoardView {
   syncToState(state: GameState): void {
     this.head.retarget([{ pos: state.snake.head }]);
     this.segments.retarget(state.snake.body);
+    this.debris.retarget(state.debris.flatMap((pile) => pile.segments));
 
     // The strand is drawn *arriving* at the cell it already occupies
     // logically, so it trails the simulation by one move. Pickups have to
@@ -351,14 +367,12 @@ export class BoardView {
     this.segments.draw(progress);
   }
 
-  /** A soft local puff where the strand broke, rather than a screen flash. */
-  shatter(segments: readonly Segment[]): void {
-    this.shards.burst(segments);
-  }
-
-  /** Dye eaten with no strand to knead it into: it splashes and is gone. */
+  /**
+   * A soft local puff at one cell, rather than a screen flash — a block of
+   * debris coming apart, or a dye that found no strand to knead itself into.
+   */
   splash(pos: Vec2, color: ColorMask): void {
-    this.shards.burst([{ pos, color }]);
+    this.shards.burst({ pos, color });
   }
 
   private drawFloor(): void {

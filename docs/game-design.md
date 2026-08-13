@@ -24,8 +24,8 @@ Traditional candy making, step by step, mapped onto game verbs:
 
 | Real-world step            | Game verb                                      |
 | -------------------------- | ---------------------------------------------- |
-| Boiling / gathering sugar  | Eating **sugar** pickups → body grows          |
-| Kneading dye into the mass | Eating **dye** pickups → body segments tint    |
+| Boiling / gathering sugar  | Drawing the strand over **sugar** → grows      |
+| Kneading dye into the mass | Drawing it through **dye** → segments tint     |
 | Pulling into a thin strand | The snake body itself                          |
 | Chopping into candies      | Driving into the **chopping block**            |
 | Serving the shop window    | Auto-matching candies to **customer orders**   |
@@ -96,11 +96,20 @@ Dyes are the three **paint primaries**: Red, Yellow, Blue. A color is simply
 
 Rules:
 
-- **Blending, never overwriting.** Eating a dye adds that primary to **every
-  current body segment's** mix. A red segment eating blue becomes purple; a
-  purple segment eating yellow becomes brown.
-- **New sugar is raw.** Segments gained after a dye keep no color — the body
-  becomes a multi-colored production line (e.g. `[purple, purple, raw, raw]`).
+- **Blending, never overwriting.** A dye adds its primary to a segment's mix.
+  A red segment taking blue becomes purple; a purple segment taking yellow
+  becomes brown. Applying a primary a segment already holds does nothing.
+- **The jar dyes one segment per move, as that segment crosses it.** The jar
+  stays where it is and the strand is drawn through it (see §5). Because the
+  body retraces the head's path exactly, every segment on the strand when the
+  head opened the jar *will* cross it — so the strand ends up uniformly
+  blended, but it turns visibly, one segment at a time, from the head end
+  back. The head is the candy maker, not sugar, so it takes no color.
+- **New sugar is raw.** A cube taken *after* the head passed a jar plants its
+  segment only once the tail has cleared the cube — which is a move later than
+  the jar is spent, so it can never catch that dye. The body therefore becomes
+  a multi-colored production line (e.g. `[purple, purple, raw, raw]`). A cube
+  taken *before* the jar is part of that batch and does get dyed.
 - **Brown is the over-mix trap.** It punishes careless dye pickups. Brown
   candies still go to the shelf; a rare "mystery flavor" customer who accepts
   brown appears occasionally as a mercy/cleanup mechanic.
@@ -160,18 +169,34 @@ has to earn its palette rather than pick pretty values:
   classic snake steering: can turn 90°, never reverse 180° directly.
 - **Starting length:** head only (length 1, no body).
 
+### Pickups are passed *through*, not eaten
+
+Sugar and dye share one rule, and it is the rule that gives both their feel:
+
+- The head **opens** a pickup by entering its cell. The pickup does not
+  disappear — it stays put, under the strand, and does not respawn.
+- It is **spent** only once the strand has cleared its cell again, which
+  (since the body retraces the head's path) is the move after the tail
+  crosses it. A long strand therefore sits on a pickup for many moves.
+- Nothing on the board teleports: a cube is never "swallowed" at the head and
+  re-materialised as length at the far tail.
+
 ### Sugar
 
 - Spawns at random free cells. **Invariant: at least one sugar is always on
   the map.**
-- Eating sugar appends one **raw** segment at the tail.
+- The cube stays where it is while the whole strand passes over it. When the
+  tail clears the cube's cell, **the cube becomes the new tail segment**, raw,
+  on that exact cell — visually it is never gone, it just stops being a cube.
+  (The tail vacated that cell on the same move, so the strand stays unbroken.)
 
 ### Dye
 
 - Spawns as red / yellow / blue jars at random free cells; at most one jar of
   each primary on the map at a time.
-- Eating a dye applies its primary to all current body segments (see §4).
-  Eating dye with **no body** wastes it (small "splash" feedback, no effect).
+- The jar tints **one segment per move** — whichever is standing on it — and
+  is spent when the strand clears it (see §4). A jar the strand crosses with
+  **no body** kneads nothing and is wasted (small "splash" feedback).
 - **Pity spawner:** if an active order requires a primary that the player
   cannot currently obtain (not on map, not derivable from shelf stock or the
   current body), that dye is guaranteed to spawn within a few seconds — orders
@@ -209,10 +234,17 @@ has to earn its palette rather than pick pretty values:
 ## 6. Movement, collision & failure rules
 
 - **Self-collision does not kill.** Running the head into your own body
-  **shatters** the strand at the impact point: the hit segment *and everything
-  behind it* (toward the tail) is destroyed in a shower of sugar shards. The
-  head and segments in front of the impact survive. Loss of material and time,
-  not of life.
+  **breaks** the strand at the impact point: the hit segment *and everything
+  behind it* (toward the tail) is cut loose. The head and segments in front of
+  the impact survive and keep moving. Loss of material and time, not of life.
+- **The severed piece freezes and crumbles.** It stops dead where it broke and
+  comes apart **one block per move, starting at the impact and travelling
+  toward the loose tail end** — the crack propagating down the strand. Debris
+  is inert: it blocks nothing and collides with nothing, but pickups will not
+  spawn on it while it is still there.
+- A pickup the lost length was still passing through is **left on the board,
+  closed again** — the strand that was drawing through it no longer exists, so
+  the head has to come back for it.
 - **Walls:** the kitchen edges wrap (pass-through service doors on each wall —
   exit left, re-enter right). This keeps flow forgiving on mobile. Station
   cells (chopping block) are solid interactables, not hazards.
@@ -242,8 +274,12 @@ first — keeps both slow and fast players on curve):
 
 ## 8. Spawn fairness rules
 
-1. ≥1 sugar on the map at all times; respawn on consume.
+1. ≥1 sugar on the map at all times; respawn once spent.
 2. ≤1 dye jar per primary on the map at a time.
+
+A pickup the strand is still passing through counts as on the map for both
+rules, so nothing respawns until the whole snake has cleared it.
+
 3. **Pity timer:** for each active order, compute the set of primaries needed
    that are not satisfiable from (shelf stock ∪ candies derivable from current
    body ∪ dyes on map). Any missing primary is force-spawned within 5 s.

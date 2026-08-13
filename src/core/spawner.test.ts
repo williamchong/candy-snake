@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { CELL_COUNT, cellKey, eq, keyToCell, stepCell } from './board';
 import { BLUE, PRIMARIES, RED, YELLOW, type Primary } from './colors';
 import { createRng } from './rng';
-import { ensurePickups, pickupIndexAt } from './spawner';
+import { createDye, createSugar, ensurePickups, pickupIndexAt } from './spawner';
 import { Dir, RAW, type GameState, type Pickup, type Vec2 } from './types';
 
 const at = (x: number, y: number): Vec2 => ({ x, y });
 
-const sugar = (pos: Vec2): Pickup => ({ kind: 'sugar', pos });
-const dye = (primary: Primary, pos: Vec2): Pickup => ({ kind: 'dye', pos, primary });
+const sugar = createSugar;
+const dye = (primary: Primary, pos: Vec2): Pickup => createDye(pos, primary);
 
 /** A full board — sugar plus one jar of each primary — as the core keeps it. */
 const stocked = (): Pickup[] => [
@@ -19,13 +19,20 @@ const stocked = (): Pickup[] => [
   dye(BLUE, at(3, 3)),
 ];
 
-const stateWith = (body: Vec2[] = [], pickups: Pickup[] = []): GameState => ({
+const stateWith = (
+  body: Vec2[] = [],
+  pickups: Pickup[] = [],
+  debris: Vec2[] = [],
+): GameState => ({
   snake: {
     head: at(5, 5),
     dir: Dir.Right,
     body: body.map((pos) => ({ pos, color: RAW })),
   },
   pickups,
+  // The core splices a pile out the move it empties, so never fake an empty one.
+  debris:
+    debris.length === 0 ? [] : [{ segments: debris.map((pos) => ({ pos, color: RAW })) }],
   tick: 0,
   elapsedMs: 0,
 });
@@ -39,6 +46,18 @@ describe('spawner placement', () => {
       ...state.snake.body.map((segment) => cellKey(segment.pos)),
       ...state.pickups.map((pickup) => cellKey(pickup.pos)),
     ]);
+
+    for (let seed = 0; seed < 200; seed += 1) {
+      for (const spawned of ensurePickups(state, createRng(seed))) {
+        expect(forbidden.has(cellKey(spawned.pos))).toBe(false);
+      }
+    }
+  });
+
+  it('never spawns on debris that is still crumbling', () => {
+    const rubble = [at(9, 1), at(9, 2), at(9, 3)];
+    const state = stateWith([], [], rubble);
+    const forbidden = new Set(rubble.map(cellKey));
 
     for (let seed = 0; seed < 200; seed += 1) {
       for (const spawned of ensurePickups(state, createRng(seed))) {

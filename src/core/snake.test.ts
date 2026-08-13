@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { COLS, ROWS } from './board';
 import { BLUE, BROWN, RED, YELLOW } from './colors';
 import {
+  coversCell,
   createSnake,
-  dyeBody,
+  dyeSegmentAt,
   findSelfHit,
+  growTail,
   moveSnake,
   shatterAt,
   snakeLength,
@@ -44,18 +46,14 @@ describe('snake movement', () => {
   });
 
   it('advances one cell per move and adopts the new direction', () => {
-    const moved = moveSnake(createSnake(at(5, 5), Dir.Right), Dir.Up, false);
+    const moved = moveSnake(createSnake(at(5, 5), Dir.Right), Dir.Up);
 
     expect(moved.head).toEqual(at(5, 4));
     expect(moved.dir).toBe(Dir.Up);
   });
 
   it('wraps at the board edge', () => {
-    const moved = moveSnake(
-      createSnake(at(COLS - 1, ROWS - 1), Dir.Right),
-      Dir.Right,
-      false,
-    );
+    const moved = moveSnake(createSnake(at(COLS - 1, ROWS - 1), Dir.Right), Dir.Right);
 
     expect(moved.head).toEqual(at(0, ROWS - 1));
   });
@@ -64,30 +62,56 @@ describe('snake movement', () => {
     const moved = moveSnake(
       snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5)),
       Dir.Right,
-      false,
     );
 
     expect(moved.head).toEqual(at(6, 5));
     expect(positions(moved)).toEqual([at(5, 5), at(4, 5)]);
   });
 
-  it('appends a raw segment at the vacated tail when growing', () => {
-    const moved = moveSnake(
-      snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5)),
-      Dir.Right,
-      true,
-    );
+  it('leaves the strand the same length — growth is growTail’s job', () => {
+    const strand = snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5));
 
-    expect(positions(moved)).toEqual([at(5, 5), at(4, 5), at(3, 5)]);
-    expect(moved.body.at(-1)?.color).toBe(RAW);
+    expect(snakeLength(moveSnake(strand, Dir.Right))).toBe(snakeLength(strand));
+  });
+});
+
+describe('growTail', () => {
+  it('appends a raw segment at the cube’s own cell', () => {
+    const strand = snakeWith(at(5, 5), Dir.Right, at(4, 5));
+    const grown = growTail(strand, at(3, 5));
+
+    expect(positions(grown)).toEqual([at(4, 5), at(3, 5)]);
+    expect(grown.body.at(-1)?.color).toBe(RAW);
   });
 
-  it('grows a bodyless snake into the cell the head left', () => {
-    const moved = moveSnake(createSnake(at(5, 5), Dir.Right), Dir.Right, true);
+  it('gives a bodyless snake its first segment', () => {
+    const grown = growTail(createSnake(at(5, 5), Dir.Right), at(4, 5));
 
-    expect(moved.head).toEqual(at(6, 5));
-    expect(positions(moved)).toEqual([at(5, 5)]);
-    expect(snakeLength(moved)).toBe(2);
+    expect(positions(grown)).toEqual([at(4, 5)]);
+    expect(snakeLength(grown)).toBe(2);
+  });
+
+  it('leaves the head where it is', () => {
+    const strand = snakeWith(at(5, 5), Dir.Right, at(4, 5));
+
+    expect(growTail(strand, at(3, 5)).head).toEqual(strand.head);
+  });
+});
+
+describe('coversCell', () => {
+  const strand = snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5));
+
+  it('counts the head, so a pickup is not spent the tick it is opened', () => {
+    expect(coversCell(strand, at(5, 5))).toBe(true);
+  });
+
+  it('counts every body segment', () => {
+    expect(coversCell(strand, at(4, 5))).toBe(true);
+    expect(coversCell(strand, at(3, 5))).toBe(true);
+  });
+
+  it('reports a clear cell', () => {
+    expect(coversCell(strand, at(2, 5))).toBe(false);
   });
 });
 
@@ -96,7 +120,6 @@ describe('self-collision detection', () => {
     const moved = moveSnake(
       snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5)),
       Dir.Right,
-      false,
     );
 
     expect(findSelfHit(moved)).toBe(-1);
@@ -104,7 +127,7 @@ describe('self-collision detection', () => {
 
   it('allows entering the cell the tail just vacated', () => {
     const coiled = snakeWith(at(1, 1), Dir.Left, at(1, 0), at(0, 0), at(0, 1));
-    const moved = moveSnake(coiled, Dir.Left, false);
+    const moved = moveSnake(coiled, Dir.Left);
 
     expect(moved.head).toEqual(at(0, 1));
     expect(findSelfHit(moved)).toBe(-1);
@@ -120,14 +143,14 @@ describe('self-collision detection', () => {
       at(0, 2),
       at(1, 2),
     );
-    const moved = moveSnake(coiled, Dir.Left, false);
+    const moved = moveSnake(coiled, Dir.Left);
 
     expect(findSelfHit(moved)).toBe(3);
   });
 
   it('detects a hit on the final segment', () => {
     const coiled = snakeWith(at(1, 1), Dir.Left, at(1, 0), at(0, 0), at(0, 1), at(0, 2));
-    const moved = moveSnake(coiled, Dir.Left, false);
+    const moved = moveSnake(coiled, Dir.Left);
 
     expect(findSelfHit(moved)).toBe(moved.body.length - 1);
   });
@@ -136,14 +159,20 @@ describe('self-collision detection', () => {
 describe('shatter', () => {
   const coiled = snakeWith(at(1, 1), Dir.Left, at(1, 0), at(0, 0), at(0, 1), at(0, 2));
 
-  it('destroys the hit segment and everything behind it', () => {
-    const { snake, destroyed } = shatterAt(coiled, 2);
+  it('severs the hit segment and everything behind it', () => {
+    const { snake, severed } = shatterAt(coiled, 2);
 
     expect(positions(snake)).toEqual([at(1, 0), at(0, 0)]);
-    expect(cellsOf(destroyed)).toEqual([at(0, 1), at(0, 2)]);
+    expect(cellsOf(severed)).toEqual([at(0, 1), at(0, 2)]);
   });
 
-  it('never destroys the head', () => {
+  it('hands the severed piece back impact end first, the order it crumbles', () => {
+    const { severed } = shatterAt(coiled, 1);
+
+    expect(cellsOf(severed)).toEqual([at(0, 0), at(0, 1), at(0, 2)]);
+  });
+
+  it('never severs the head', () => {
     const { snake } = shatterAt(coiled, 0);
 
     expect(snake.head).toEqual(coiled.head);
@@ -151,25 +180,31 @@ describe('shatter', () => {
   });
 
   it('loses only the last segment when the tail is hit', () => {
-    const { snake, destroyed } = shatterAt(coiled, coiled.body.length - 1);
+    const { snake, severed } = shatterAt(coiled, coiled.body.length - 1);
 
     expect(snake.body).toHaveLength(coiled.body.length - 1);
-    expect(cellsOf(destroyed)).toEqual([at(0, 2)]);
+    expect(cellsOf(severed)).toEqual([at(0, 2)]);
   });
 
   it('reports the colors that were lost, not just the cells', () => {
-    const dyed = dyeBody(coiled, RED);
-    const { destroyed } = shatterAt(dyed, 2);
+    const dyed: SnakeState = {
+      ...coiled,
+      body: coiled.body.map((segment) => ({ ...segment, color: RED })),
+    };
+    const { severed } = shatterAt(dyed, 2);
 
-    expect(destroyed.map((segment) => segment.color)).toEqual([RED, RED]);
+    expect(severed.map((segment) => segment.color)).toEqual([RED, RED]);
   });
 });
 
-describe('dyeBody', () => {
+describe('dyeSegmentAt', () => {
   const strand = snakeWith(at(5, 5), Dir.Right, at(4, 5), at(3, 5));
 
-  it('kneads the primary into every segment', () => {
-    expect(colorsOf(dyeBody(strand, RED))).toEqual([RED, RED]);
+  it('kneads the primary into only the segment standing on the cell', () => {
+    const dyed = dyeSegmentAt(strand, at(4, 5), RED);
+
+    expect(colorsOf(dyed!.snake)).toEqual([RED, RAW]);
+    expect(dyed?.color).toBe(RED);
   });
 
   it('blends each segment from its own mix, not from a shared one', () => {
@@ -182,22 +217,36 @@ describe('dyeBody', () => {
       ],
     };
 
-    expect(colorsOf(dyeBody(mixed, BLUE))).toEqual([RED | BLUE, BLUE]);
+    expect(dyeSegmentAt(mixed, at(4, 5), BLUE)?.color).toBe(RED | BLUE);
+    expect(dyeSegmentAt(mixed, at(3, 5), BLUE)?.color).toBe(BLUE);
   });
 
   it('over-mixes into brown rather than cycling back', () => {
-    const purple = dyeBody(dyeBody(strand, RED), BLUE);
+    const purple: SnakeState = {
+      ...strand,
+      body: [{ pos: at(4, 5), color: RED | BLUE }],
+    };
 
-    expect(colorsOf(dyeBody(purple, YELLOW))).toEqual([BROWN, BROWN]);
+    expect(dyeSegmentAt(purple, at(4, 5), YELLOW)?.color).toBe(BROWN);
   });
 
-  it('does nothing to a snake with no body — the dye is wasted', () => {
-    const bodyless = createSnake(at(5, 5), Dir.Right);
+  it('is a no-op when re-applying a primary the segment already holds', () => {
+    const red: SnakeState = { ...strand, body: [{ pos: at(4, 5), color: RED }] };
 
-    expect(dyeBody(bodyless, RED)).toEqual(bodyless);
+    expect(dyeSegmentAt(red, at(4, 5), RED)?.color).toBe(RED);
+  });
+
+  it('finds nothing under the head — the maker is not sugar', () => {
+    expect(dyeSegmentAt(strand, at(5, 5), RED)).toBeUndefined();
+  });
+
+  it('finds nothing on an empty cell, so the dye is wasted', () => {
+    expect(dyeSegmentAt(createSnake(at(5, 5), Dir.Right), at(4, 5), RED)).toBeUndefined();
   });
 
   it('leaves segments where they are', () => {
-    expect(positions(dyeBody(strand, YELLOW))).toEqual(positions(strand));
+    expect(positions(dyeSegmentAt(strand, at(4, 5), YELLOW)!.snake)).toEqual(
+      positions(strand),
+    );
   });
 });

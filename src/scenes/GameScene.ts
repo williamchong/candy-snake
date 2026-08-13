@@ -66,18 +66,22 @@ export class GameScene extends Phaser.Scene {
   /** Effects are driven by events, never by polling state (architecture §7). */
   private play(event: GameEvent): void {
     switch (event.type) {
-      case 'body-shattered':
-        this.view.shatter(event.destroyed);
+      case 'debris-crumbled':
+        // One puff per block, so a long break comes apart over several moves
+        // instead of flashing the whole severed length at once (design §6).
+        this.view.splash(event.segment.pos, event.segment.color);
         return;
 
-      case 'dye-eaten':
-        // A dye that lands needs nothing here — the strand visibly recolors.
-        // A wasted one has to say so itself (design §5).
-        if (event.wasted) this.view.splash(event.pos, event.primary);
+      case 'dye-spent':
+        // A dye that landed needs nothing here — the strand visibly recolored
+        // segment by segment. One that kneaded nothing has to say so (§5).
+        if (event.kneaded === 0) this.view.splash(event.pos, event.primary);
         return;
 
       // Nothing to play yet; the juice pass (Phase 7) fills these in.
-      case 'sugar-eaten':
+      case 'strand-broken':
+      case 'dye-kneaded':
+      case 'sugar-pulled':
       case 'sugar-spawned':
       case 'dye-spawned':
         return;

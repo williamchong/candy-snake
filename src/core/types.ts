@@ -50,13 +50,40 @@ export interface SnakeState {
   readonly body: readonly Segment[];
 }
 
+/**
+ * Pickups are passed *through*, not eaten: the head opens one by entering its
+ * cell, and it stays on the board — blocking a respawn — until the strand has
+ * cleared the cell again (design §5). `open` is that in-between state.
+ */
 export type Pickup =
-  | { readonly kind: 'sugar'; readonly pos: Vec2 }
-  | { readonly kind: 'dye'; readonly pos: Vec2; readonly primary: Primary };
+  | { readonly kind: 'sugar'; readonly pos: Vec2; readonly open: boolean }
+  | {
+      readonly kind: 'dye';
+      readonly pos: Vec2;
+      readonly primary: Primary;
+      readonly open: boolean;
+      /**
+       * Segments kneaded so far; 0 at spend time means the dye was wasted. A
+       * break re-closes a jar without clearing this, so it counts the segments
+       * this jar has ever colored, not the segments of the current pass.
+       */
+      readonly kneaded: number;
+    };
+
+/**
+ * A length of strand cut loose by a self-hit. It freezes where it broke and
+ * crumbles one segment per move, `segments[0]` (the impact end) first —
+ * design §6.
+ */
+export interface Debris {
+  readonly segments: readonly Segment[];
+}
 
 export interface GameState {
   snake: SnakeState;
   pickups: Pickup[];
+  /** One entry per break still crumbling; each crumbles independently. */
+  debris: Debris[];
   /**
    * Grid moves elapsed — a simulation clock that does not depend on
    * `moveIntervalMs` (which difficulty varies from Phase 5). The view watches
@@ -74,22 +101,32 @@ export interface GameConfig {
 }
 
 export type GameEvent =
-  | { readonly type: 'sugar-eaten'; readonly pos: Vec2; readonly length: number }
+  /** The cube has been pulled into the strand as the new tail segment at `pos`. */
+  | { readonly type: 'sugar-pulled'; readonly pos: Vec2; readonly length: number }
   | { readonly type: 'sugar-spawned'; readonly pos: Vec2 }
-  /**
-   * `wasted` marks a dye eaten with no body to knead it into — design §5 asks
-   * for a splash and no effect, and the view needs to tell the two apart
-   * without re-reading state (architecture §4).
-   */
+  /** One segment took the primary while standing on the jar; `color` is its new mix. */
   | {
-      readonly type: 'dye-eaten';
+      readonly type: 'dye-kneaded';
       readonly pos: Vec2;
       readonly primary: Primary;
-      readonly wasted: boolean;
+      readonly color: ColorMask;
+    }
+  /**
+   * The strand has cleared the jar and it leaves the board. `kneaded` is how
+   * many segments it colored, so 0 is design §5's wasted dye — the view needs
+   * to tell the two apart without re-reading state (architecture §4).
+   */
+  | {
+      readonly type: 'dye-spent';
+      readonly pos: Vec2;
+      readonly primary: Primary;
+      readonly kneaded: number;
     }
   | { readonly type: 'dye-spawned'; readonly pos: Vec2; readonly primary: Primary }
-  /** Carries whole segments, so the puff can show the colors that were lost. */
-  | { readonly type: 'body-shattered'; readonly destroyed: readonly Segment[] };
+  /** The strand broke; `severed` is the piece now frozen as debris, impact end first. */
+  | { readonly type: 'strand-broken'; readonly severed: readonly Segment[] }
+  /** Carries the whole segment, so the puff can show the color that was lost. */
+  | { readonly type: 'debris-crumbled'; readonly segment: Segment };
 
 /**
  * How the core pulls a buffered turn at the exact moment a move tick fires.
