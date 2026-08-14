@@ -797,6 +797,16 @@ describe('Game opening levels', () => {
   /** Grid moves in the beat between a serve and the next child walking up. */
   const GAP_MOVES = Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / MOVE_MS);
 
+  /**
+   * Pulls one cube into the strand, in the maker's path rather than wherever
+   * the seed dropped it. An opening level holds its jars back until there is
+   * something to dye (design §7), so this is what puts them on the floor.
+   */
+  const pullCube = (game: Game): void => {
+    game.state.pickups = [createSugar(cellAheadOf(game))];
+    run(game, passThrough(game));
+  };
+
   /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
   const chopOne = (game: Game, want: ColorMask): void => {
     layBatchAtBlock(game, [want]);
@@ -864,10 +874,18 @@ describe('Game opening levels', () => {
     serveLevel(game, RAW);
     expect(game.state.tutorialIndex).toBe(1);
     expect(game.state.customers[0]?.want).toBe(second?.want);
+    // Nothing but the cube, so crossing the jar first is not a move the level
+    // offers — the lesson is authored by *when* it stocks (design §7).
+    expect(jarsOn(game)).toEqual([]);
+
+    pullCube(game);
     expect(jarsOn(game)).toEqual([...(second?.stock ?? [])].sort());
 
     serveLevel(game, second?.want ?? RAW);
     expect(game.state.customers[0]?.want).toBe(third?.want);
+    expect(jarsOn(game)).toEqual([]);
+
+    pullCube(game);
     expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
   });
 
@@ -877,14 +895,27 @@ describe('Game opening levels', () => {
 
     serveLevel(game, RAW);
     serveLevel(game, second?.want ?? RAW);
-    serveLevel(game, third?.want ?? RAW);
+    pullCube(game);
+
+    const laid = jarsOn(game);
+    expect(laid).toEqual([...(third?.stock ?? [])].sort());
+
+    // The third level's own candy, cut from the strand the jars were laid for
+    // rather than from `layBatchAtBlock`'s bare board — the claim below is
+    // about what survives the handover, so nothing may sweep the floor first.
+    game.state.snake = {
+      head: at(BENCH.x - 1, BENCH.y),
+      dir: Dir.Right,
+      body: batchCells([third?.want ?? RAW]),
+    };
+    run(game, chopThrough([third?.want ?? RAW]) + GAP_MOVES);
 
     expect(game.state.tutorialIndex).toBe(3);
     // The endless board no longer throws every primary out at the handover —
     // the pity spawner stocks what orders ask for (design §8.3). What the third
     // level laid stays where it is, because nothing on this board teleports and
     // the stocked set only ever grows (design §7).
-    expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
+    expect(jarsOn(game)).toEqual(laid);
   });
 
   it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {

@@ -5,6 +5,7 @@ import { createRng } from './rng';
 import {
   rollTutorial,
   stockedPrimaries,
+  stocksDyes,
   stocksSugar,
   type TutorialLevel,
 } from './tutorial';
@@ -81,30 +82,31 @@ describe('stockedPrimaries', () => {
   });
 });
 
-describe('stocksSugar', () => {
-  const strand = (segments: number, cut = 0): Pick<GameState, 'snake' | 'severed'> => ({
-    snake: {
-      head: { x: 0, y: 0 },
-      dir: Dir.Right,
-      body: Array.from({ length: segments }, (_unused, index) => ({
-        pos: { x: index + 1, y: 0 },
-        color: RAW,
-      })),
-    },
-    severed:
-      cut === 0
-        ? []
-        : [
-            {
-              segments: Array.from({ length: cut }, (_unused, index) => ({
-                pos: { x: index, y: 1 },
-                color: RAW,
-              })),
-              fate: 'chop',
-            },
-          ],
-  });
+/** A maker carrying `segments`, with `cut` more of them on the way to the block. */
+const strand = (segments: number, cut = 0): Pick<GameState, 'snake' | 'severed'> => ({
+  snake: {
+    head: { x: 0, y: 0 },
+    dir: Dir.Right,
+    body: Array.from({ length: segments }, (_unused, index) => ({
+      pos: { x: index + 1, y: 0 },
+      color: RAW,
+    })),
+  },
+  severed:
+    cut === 0
+      ? []
+      : [
+          {
+            segments: Array.from({ length: cut }, (_unused, index) => ({
+              pos: { x: index, y: 1 },
+              color: RAW,
+            })),
+            fate: 'chop',
+          },
+        ],
+});
 
+describe('stocksSugar', () => {
   const level = tutorialFor(42)[0];
 
   it('lays the level its one cube while the maker is empty-handed', () => {
@@ -122,5 +124,27 @@ describe('stocksSugar', () => {
   it('keeps the endless board stocked whatever the maker is carrying', () => {
     expect(stocksSugar(undefined, strand(1))).toBe(true);
     expect(stocksSugar(undefined, strand(0, 3))).toBe(true);
+  });
+});
+
+describe('stocksDyes', () => {
+  const level = tutorialFor(42)[1];
+
+  it('holds the level’s jar back while there is nothing to dye', () => {
+    expect(stocksDyes(level, strand(0))).toEqual([]);
+  });
+
+  it('lays it once the first cube is on the strand', () => {
+    expect(stocksDyes(level, strand(1))).toEqual(level?.stock);
+  });
+
+  it('does not wait on a batch already cut loose', () => {
+    // The cut piece is the level's candy on its way through the block, not a
+    // strand to dye — so this is the same empty-handed board as above.
+    expect(stocksDyes(level, strand(0, 2))).toEqual([]);
+  });
+
+  it('never withholds a jar from the endless board', () => {
+    expect(stocksDyes(undefined, strand(0))).toEqual(PRIMARIES);
   });
 });

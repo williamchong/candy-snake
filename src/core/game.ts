@@ -27,7 +27,7 @@ import { ensurePickups, pickupIndexAt } from './spawner';
 import {
   TUTORIAL_ARRIVAL_GAP_MS,
   rollTutorial,
-  stockedPrimaries,
+  stocksDyes,
   stocksSugar,
   type TutorialLevel,
 } from './tutorial';
@@ -569,7 +569,8 @@ export class Game {
 
   private spawnPickups(events: GameEvent[]): void {
     const level = this.openingLevel;
-    const stocked = level === undefined ? this.endlessStock() : stockedPrimaries(level);
+    const stocked =
+      level === undefined ? this.endlessStock() : stocksDyes(level, this.state);
     const sugar = stocksSugar(level, this.state);
 
     for (const pickup of ensurePickups(this.state, this.rng, stocked, sugar)) {

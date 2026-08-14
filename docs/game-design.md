@@ -343,22 +343,39 @@ Every run — not only the first — starts with three scripted levels. Each is 
 single customer, and the board is stocked with exactly what that order needs
 and nothing else:
 
-| Level | Order                   | On the board           | What it teaches                       |
-| ----- | ----------------------- | ---------------------- | ------------------------------------- |
-| 1     | Raw                     | sugar, no jars         | pull sugar, chop at the block         |
-| 2     | One primary             | sugar + that jar       | cross the sugar *first*, then the jar |
-| 3     | That primary + one more | sugar + those two jars | two dyes blend into one color         |
+| Level | Order                   | On the board                   | What it teaches                       |
+| ----- | ----------------------- | ------------------------------ | ------------------------------------- |
+| 1     | Raw                     | sugar, no jars                 | pull sugar, chop at the block         |
+| 2     | One primary             | sugar, **then** that jar       | cross the sugar *first*, then the jar |
+| 3     | That primary + one more | sugar, **then** those two jars | two dyes blend into one color         |
 
-A restricted board teaches better than any text can: in level 2 the only jar on
-the floor is the one the order wants, so "wrong dye" is not yet a mistake the
-player is able to make. Difficulty here is authored by removing options.
+A restricted board teaches better than any text can, and it restricts *when* as
+well as *what*:
+
+- **Which jars.** In level 2 the only jar on the floor is the one the order
+  wants, so "wrong dye" is not a mistake the player is able to make.
+- **When they arrive.** A level lays no jar at all until the first cube is on
+  the strand, so crossing the jar first is not a mistake the player is able to
+  make either. A board holding a cube and a jar at once offers two moves and the
+  wrong one is the *louder* one — the jar is a saturated color wearing a symbol
+  and the cube is off-white — which is how three playtesters came to drive
+  straight at the jar and stall there. With the jar withheld there is one thing
+  on the floor to take, and when it does arrive the strand is already carrying
+  something, so crossing it *visibly turns a segment*. That is the lesson
+  delivered as cause and effect rather than as a mistake to be inferred from a
+  splash.
+
+Difficulty here is authored by removing options.
 
 - The orders are **rolled from the run's seed**, so the levels teach the rule
   rather than a memorised answer. Level 3 deliberately *extends* level 2's
   primary instead of drawing a fresh pair — it reads as a progression (you made
   yellow, now add red for orange), and it means the stocked set only ever grows,
   so no jar is ever taken off the board mid-run. Nothing on this board
-  teleports, and that includes the tutorial's own furniture.
+  teleports, and that includes the tutorial's own furniture. Holding a jar back
+  until there is a strand to dye is not an exception to that: withholding is a
+  jar not yet laid, never one removed, so a jar already on the floor stays there
+  whatever the maker is carrying.
 - **Opening customers have no patience at all**: no bar, no countdown, no way
   to lose a life. A tutorial that plays on every single run must not be able to
   cost the run, and a bar that drained toward nothing would be a lie about the
@@ -374,9 +391,11 @@ player is able to make. Difficulty here is authored by removing options.
   later — and so does the endless game's first, which inherits that beat rather
   than opening on a whole arrival interval of empty window (12s at Mixing,
   which would read as the game having ended rather than started). Nothing can
-  be soft-locked: a jar wasted on a bodiless strand simply
-  respawns, because the stock rule keeps it on the board — the level-2 lesson is
-  taught by retry rather than by text.
+  be soft-locked: a level's jar is not on the floor until there is a strand to
+  dye, and a jar wasted on a bodiless strand respawns anyway, because the stock
+  rule keeps it on the board. The level-2 lesson is not taught by retry — retry
+  was tried, and three playtesters drove at the jar again instead of learning
+  from it (see §7 above). It is taught by not offering the wrong move.
 - These three levels **are** the teaching, on their own: no captions, no
   toasts, no words anywhere on the screen. What the player is shown is a board
   holding exactly one useful move and a child holding up what they want, which

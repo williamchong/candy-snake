@@ -293,6 +293,57 @@ more hellish — is already answered in writing, which is worth saying because i
 will be asked again: design §1 sets the audience as casual, all ages, one-hand
 playable on mobile. The players arrived at the document's answer unprompted.
 
+### What the third sitting settled — level 2 taught nothing
+
+A player driving straight at level 2's jar, repeatedly, without ever taking the
+cube, and staying confused about why nothing happened. This is the fourth
+comprehension data point in three sittings and much the sharpest, because it
+names the level and the exact wrong move rather than describing a general fog.
+
+It also falsifies something the docs asserted: design §7 claimed the level-2
+lesson was "taught by retry rather than by text". Retry was the mechanism, and
+four players in, it has not taught anybody. Two things were working against it.
+The board laid the cube and the jar **at the same time**, so the level offered
+two moves where its own "remove the options" rule says it offers one — and the
+wrong one is the louder, being a saturated color wearing a symbol against an
+off-white cube. And the punishment was illegible: a wasted jar splashes, leaves,
+and the stock rule re-lays it *at a different random cell*, which is exactly what
+eating food and food respawning looks like. The board was teaching the eat-model
+the player had brought with them.
+
+**Fixed by stocking, not by a rules change.** A level now lays no jar until the
+first cube is on the strand (`tutorial.ts`'s `stocksDyes`), so crossing the jar
+first is not a move the level offers, and when the jar does arrive the maker is
+carrying something — so crossing it visibly turns a segment. Cause and effect on
+screen, still no captions. Withholding is not removal: the spawner only ever
+adds, so §7's promise that none of the tutorial's furniture leaves mid-run holds
+unchanged, which is why `stockedPrimaries` (what a level permits) is now a
+separate question from `stocksDyes` (what it lays right now).
+
+Two things this deliberately did **not** do:
+
+- **It did not touch the wasted-dye rule** (design §5). The proposal on the table
+  was to stop spending a jar the strand crosses with no body at all. Measured
+  over the bot sweeps, that fires on 2–5% of jars opened — one every 1.5–3
+  minutes — at the same rate for both reference players, so it is not the tax on
+  batching it might look like. With the stocking fixed it is no longer a
+  tutorial question at all, and what is left is an endless-only call with a real
+  cost: a stale jar that never leaves suppresses `endlessStock`'s baseline
+  reroll, which is the only thing that lets a maker build ahead of the window.
+  Open, unscheduled, and not urgent.
+- **It did not retune anything.** The gate shifts *when* a jar spawns, which
+  re-rolls every free cell drawn after it, so runs either side of it are
+  different runs rather than the same run played harder. Measured across sixteen
+  seeds: the ramp closed out 14/16 batching runs before and 12/16 after — the
+  same rate, re-rolled. The four canonical seeds happened to sit on the edge of
+  it (3 died, then 2), which is why `simulation.test.ts` now asks that rate of
+  the wider draw and keeps the seven-minute floor on the four.
+
+One finding fell out of that sweep and is **not** about this change: on the wider
+draw the ramp does not hold its seven-minute floor everywhere — seed 88 kills the
+batcher at 309 s, before this change and after. The four tuned seeds do not
+contain a case that shows it. That belongs to the balance work above, not here.
+
 ## Phase 6 — Mobile & responsive (L) ◀ current
 
 - Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold);
@@ -331,7 +382,7 @@ both orientations.
 every core event has audiovisual feedback.
 
 The first of those is the criterion at risk, and it now has evidence against it
-from three players across two sittings, all of whom came through Phase 4's
+from four players across three sittings, all of whom came through Phase 4's
 opening levels first. One was "a bit confused at first, just chasing the colored
 things". One understood the game but credited the other games they had played
 for it rather than this one. The third asked, unprompted, for a picture showing
@@ -342,6 +393,15 @@ being produced; the third says the table did not stick either. Design §11's
 position — that the opening levels teach on their own, with no captions anywhere
 — is what is on trial here; if the cheat sheet does not carry the rest, that
 position gives way before the criterion does.
+
+The fourth is the one that has been answered rather than logged, and it is the
+reason the position has not given way yet: that player drove at level 2's jar
+over and over without ever taking a cube, which turned out to be a level offering
+the wrong move rather than a player failing to read the right one (see the third
+sitting, above). It was fixed by what the level stocks and when. That is one
+comprehension failure traced to a board that could be re-authored — so before the
+cheat sheet is treated as the fix for the other three, they are worth re-asking
+the same question of.
 
 ## Phase 8 — Persistence, high scores & release (S)
 

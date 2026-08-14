@@ -11,9 +11,11 @@ import { RAW, type ColorMask, type GameState } from './types';
  * 2. a primary — that jar only: cross the sugar *first*, then the jar.
  * 3. a secondary — those two jars: two dyes blend into one color.
  *
- * A restricted board teaches better than any text can — in level 2 the only jar
- * on the floor is the one the order wants, so "wrong dye" is not yet a mistake
- * the player is able to make. Difficulty here is authored by removing options.
+ * A restricted board teaches better than any text can, and it restricts *when*
+ * as well as *what*: in level 2 the only jar on the floor is the one the order
+ * wants, so "wrong dye" is not a mistake the player is able to make, and no jar
+ * is laid until the first cube is on the strand (`stocksDyes`), so nor is the
+ * wrong order. Difficulty here is authored by removing options.
  */
 export interface TutorialLevel {
   readonly want: ColorMask;
@@ -45,12 +47,40 @@ export const rollTutorial = (rng: Rng): TutorialLevel[] => {
 };
 
 /**
- * The jars the spawner keeps on the board: the level's own stock while the
+ * The jars a board is allowed to carry: the level's own stock while the
  * tutorial runs, and every primary once it is over — which is the floor the
  * game had before, and what Phase 5's pity spawner replaces (design §8).
+ *
+ * What the level *permits*, which is not the same as what it lays out right
+ * now — see `stocksDyes`.
  */
 export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Primary[] =>
   level?.stock ?? PRIMARIES;
+
+/**
+ * The jars the spawner lays *at this moment*, which an opening level withholds
+ * until there is a strand to dye.
+ *
+ * Level 2 teaches the order the two pickups go in, and a board holding both at
+ * once does not teach it: the jar is a saturated color with a symbol on it and
+ * the cube is off-white, so the wrong move is also the loud one. Withholding
+ * the jar until the first cube is on the strand is the same "remove the
+ * options" rule the rest of §7 is authored by — applied to *when* rather than
+ * to which, so crossing the jar first is not a mistake the player is able to
+ * make. The lesson then lands as cause and effect on screen: they cross the
+ * jar and watch a segment turn.
+ *
+ * Withholding never takes a jar off the floor — the spawner only ever adds
+ * (`ensurePickups`), so a jar already laid stays where it is, which is design
+ * §7's promise that none of the tutorial's furniture is removed mid-run. That
+ * is why this is a separate question from `stockedPrimaries`: the permitted set
+ * still only grows.
+ */
+export const stocksDyes = (
+  level: TutorialLevel | undefined,
+  state: Pick<GameState, 'snake'>,
+): readonly Primary[] =>
+  level === undefined || state.snake.body.length > 0 ? stockedPrimaries(level) : [];
 
 /**
  * Whether the board should be carrying a sugar cube. The endless game always
