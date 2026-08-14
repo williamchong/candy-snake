@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, primariesOf, type Primary } from './colors';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
-import { MIXING_STAGE } from './orders';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
 import {
@@ -93,6 +92,87 @@ const grinderGoal: Goal = (state) => {
 };
 
 /**
+ * Every ordering of a set, longest-first being no cheaper than shortest — there
+ * are at most six of these, since a color holds at most three primaries.
+ */
+const orderings = <T>(items: readonly T[]): T[][] =>
+  items.length <= 1
+    ? [[...items]]
+    : items.flatMap((item, index) =>
+        orderings([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [
+          item,
+          ...rest,
+        ]),
+      );
+
+/**
+ * What a ladder built by laying `order`'s dyes on in that sequence comes out as.
+ *
+ * The segment laid before the first jar crosses every jar after it, the next
+ * one crosses all but the first, and the cube laid after the last jar crosses
+ * none — so the rungs are the running OR of the *tail* of the order, raw last.
+ * Which is why the sequence matters and not just the set: red-then-yellow banks
+ * an orange over a **yellow**, yellow-then-red an orange over a **red**.
+ */
+const ladderColors = (order: readonly Primary[]): ColorMask[] => [
+  ...order.map((_dye, index) =>
+    order.slice(index).reduce<ColorMask>((mask, dye) => mask | dye, RAW),
+  ),
+  RAW,
+];
+
+/** How many waiting children a batch of these colors could hand a candy to. */
+const coverage = (rungs: readonly ColorMask[], wants: readonly ColorMask[]): number => {
+  const spare = [...rungs];
+  let matched = 0;
+
+  for (const want of wants) {
+    const slot = spare.indexOf(want);
+    if (slot < 0) continue;
+    spare.splice(slot, 1);
+    matched += 1;
+  }
+
+  return matched;
+};
+
+/**
+ * Which ladder to build, as the sequence its dyes go on in.
+ *
+ * The maker plans against the **whole** window rather than whoever is at the
+ * front of it. A ladder is a nested bundle — one secondary over one particular
+ * primary over a raw — so building it for a single order leaves the lower rungs
+ * to sell themselves, and against seven colors of uncorrelated demand they
+ * mostly do not: measured, the strand banked more candy than the grinder and
+ * sold less of it. Choosing *which* order to build for, and in which sequence,
+ * is what puts those rungs in front of children who are already waiting.
+ *
+ * Coverage is worth an order of magnitude more than length, so a longer ladder
+ * that serves two is taken over a short one that serves one — but between
+ * ladders that serve the same number, the shorter wins. That tie-break is the
+ * one that matters: what kills a maker is not waste but the time spent building
+ * before anybody is handed anything.
+ */
+const bestLadder = (state: GameState): Primary[] => {
+  const wants = state.customers.map((customer) => customer.want);
+
+  let best: Primary[] = [];
+  let bestScore = -Infinity;
+
+  for (const want of wants) {
+    for (const order of orderings(primariesOf(want))) {
+      const score = coverage(ladderColors(order), wants) * 10 - order.length;
+      if (score > bestScore) {
+        bestScore = score;
+        best = order;
+      }
+    }
+  }
+
+  return best;
+};
+
+/**
  * The other way to play, and the one the color system was designed around: the
  * maker builds a production line before chopping.
  *
@@ -103,10 +183,11 @@ const grinderGoal: Goal = (state) => {
  *
  *     sugar, red, sugar, yellow, sugar  →  [orange, yellow, raw]
  *
- * The ladder is cut to the order at the window: one segment per jar that order
- * needs, plus the raw one under them all. Nothing is counted between moves —
- * how far the build has got is read back off the head-end segment's color — so
- * a strand broken mid-build simply re-plans from whatever survived.
+ * The ladder is cut to the window as a whole (`bestLadder`): one segment per
+ * jar it calls for, plus the raw one under them all. Nothing is counted between
+ * moves — how far the build has got is read back off the head-end segment's
+ * color — so a strand broken mid-build, or a queue that changed while it was
+ * being built, simply re-plans from whatever survived.
  *
  * Where the board withholds a cube, the bot takes the next jar it still needs
  * rather than stalling. That is not a special case for the opening levels: it
@@ -116,16 +197,24 @@ const grinderGoal: Goal = (state) => {
 const batcherGoal: Goal = (state) => {
   const carried = state.snake.body;
   const held = carried[0]?.color ?? RAW;
-  const needed = primariesOf(state.customers[0]?.want ?? RAW);
+  const needed = bestLadder(state);
   const mixes = primariesOf(held).length;
-  /** A segment per jar the order needs, plus the raw one under them all. */
+  /** A segment per jar the ladder calls for, plus the raw one under them all. */
   const batchSize = needed.length + 1;
+  /**
+   * Steering at nothing in particular, which `steerTowards` reads as "no turn":
+   * the maker carries straight on. It is what to do when the jar the ladder
+   * wants is not out yet — design §8.3 guarantees one within seconds, and a lap
+   * of the kitchen costs far less than taking a half-built ladder to the block
+   * and throwing the rest of the trip away.
+   */
+  const circle = state.snake.head;
 
   if (carried.length >= batchSize) return BENCH;
 
   // Dye what is on the strand before laying the next cube on top of it. A cube
   // taken first would cross this jar too, and the ladder would come out flat.
-  if (mixes < carried.length) return jarTowards(state, held, needed) ?? BENCH;
+  if (mixes < carried.length) return jarTowards(state, held, needed) ?? circle;
 
   const sugar = state.pickups.find((pickup) => pickup.kind === 'sugar');
   if (sugar !== undefined) return sugar.pos;
@@ -135,7 +224,7 @@ const batcherGoal: Goal = (state) => {
   // mid-build can leave `held` carrying a primary the new one does not need.
   if (mixes >= needed.length) return BENCH;
 
-  return jarTowards(state, held, needed) ?? BENCH;
+  return jarTowards(state, held, needed) ?? circle;
 };
 
 const botFor = (game: Game, goalOf: Goal = grinderGoal): TurnSource => ({
@@ -156,7 +245,10 @@ const violationsIn = (game: Game, tick: number): string[] => {
   }
 
   const inTutorial = game.openingLevel !== undefined;
-  const cap = inTutorial ? 1 : MIXING_STAGE.maxQueue;
+  // The live cap, not a fixed row: the ramp widens the window as it climbs
+  // (design §7), so the only thing that can be asserted is that the queue never
+  // outgrows whatever difficulty is asking for right now.
+  const cap = inTutorial ? 1 : game.stage.maxQueue;
   if (state.customers.length > cap) {
     broken.push(at(`${state.customers.length} children waiting, cap ${cap}`));
   }
@@ -210,6 +302,19 @@ interface RunResult {
    * one-segment strand cannot produce one.
    */
   readonly ladders: number;
+  /**
+   * Strands lost to a self-hit (design §6). A production line is a longer
+   * strand, and a longer strand is easier to steer into — so this is the cost
+   * of batching that no amount of demand tuning can pay off.
+   */
+  readonly broken: number;
+  /**
+   * How long the run lasted, or undefined for a maker still standing when the
+   * sweep ran out of ticks. `step` returns before it advances the clock once
+   * the run is over, so `elapsedMs` is already the moment of death rather than
+   * however long the loop kept calling afterwards.
+   */
+  readonly diedAtMs: number | undefined;
 }
 
 const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResult => {
@@ -222,11 +327,13 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
   let chopped = 0;
   let staled = 0;
   let ladders = 0;
+  let broken = 0;
 
   for (let tick = 0; tick < ticks; tick += 1) {
     for (const event of game.step(20, bot)) {
       if (event.type === 'candy-chopped') chopped += 1;
       if (event.type === 'candy-staled') staled += 1;
+      if (event.type === 'strand-broken') broken += 1;
       if (event.type === 'strand-cut') {
         const colors = new Set(event.batch.map((segment) => segment.color));
         if (colors.size > 1) ladders += 1;
@@ -241,7 +348,15 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
     ({ score, served, tutorialIndex: level } = state);
   }
 
-  return { violations: violations.slice(0, 10), game, chopped, staled, ladders };
+  return {
+    violations: violations.slice(0, 10),
+    game,
+    chopped,
+    staled,
+    ladders,
+    broken,
+    diedAtMs: game.state.over ? game.state.elapsedMs : undefined,
+  };
 };
 
 const SEEDS = [1, 17, 404, 9_001];
@@ -330,27 +445,37 @@ describe('a full run', () => {
 const TARGET_TICKS = 30_000;
 
 /**
- * Where the balance stands before Phase 5 touches it, measured rather than
- * guessed. **Every assertion here is expected to change in that phase** — this
- * block is the before half of the comparison, not a rule the game has to keep.
+ * Where the balance stands *after* the ramp went in, measured rather than
+ * guessed — the after half of the comparison the pre-Phase-5 block set up. The
+ * plan's mitigation for "balance is opinion" is seeded simulations that make
+ * tuning comparable run-to-run, so the numbers stay committed as assertions and
+ * the next change to them shows up as a diff.
  *
- * It exists because Phase 4 pinned a single `MIXING_STAGE` row to have a stage
- * at all, and the plan's own mitigation for "balance is opinion" is seeded
- * simulations that make tuning comparable run-to-run. There was nothing to
- * compare against yet.
+ * Two of the three findings that opened the phase are answered:
  *
- * What the runs say, in three findings — neither bot can lose, both drown the
- * window with candy nobody is there to take, and batching is therefore the
- * worse of the two ways to play. The measurements behind each are written up
- * in the plan's "Where the balance stands going in", which is where they should
- * be read and kept; repeating the numbers here would only give them a second
- * place to go stale.
+ * - **Losing is possible now.** The maker who batches — the way the color
+ *   system is meant to be played — dies inside the 8–10 minute window the plan
+ *   is aiming at, where before neither bot could be touched.
+ * - **The window is no longer the only constraint.** The ramp shortens the
+ *   arrival interval past what either maker can keep up with, so the run ends
+ *   on the queue rather than on the clock running out of customers.
  *
- * The third finding is the one that matters for tuning, and it is why both bots
- * are kept: a pass that tightened the ramp until the *grinder* died on schedule
- * would be tuning the game around the strategy it least wants to reward.
+ * The third is **not** answered, and the assertions below say so plainly rather
+ * than quietly dropping it: batching is still the worse way to play. It is not
+ * a tuning failure — the levers were measured and none of them close it. A
+ * nested ladder is a fixed bundle (a secondary over one particular primary over
+ * a raw) while demand is spread uncorrelated across seven colors, so the extra
+ * candy a longer strand buys is mostly candy nobody ordered. Removing staling
+ * entirely (a 60-slot shelf) does not fix it, flattening the tier mix does not
+ * fix it, and teaching the bot to plan against the whole window rather than the
+ * child at the front of it only narrows it.
+ *
+ * That is a rules question, not a numbers question, and it is recorded here as
+ * the open one. Both bots are kept for the same reason as before: tightening
+ * the ramp until the *grinder* died on schedule would be tuning the game around
+ * the strategy it least wants to reward.
  */
-describe('the reference players, before the balancing pass', () => {
+describe('the reference players, after the ramp went in', () => {
   /**
    * One sweep per bot, shared between the tests below. `play` is a pure
    * function of (seed, ticks, goal) — the core takes all its randomness from
@@ -365,43 +490,44 @@ describe('the reference players, before the balancing pass', () => {
     return sweep;
   };
 
-  it.each([
-    ['the cheapest strategy', grinderGoal],
-    ['a maker who batches', batcherGoal],
-  ] as const)('lets %s through the target window untouched', (_name, goalOf) => {
-    for (const { game } of target(goalOf)) {
-      expect(game.state.over).toBe(false);
-      expect(game.state.lives).toBe(STARTING_LIVES);
+  it('ends a batching run inside the window the ramp is aimed at', () => {
+    const finished = target(batcherGoal).filter((run) => run.diedAtMs !== undefined);
+
+    // Not every seed: one in four still comes through ten minutes alive, which
+    // is variance rather than a curve that cannot bite.
+    expect(finished.length).toBeGreaterThanOrEqual(3);
+    for (const run of finished) {
+      expect(run.diedAtMs).toBeGreaterThan(7 * 60_000);
     }
   });
 
-  it('makes more than twice the candy the window can take', () => {
-    for (const goalOf of [grinderGoal, batcherGoal]) {
-      for (const { game, chopped, staled } of target(goalOf)) {
-        expect(chopped).toBeGreaterThan(game.state.served * 2);
-        expect(staled).toBeGreaterThan(0);
-        // A shelf that is always full is a shelf that never poses a question.
-        expect(game.state.shelf).toHaveLength(SHELF_SLOTS);
-      }
-    }
-  });
-
-  it('pays a batching maker nothing for the extra work', () => {
+  it('buys a batching maker more candy than a grinder', () => {
     const grinders = target(grinderGoal);
 
     target(batcherGoal).forEach((batcher, seed) => {
       const grinder = grinders[seed]!;
 
-      // Both are demand-capped, so the longer strand buys no extra customers.
-      // The gap measures 1 on every seed; 4 is slack, not a measured bound.
-      expect(
-        Math.abs(batcher.game.state.served - grinder.game.state.served),
-      ).toBeLessThan(4);
-      // The surplus it does make is thrown away…
+      // The longer strand is genuinely the more productive one: fewer trips to
+      // the jars and the block per candy that comes off it.
+      expect(batcher.chopped).toBeGreaterThan(grinder.chopped);
+      // And it is laddering to get there, rather than chopping singles fast.
+      expect(batcher.ladders).toBeGreaterThan(30);
+      // Neither bot ever steers into itself, so none of the gap below is a
+      // longer strand being clumsier — it is all what the candy is worth.
+      expect(batcher.broken).toBe(0);
+    });
+  });
+
+  it('still pays it nothing for the extra work — the open finding', () => {
+    const grinders = target(grinderGoal);
+
+    target(batcherGoal).forEach((batcher, seed) => {
+      const grinder = grinders[seed]!;
+
+      // Every extra candy above is made for a window that did not ask for it…
       expect(batcher.staled).toBeGreaterThan(grinder.staled);
-      // …and it is not paid for elsewhere. Level with the grinder on the best
-      // seed and well behind on the rest, so this is a band rather than a `<`.
-      expect(batcher.game.state.score).toBeLessThan(grinder.game.state.score * 1.05);
+      // …so the maker doing more work scores less for it, on every seed.
+      expect(batcher.game.state.score).toBeLessThan(grinder.game.state.score);
     });
   });
 });

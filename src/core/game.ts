@@ -1,6 +1,15 @@
 import { COLS, ROWS, isChopBlock } from './board';
+import { BROWN, PRIMARIES, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
-import { MIXING_STAGE, rollOrder } from './orders';
+import { SETTLED_MS, stageAt } from './difficulty';
+import { rollOrder, type StageConfig } from './orders';
+import {
+  NO_PITY,
+  duePrimaries,
+  starvedPrimaries,
+  tickPity,
+  type PityClock,
+} from './pity';
 import { createRng, type Rng } from './rng';
 import { scoreServe } from './scoring';
 import { pushCandy } from './shelf';
@@ -25,6 +34,7 @@ import {
 import {
   Dir,
   OPPOSITE,
+  type ColorMask,
   type Customer,
   type GameConfig,
   type GameEvent,
@@ -39,11 +49,12 @@ import {
 /** Lost only to a customer walking out on you (design §6). */
 export const STARTING_LIVES = 3;
 
-/** 200 ms/cell = the 5 cells/s Warm-up speed (design §7). Tuning knob. */
+/** How often a child takes the brown one off your hands (design §7). */
+export const MERCY_CHANCE = 0.05;
+
+/** A real run: seeded, taught, and ramped by `core/difficulty.ts`. */
 export const DEFAULT_CONFIG: GameConfig = {
   seed: 1,
-  moveIntervalMs: 200,
-  stage: MIXING_STAGE,
   openingLevels: true,
 };
 
@@ -62,6 +73,15 @@ export class Game {
   private moveAccMs = 0;
   /** Time the window has been empty, against the current arrival interval. */
   private waitMs = 0;
+  /**
+   * Time on the endless ramp, which only starts once the opening levels are
+   * done (design §7) — so a player who takes their time learning does not find
+   * the rush already waiting for them. It is not `elapsedMs` minus a handover
+   * stamp, because there is nothing to stamp until the third child is served.
+   */
+  private endlessMs = 0;
+  /** How long each primary has been needed and missing (design §8.3). */
+  private pity: PityClock = NO_PITY;
   private nextCustomerId = 1;
   /** Events raised before the first step, so no spawn goes unannounced. */
   private pending: GameEvent[] = [];
@@ -106,13 +126,29 @@ export class Game {
   }
 
   /**
+   * The difficulty in force right now — every knob the ramp varies, read
+   * through one place so nothing downstream has to know whether it came from
+   * the curve or from a pinned row (design §7, `core/difficulty.ts`).
+   *
+   * Serves count from the handover too, for the same reason the clock does:
+   * the three opening levels are taught, not earned, and crediting them to the
+   * ramp would start the endless game a fifth of the way up it.
+   */
+  get stage(): StageConfig {
+    if (this.config.stage !== undefined) return this.config.stage;
+
+    const served = Math.max(0, this.state.served - this.tutorial.length);
+    return stageAt(this.endlessMs, served);
+  }
+
+  /**
    * How far the snake stands between its last cell and its next, 0…1.
    * Movement is discrete here but must not look it, so the view draws the
    * snake at this fraction of the way across. `extraMs` lets a caller add
    * time it has accumulated but not yet handed to `step`.
    */
   moveProgress(extraMs = 0): number {
-    return Math.min((this.moveAccMs + extraMs) / this.config.moveIntervalMs, 1);
+    return Math.min((this.moveAccMs + extraMs) / this.stage.moveIntervalMs, 1);
   }
 
   /**
@@ -126,9 +162,23 @@ export class Game {
 
     this.state.elapsedMs += dtMs;
     this.moveAccMs += dtMs;
+    // Only once the teaching is over — see `endlessMs`. The pity clocks are
+    // held back for the same reason: an opening level's board is stocked with
+    // exactly what its one order needs (design §7), so nothing on it can starve.
+    if (this.openingLevel === undefined) {
+      this.endlessMs += dtMs;
+      this.pity = tickPity(this.pity, starvedPrimaries(this.state), dtMs);
+    }
 
-    while (this.moveAccMs >= this.config.moveIntervalMs) {
-      this.moveAccMs -= this.config.moveIntervalMs;
+    // Read once a pass and not once a test: `stage` is a fresh row off the
+    // curve every time it is asked. Re-read *between* passes all the same — the
+    // ramp can shorten the interval between one move and the next, and a stale
+    // one would spend time the maker no longer takes.
+    for (;;) {
+      const { moveIntervalMs } = this.stage;
+      if (this.moveAccMs < moveIntervalMs) break;
+
+      this.moveAccMs -= moveIntervalMs;
       this.advance(input, events);
     }
 
@@ -397,7 +447,7 @@ export class Game {
    */
   private admitCustomer(dtMs: number, events: GameEvent[]): void {
     const level = this.openingLevel;
-    const stage = this.config.stage;
+    const stage = this.stage;
     // One child at a time while the tutorial runs, and no clock on them: each
     // level is a single order, the next does not walk up until this one is
     // served, and a tutorial that plays on every run must not be able to cost
@@ -423,7 +473,7 @@ export class Game {
       this.nextCustomerId,
       // Drawn only now that a child is actually arriving, so the seeded run of
       // orders does not depend on how often `step` was called.
-      level?.want ?? rollOrder(stage, this.rng),
+      level?.want ?? this.rollWant(stage),
       window.patienceMs,
     );
     this.nextCustomerId += 1;
@@ -431,6 +481,28 @@ export class Game {
     events.push({ type: 'customer-arrived', customer });
 
     this.serveFromShelf(this.state.customers.length - 1, events);
+  }
+
+  /**
+   * What the child at the window asks for. Almost always a roll against the
+   * stage's tier weights — but occasionally the one customer who *wants* the
+   * over-mix (design §4, §7).
+   *
+   * They only ever turn up when there is a brown candy going spare, which is
+   * what makes them a mercy rather than another order to fill: brown is the
+   * mistake the color system is built around, and this is the one way it leaves
+   * the shelf other than going stale. They are held back until the ramp has
+   * settled, so a run's first minutes are not spent teaching that the mistake
+   * pays. Because a new arrival sweeps the rack (`serveFromShelf` above), they
+   * are served the moment they walk up — the cleanup is the whole visit.
+   */
+  private rollWant(stage: StageConfig): ColorMask {
+    const spare = this.state.shelf.some((candy) => candy.color === BROWN);
+    if (spare && this.endlessMs >= SETTLED_MS && this.rng.next() < MERCY_CHANCE) {
+      return BROWN;
+    }
+
+    return rollOrder(stage, this.rng);
   }
 
   /**
@@ -489,13 +561,15 @@ export class Game {
     this.state.tutorialIndex += 1;
     if (this.openingLevel !== undefined) return;
 
-    const served = this.config.stage.arrivalIntervalMs - TUTORIAL_ARRIVAL_GAP_MS;
+    // Read after the index moved, so this is the handover row the ramp starts
+    // at rather than the tutorial's own beat.
+    const served = this.stage.arrivalIntervalMs - TUTORIAL_ARRIVAL_GAP_MS;
     this.waitMs = Number.isFinite(served) ? Math.max(0, served) : 0;
   }
 
   private spawnPickups(events: GameEvent[]): void {
     const level = this.openingLevel;
-    const stocked = stockedPrimaries(level);
+    const stocked = level === undefined ? this.endlessStock() : stockedPrimaries(level);
     const sugar = stocksSugar(level, this.state);
 
     for (const pickup of ensurePickups(this.state, this.rng, stocked, sugar)) {
@@ -506,6 +580,28 @@ export class Game {
           : { type: 'dye-spawned', pos: pickup.pos, primary: pickup.primary },
       );
     }
+  }
+
+  /**
+   * Which jars the endless board carries — design §8.3's pity spawner, which
+   * replaces the Phase 4 floor of one jar of every primary at all times.
+   *
+   * Two things put a jar out. A shortage that has run its five seconds is the
+   * rule proper: whatever the queue needs and cannot get, it gets. The second
+   * is a floor under *that* — a board with no dye on it at all lays one, rolled,
+   * so a maker can still build ahead of the window. Without it the only jars
+   * that ever appeared would be ones some waiting child already needed, and
+   * batching — the thing the color system is for — could never start early.
+   */
+  private endlessStock(): readonly Primary[] {
+    const due = duePrimaries(this.pity);
+    if (due.length > 0) return due;
+
+    if (this.state.pickups.some((pickup) => pickup.kind === 'dye')) return [];
+
+    // Rolled only when it is actually wanted: an unconditional draw here would
+    // burn a number every move and no two runs of the same seed would match.
+    return [PRIMARIES[this.rng.int(PRIMARIES.length)] ?? PRIMARIES[0]];
   }
 
   /**

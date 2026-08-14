@@ -153,13 +153,14 @@ export interface GameState {
 export interface GameConfig {
   /** Seeds core/rng.ts — the same seed and inputs always replay identically. */
   readonly seed: number;
-  /** Milliseconds per grid move; the steering-feel knob (design §7). */
-  readonly moveIntervalMs: number;
   /**
-   * The difficulty row in force once the opening levels are done. Phase 5
-   * replaces this fixed row with a continuous curve.
+   * Pins the difficulty to one row for the whole run, instead of letting
+   * `core/difficulty.ts` ramp it. Only tests and balancing sims want this — a
+   * real run is the curve. It is how a test asks for a window that never opens
+   * or a mix that only ever rolls raw, without having to reach a point on the
+   * ramp where that happens to be true.
    */
-  readonly stage: StageConfig;
+  readonly stage?: StageConfig;
   /**
    * Every real run opens with the three teaching levels (design §7). Off only
    * for tests and balancing sims, which want the endless game directly.

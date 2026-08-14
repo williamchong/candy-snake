@@ -41,6 +41,15 @@ const NO_TURNS: TurnSource = { take: () => undefined };
  */
 const CLOSED_WINDOW: StageConfig = { ...MIXING_STAGE, arrivalIntervalMs: Infinity };
 
+/**
+ * One grid move's worth of time. Speed is on the difficulty curve now
+ * (`core/difficulty.ts`), so there is no one interval a run keeps — but every
+ * test here either pins `CLOSED_WINDOW` or stays inside the opening levels, and
+ * both of those sit at the handover row, where the maker is still at Warm-up's
+ * 5 cells/s.
+ */
+const MOVE_MS = MIXING_STAGE.moveIntervalMs;
+
 const newGame = (config: Partial<GameConfig> = {}): Game =>
   new Game({ ...DEFAULT_CONFIG, openingLevels: false, stage: CLOSED_WINDOW, ...config });
 
@@ -63,7 +72,7 @@ const drive = (game: Game, moves: number): GameEvent[] => {
   const events: GameEvent[] = [];
 
   for (let move = 0; move < moves; move += 1) {
-    events.push(...game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS));
+    events.push(...game.step(MOVE_MS, NO_TURNS));
     game.state.pickups = game.state.pickups.filter((pickup) =>
       scripted.has(cellKey(pickup.pos)),
     );
@@ -124,7 +133,7 @@ describe('Game.step timing', () => {
     const game = newGame();
     const start = game.state.snake.head;
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs - 1, NO_TURNS);
+    game.step(MOVE_MS - 1, NO_TURNS);
     expect(game.state.snake.head).toEqual(start);
 
     game.step(1, NO_TURNS);
@@ -135,34 +144,34 @@ describe('Game.step timing', () => {
     const game = newGame();
     const start = game.state.snake.head;
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs * 3, NO_TURNS);
+    game.step(MOVE_MS * 3, NO_TURNS);
 
     expect(game.state.snake.head).toEqual(at(start.x + 3, start.y));
-    expect(game.state.elapsedMs).toBe(DEFAULT_CONFIG.moveIntervalMs * 3);
+    expect(game.state.elapsedMs).toBe(MOVE_MS * 3);
   });
 
   it('reports how far the snake stands between cells', () => {
     const game = newGame();
     expect(game.moveProgress()).toBe(0);
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs / 2, NO_TURNS);
+    game.step(MOVE_MS / 2, NO_TURNS);
     expect(game.moveProgress()).toBeCloseTo(0.5);
 
     // Unspent time the caller is holding counts toward the next cell too.
-    expect(game.moveProgress(DEFAULT_CONFIG.moveIntervalMs / 2)).toBe(1);
+    expect(game.moveProgress(MOVE_MS / 2)).toBe(1);
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs / 2, NO_TURNS);
+    game.step(MOVE_MS / 2, NO_TURNS);
     expect(game.moveProgress()).toBe(0);
   });
 
   it('banks the leftover time instead of dropping it', () => {
     const game = newGame();
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs * 1.5, NO_TURNS);
+    game.step(MOVE_MS * 1.5, NO_TURNS);
     expect(game.state.tick).toBe(1);
 
     // The half-interval carried over from the previous call completes a move.
-    game.step(DEFAULT_CONFIG.moveIntervalMs * 0.5, NO_TURNS);
+    game.step(MOVE_MS * 0.5, NO_TURNS);
     expect(game.state.tick).toBe(2);
   });
 });
@@ -172,7 +181,7 @@ describe('Game turning', () => {
     const game = newGame();
     const start = game.state.snake.head;
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs, alwaysTurning(Dir.Up));
+    game.step(MOVE_MS, alwaysTurning(Dir.Up));
 
     expect(game.state.snake.head).toEqual(at(start.x, start.y - 1));
     expect(game.state.snake.dir).toBe(Dir.Up);
@@ -182,7 +191,7 @@ describe('Game turning', () => {
     const game = newGame();
     const start = game.state.snake.head;
 
-    game.step(DEFAULT_CONFIG.moveIntervalMs, alwaysTurning(Dir.Left));
+    game.step(MOVE_MS, alwaysTurning(Dir.Left));
 
     expect(game.state.snake.dir).toBe(Dir.Right);
     expect(game.state.snake.head).toEqual(at(start.x + 1, start.y));
@@ -191,11 +200,14 @@ describe('Game turning', () => {
 
 describe('Game sugar', () => {
   // The opening levels stock a narrower board; see "Game opening levels".
-  it('keeps sugar and one jar of each primary on the endless board', () => {
+  it('opens the endless board with sugar and a jar to start on', () => {
     const pickups = newGame().state.pickups;
 
     expect(pickups.filter((pickup) => pickup.kind === 'sugar')).toHaveLength(1);
-    expect(pickups.filter((pickup) => pickup.kind === 'dye')).toHaveLength(3);
+    // One, not one of each: what is on the floor is the pity spawner's baseline
+    // (design §8.3), and the rest arrive as orders call for them. The old floor
+    // of every primary at all times was Phase 4's stopgap.
+    expect(pickups.filter((pickup) => pickup.kind === 'dye')).toHaveLength(1);
   });
 
   it('announces every opening spawn, so none goes unrendered', () => {
@@ -334,20 +346,20 @@ describe('Game dye', () => {
     const pos = cellAheadOf(game);
     game.state.pickups = [createDye(pos, BLUE)];
 
-    // `drive` keeps only the scripted jar, so the other primaries respawn
-    // every move — only a fresh *blue* one says this jar was replaced.
+    // Which primary comes back is the pity spawner's to choose now (design
+    // §8.3): with nobody at this window, what lands is its baseline jar rather
+    // than a replacement blue. That a jar lands at all is the claim here.
     const refilled = (events: GameEvent[]): boolean =>
-      events.some((event) => event.type === 'dye-spawned' && event.primary === BLUE);
+      events.some((event) => event.type === 'dye-spawned');
 
-    // Still open, so the refill must not have fired yet.
+    // Still open, and an open jar is very much on the map — so nothing may
+    // refill behind it.
     expect(refilled(drive(game, passThrough(game) - 1))).toBe(false);
 
-    const spent = game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS);
+    const spent = game.step(MOVE_MS, NO_TURNS);
 
     expect(refilled(spent)).toBe(true);
-    const jars = game.state.pickups.filter(
-      (pickup) => pickup.kind === 'dye' && pickup.primary === BLUE,
-    );
+    const jars = game.state.pickups.filter((pickup) => pickup.kind === 'dye');
     expect(jars).toHaveLength(1);
     expect(jars[0]?.pos).not.toEqual(pos);
   });
@@ -771,7 +783,7 @@ describe('Game opening levels', () => {
   const run = (game: Game, moves: number): GameEvent[] => {
     const events: GameEvent[] = [];
     for (let move = 0; move < moves; move += 1) {
-      events.push(...game.step(DEFAULT_CONFIG.moveIntervalMs, NO_TURNS));
+      events.push(...game.step(MOVE_MS, NO_TURNS));
     }
     return events;
   };
@@ -783,7 +795,7 @@ describe('Game opening levels', () => {
       .sort();
 
   /** Grid moves in the beat between a serve and the next child walking up. */
-  const GAP_MOVES = Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / DEFAULT_CONFIG.moveIntervalMs);
+  const GAP_MOVES = Math.ceil(TUTORIAL_ARRIVAL_GAP_MS / MOVE_MS);
 
   /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
   const chopOne = (game: Game, want: ColorMask): void => {
@@ -859,7 +871,7 @@ describe('Game opening levels', () => {
     expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
   });
 
-  it('opens the board up to every dye once the third order is served', () => {
+  it('leaves the tutorial’s own jars standing when it hands over', () => {
     const game = opening();
     const [, second, third] = game.tutorial;
 
@@ -868,7 +880,11 @@ describe('Game opening levels', () => {
     serveLevel(game, third?.want ?? RAW);
 
     expect(game.state.tutorialIndex).toBe(3);
-    expect(jarsOn(game)).toEqual([...PRIMARIES].sort());
+    // The endless board no longer throws every primary out at the handover —
+    // the pity spawner stocks what orders ask for (design §8.3). What the third
+    // level laid stays where it is, because nothing on this board teleports and
+    // the stocked set only ever grows (design §7).
+    expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
   });
 
   it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {

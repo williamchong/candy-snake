@@ -30,20 +30,34 @@ export interface StageConfig {
   readonly patienceMs: number;
   /** Gap between arrivals, counted only while the queue has room. */
   readonly arrivalIntervalMs: number;
+  /**
+   * Milliseconds per grid move — the table's *Snake speed* column, which had
+   * nowhere to live while a run was pinned to one row. It belongs with the
+   * other knobs rather than in `GameConfig`, so the whole difficulty table is
+   * one thing the curve interpolates (implementation plan, "balance is
+   * opinion").
+   */
+  readonly moveIntervalMs: number;
 }
 
 /**
- * What the game settles into once the opening levels are done. The table's
- * Warm-up row is deliberately skipped: its job is teaching raw orders, and the
- * tutorial has already taught raw, primary *and* secondary by the time this
- * takes over — dropping back to 100% raw would read as going backwards.
- * Phase 5's curve therefore starts here rather than at Warm-up.
+ * What the game hands over to once the opening levels are done, and the curve's
+ * first anchor (`difficulty.ts`). The table's Warm-up row is deliberately
+ * skipped: its job is teaching raw orders, and the tutorial has already taught
+ * raw, primary *and* secondary by the time this takes over — dropping back to
+ * 100% raw would read as going backwards.
+ *
+ * Its *speed* is Warm-up's 5 cells/s all the same. Demand starts at Mixing, but
+ * a strand that jumped straight to 7 cells/s the instant the third child was
+ * served would lurch, so the curve eases the maker up to the Mixing row's speed
+ * over the first minute instead.
  */
 export const MIXING_STAGE: StageConfig = {
   mix: [10, 50, 40],
   maxQueue: 3,
   patienceMs: 35_000,
   arrivalIntervalMs: 12_000,
+  moveIntervalMs: 200,
 };
 
 const pick = (colors: readonly ColorMask[], rng: Rng): ColorMask =>
