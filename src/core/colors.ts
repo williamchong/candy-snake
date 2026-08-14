@@ -31,6 +31,14 @@ export const primariesOf = (color: ColorMask): Primary[] =>
   PRIMARIES.filter((primary) => (color & primary) !== 0);
 
 /**
+ * How many primaries a mix is made of — `primariesOf(color).length` without
+ * building the array to throw it away. It is how far along a color is toward
+ * being some other color, which the pity spawner asks on every step.
+ */
+export const mixCount = (color: ColorMask): number =>
+  PRIMARIES.reduce((count, primary) => count + ((color & primary) !== 0 ? 1 : 0), 0);
+
+/**
  * How hard a color is to produce, which is what difficulty will mix orders by
  * (design §4). Brown is not a tier — it is the over-mix mistake, and no
  * regular customer orders it.

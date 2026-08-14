@@ -9,6 +9,8 @@ import {
   YELLOW,
   blend,
   colorInfo,
+  mixCount,
+  primariesOf,
   type Primary,
 } from './colors';
 import { RAW, type ColorMask } from './types';
@@ -85,6 +87,21 @@ describe('blend', () => {
     }
 
     expect(reached.size).toBe(COLORS.length);
+  });
+});
+
+describe('mixCount', () => {
+  it('counts nothing in raw and everything in brown', () => {
+    expect(mixCount(RAW)).toBe(0);
+    expect(mixCount(BROWN)).toBe(3);
+  });
+
+  it('agrees with primariesOf on every color', () => {
+    // The whole reason it exists is to skip building that array, so the two
+    // drifting apart is exactly the failure to guard against.
+    for (let color = 0; color <= BROWN; color += 1) {
+      expect(mixCount(color)).toBe(primariesOf(color).length);
+    }
   });
 });
 

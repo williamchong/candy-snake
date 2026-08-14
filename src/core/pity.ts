@@ -1,4 +1,4 @@
-import { PRIMARIES, primariesOf, type Primary } from './colors';
+import { PRIMARIES, mixCount, type Primary } from './colors';
 import { RAW, type ColorMask, type GameState } from './types';
 
 /**
@@ -64,7 +64,7 @@ export const starvedPrimaries = (state: GameState): Primary[] => {
     for (const segment of state.snake.body) {
       if (!reachableFrom(segment.color, want)) continue;
 
-      const mixes = primariesOf(segment.color).length;
+      const mixes = mixCount(segment.color);
       if (mixes > bestMixes) {
         bestMixes = mixes;
         best = segment.color;

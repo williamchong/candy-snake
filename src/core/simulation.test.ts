@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
-import { PRIMARIES, primariesOf, type Primary } from './colors';
+import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
@@ -198,7 +198,7 @@ const batcherGoal: Goal = (state) => {
   const carried = state.snake.body;
   const held = carried[0]?.color ?? RAW;
   const needed = bestLadder(state);
-  const mixes = primariesOf(held).length;
+  const mixes = mixCount(held);
   /** A segment per jar the ladder calls for, plus the raw one under them all. */
   const batchSize = needed.length + 1;
   /**
