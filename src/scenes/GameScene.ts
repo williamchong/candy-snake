@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, Game } from '../core/game';
 import type { GameEvent } from '../core/types';
 import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
+import { bindSwipe } from '../input/swipe';
 import { BoardView } from '../render/boardView';
 import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
@@ -42,7 +43,10 @@ export class GameScene extends Phaser.Scene {
     this.view = new BoardView(this);
     this.accumulatorMs = 0;
 
+    // Both adapters normalize into the same queue, so nothing downstream of
+    // here knows which one the player is using (architecture §8).
     bindKeyboard(this, this.turns);
+    bindSwipe(this, this.turns);
     // The HUD runs in parallel and reads the same core, read-only
     // (architecture §6).
     this.scene.launch(SceneKey.UI, { core: this.core });
