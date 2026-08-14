@@ -118,9 +118,10 @@ Two of those three are met. The third — the batching bot outscoring the grinde
 — is **not**, and the balance record below sets out why it is a rules question
 rather than a tuning one, along with the three candidate rule changes. It is
 carried forward as an open finding rather than counted as done. The human
-playtest half of the first criterion is also still outstanding: the bots show
-the curve has teeth, but whether death *feels* earned is a judgment nobody has
-made at the keyboard yet.
+playtest half of the first criterion has now had two sittings, and neither
+answered that half — nobody played long enough to die. They answered
+other things instead, including the open finding arrived at from the far end —
+twice, by two different players, in two sittings. See the two records below.
 
 ### Where the balance landed
 
@@ -168,6 +169,130 @@ strategy it least wants to reward. The ramp is tuned so the maker playing as
 intended dies on schedule, and the grinder outliving them is the open finding
 made visible rather than hidden.
 
+### What the first sitting said
+
+Two players, both game-literate, on the build as it stood partway through Phase
+6. The sitting is worth recording because one of them walked into the finding
+above from the other end: without having seen a bot run, they asked for a combo
+bonus and for a slower snake with a deeper window — the first of the three
+candidates, and a lever the list has not got.
+
+What came out of it, and what is to be done about each:
+
+- **"Could serving several customers at once be worth more?"** — candidate one,
+  proposed independently. It is cheap: `Severed` gains a serve counter,
+  `consumeSevered` already holds the piece that counter belongs to, and the term
+  itself goes in `core/scoring.ts`. It is also, on the sell-through measured
+  above, unlikely to be enough on its own — it pays better for the matched
+  *part* of a batch, and the batching maker's problem is everything outside that
+  part. Worth doing, second. The second sitting asked for the same thing and
+  called it a *meter*, which is a correction to that scope rather than an echo
+  of it — see below.
+- **"Slow it down a bit and put more children at the window, so you can pull a
+  longer strand."** — a lever the candidate list does not have, because the
+  record above measured queue depth and speed *one at a time*. Together they
+  compound on sell-through: a slower strand is in play longer, and a deeper
+  window gives a fixed bundle more targets to land on. One edit to
+  `core/difficulty.ts`'s anchor table and one sweep of the bots says whether
+  that is true. Worth doing, **first** — it is the cheapest test of the likeliest
+  fix, and it is a table diff, which is what that module is for. The second
+  sitting names which knob of the two actually matters; see below.
+- **"The candy preparation area — does it score for me or against me?"** — the
+  shelf is unreadable, and the reason is in the code rather than in the design:
+  `candy-staled` reaches `GameScene` and plays nothing, so a candy pushed off a
+  full rack goes in silence. Design §5 already asks for the toss, and Phase 7
+  already owns it; this is that item with a playtest behind it now.
+- **"Maybe the dye shouldn't respawn straight away, or cap how many there are."**
+  — **rejected**, and worth writing down why, because the instinct is right and
+  the effect is backwards. Two things put a jar out (design §8.3): pity, which
+  answers what a *waiting* order needs, and the baseline jar, which is the only
+  way to build ahead of the window. Scarcity taxes the second while the pity
+  floor keeps the first supplied — so it throttles the maker pulling a strand
+  and leaves the one playing off the front of the queue topped up. It would
+  widen the very gap this phase is trying to close. If more constraint is
+  wanted, the row above is the constraint that pushes the right way.
+
+The order of attack, once Phase 6 is landed and not before: retune the anchor
+table and measure; build the combo only if that leaves the gap open; and if
+neither closes it, escalate to the second candidate — orders that ask for a
+nested set — rather than keep tuning. The success criterion is already written
+and already committed. `core/simulation.test.ts` asserts *today* that the
+batching maker scores less on every seed, so closing this finding means
+inverting that assertion, not deleting it.
+
+Candidate three — one jar-crossing tinting the whole strand in a single move —
+is **struck**. The argument against it was theory: it makes a long strand faster
+to dye and also more uniform, so a five-segment batch leaves the block as five of
+the same candy against demand spread over seven colors, which is the half of the
+problem that is not the problem. The second sitting turned that into evidence — a
+player reported the uniformity unprompted, as something that already bothers them
+at the *current* tint speed. A candidate whose whole effect is to arrive at that
+state sooner does not need scheduling.
+
+### What the second sitting added
+
+Two more players, one of them new to it. This is the more useful of the two
+sittings, and most of that is one player's two sentences.
+
+- **"I kept wondering whether I had a reason to make the strand longer — one or
+  two sugars plus the jars already spends the whole of a customer's patience."**
+  — the open finding, reached from the chair rather than from a bot sweep, and
+  with a *different* mechanism under it. The record above is economic: the extra
+  candy a long strand buys is candy nobody ordered. This one is temporal: the
+  trip cannot be afforded at all, so the strand never gets long enough for
+  sell-through to be what bites. Both can be true at once, and they do not have
+  the same fix.
+- **That is a gap in the bot harness as much as it is a finding.** The bots path
+  optimally and never hesitate, so they finish a ladder inside a patience window
+  a human cannot — which is why the seeded sweeps measured the economics and
+  never once saw the clock. Worth remembering the next time the simulation is
+  taken as the last word on a tuning question.
+- **It also names the knob.** What the first sitting asked for was "slower, with
+  more children"; what actually wants moving is `patienceMs` against what a
+  ladder costs in trip time. Queue depth is the second-order half of it.
+- **"A combo meter would feel very good on multiple delivery."** — candidate one
+  again, from a different player, and *meter* is the correction: the first
+  sitting's version is a term in `core/scoring.ts`, and a term that quietly pays
+  more delivers none of the feel being asked for. What gets built is a meter
+  **and** a term, and the meter may be the load-bearing half. Note the tension
+  with the row above — a combo pays for a batch nobody can currently afford to
+  build — which is why the order of attack stands rather than being reshuffled
+  toward the thing two players have now asked for.
+- The same player described their strategy as taking whatever was nearest. That
+  is the grinder, played by a human, and it is the plainest argument yet for
+  keeping both bots: the cheap way to play is what people find on their own.
+
+The rest of the thread was about making the game harsher, and the answer is
+worth recording once rather than re-derived each time it comes up.
+
+- **Shattering the strand against a wall** — **no**, and there is no rule here to
+  tune: `core/board.ts` wraps the edges unconditionally, so this would be
+  net-new. It would also delete a tactic a player in that same thread had just
+  found and liked — using the wrap to save distance — and design §6 gives wrap a
+  stated reason, that it keeps flow forgiving on mobile, which is the phase in
+  hand. Read instead as "is the self-hit too harsh?", it is already the harsh
+  version: everything from the impact back is destroyed.
+- **Debris scattering onto the floor to be picked back up** — offered as the
+  gentler alternative to the above. The harsher rule is not going in, so the
+  mitigation is not needed for what it was proposed for; it joins the candidate
+  list anyway, because it is the first suggestion in either sitting that pushes
+  the *right* way on the open finding. Recoverable debris makes a long strand
+  cheaper to lose, which is a reason to pull one. It is not free: it would want
+  an answer for flooding the floor, for what §8.1's ≥1-sugar restock does when a
+  break lays six cubes at once (`ensurePickups` only lays sugar when there is
+  none), and for self-collision becoming nearly costless.
+
+Three harshening instincts have now come up across the two sittings — scarcer
+dye, wall shatter, and the standing temptation to tighten the ramp until the
+grinder dies. All three tax a long strand more than a short one, which is to say
+all three push toward the way of playing this phase is trying to stop rewarding.
+That is the first thing to check any difficulty proposal against.
+
+And the question the thread opened with — whether the game should be gentler or
+more hellish — is already answered in writing, which is worth saying because it
+will be asked again: design §1 sets the audience as casual, all ages, one-hand
+playable on mobile. The players arrived at the document's answer unprompted.
+
 ## Phase 6 — Mobile & responsive (L) ◀ current
 
 - Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold);
@@ -190,16 +315,33 @@ both orientations.
   wheel that section specifies. It is the only place in the game a recipe is
   shown at all, now that the queue holds none.
 - (The three lessons are already carried by Phase 4's opening levels and what
-  they stock — design §11 — so no toasts, no captions, no seen-once flags.)
+  they stock — design §11 — so no toasts, no captions, no seen-once flags. That
+  is the position the note under "Done when" now puts on trial.)
 - Settings screen: sound, D-pad toggle, left-hand mode, high-contrast symbols.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
-  serve confetti, patience-bar urgency pulse. Now that the strand is drawn as
-  one rope (design §2), stretching it along its travel axis as it is pulled
-  belongs here too.
+  serve confetti, patience-bar urgency pulse, and the stale-candy toss off the
+  rack (design §5) — `candy-staled` reaches `GameScene` today and plays nothing,
+  which is why the first sitting could not tell whether the shelf was scoring
+  for the player or against them. Now that the strand is drawn as one rope
+  (design §2), stretching it along its travel axis as it is pulled belongs here
+  too.
 - Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted.
 
 **Done when:** a new player understands mixing without leaving the game, and
 every core event has audiovisual feedback.
+
+The first of those is the criterion at risk, and it now has evidence against it
+from three players across two sittings, all of whom came through Phase 4's
+opening levels first. One was "a bit confused at first, just chasing the colored
+things". One understood the game but credited the other games they had played
+for it rather than this one. The third asked, unprompted, for a picture showing
+which color plus which color makes what — which is the mixing wheel design §4
+already specifies, requested by someone who had just been taught mixing by three
+scripted levels. The first two describe the *strand* failing to land as the thing
+being produced; the third says the table did not stick either. Design §11's
+position — that the opening levels teach on their own, with no captions anywhere
+— is what is on trial here; if the cheat sheet does not carry the rest, that
+position gives way before the criterion does.
 
 ## Phase 8 — Persistence, high scores & release (S)
 
