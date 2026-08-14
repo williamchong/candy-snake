@@ -6,7 +6,7 @@ Sizes are relative (S < M < L), not calendar promises.
 
 References: [game-design.md](./game-design.md), [architecture.md](./architecture.md).
 
-> **Status: Phase 5 is the current phase**; 0–4 are done and marked ✅ below.
+> **Status: Phase 6 is the current phase**; 0–5 are done and marked ✅ below.
 > This plan is where phase status is tracked — anything else that mentions it
 > (the README) links here rather than restating it.
 
@@ -99,7 +99,7 @@ The phase where it becomes a *game*.
 **Done when:** a full run — opening levels, serve customers, lose lives, game
 over, restart — is playable start to finish with keyboard.
 
-## Phase 5 — Difficulty ramp & spawn fairness (M) ◀ current
+## Phase 5 — Difficulty ramp & spawn fairness (M) ✅
 
 - `core/difficulty.ts`: continuous curve over (time, serves) driving order
   tier mix, arrival interval, patience, queue cap, snake speed (per the table
@@ -114,40 +114,61 @@ over, restart — is playable start to finish with keyboard.
 death feels earned (post-playtest judgment call), simulation asserts no order
 is ever primary-starved, and the batching bot outscores the grinder.
 
-### Where the balance stands going in
+Two of those three are met. The third — the batching bot outscoring the grinder
+— is **not**, and the balance record below sets out why it is a rules question
+rather than a tuning one, along with the three candidate rule changes. It is
+carried forward as an open finding rather than counted as done. The human
+playtest half of the first criterion is also still outstanding: the bots show
+the curve has teeth, but whether death *feels* earned is a judgment nobody has
+made at the keyboard yet.
 
-Measured at the end of Phase 4, two seeded bots over ten minutes on four seeds
-(`core/simulation.test.ts`, "the reference players, before the balancing
-pass"). The numbers are committed as assertions so this phase's diff shows what
-it moved; all of them are expected to change here.
+### Where the balance landed
 
-- **Nothing can lose.** Both bots finish untouched on 3 lives — and one of them
-  is the laziest strategy in the game, a single segment carried to the bench
-  and back. Against a target of dying around 8–10 minutes, the ramp currently
-  has no teeth at all.
-- **Demand is the binding constraint, not the maker.** Both bots serve ~52 in
-  ten minutes: the 12 s `arrivalIntervalMs` runs out ~50 times over those 600 s,
-  and the three opening levels make up the rest. The grinder chops ~135 to
-  serve them and the batcher ~165, staling the difference on a permanently full
-  shelf. Neither is near its own throughput ceiling, so **supply-side levers
-  move nothing until arrival interval and queue cap have taken up the slack** —
-  the dye economy included.
-- **Batching is currently punished.** The bot that builds a production line
-  does strictly more work for the same serves, stales ~40% more, and scores no
-  better than the grinder. Playing the way the color system was designed for is
-  the worse way to play, which is the single most important thing to invert
-  here.
+Measured the same way it was measured going in — two seeded bots over ten
+minutes on four seeds (`core/simulation.test.ts`, "the reference players, after
+the ramp went in"). Two of the three findings this phase opened with are
+answered; the third is not, and it turned out not to be a tuning problem.
 
-Hence two reference bots rather than one: tightening the ramp until the
-*grinder* dies on schedule would calibrate the game around the strategy it
-least wants to reward, and make it brutal for anyone playing as intended.
+- **Losing is possible.** A maker who batches now dies around the 8-minute mark
+  on three seeds in four, against a target of 8–10 minutes. Before, neither bot
+  could be touched in ten.
+- **Demand is no longer the only constraint.** The arrival interval comes down
+  from 12 s to under 3 s, past what either maker can keep up with, so a run ends
+  on a queue that outgrew the maker rather than on the clock running out of
+  customers. Serves roughly doubled, to ~110 over the same ten minutes.
+- **Batching is still punished — the open finding.** The maker who builds a
+  production line chops *more* candy than the grinder on every seed, and scores
+  less on every seed. This is not a number that was left untuned. The levers
+  were measured one at a time: removing staling entirely (a 60-slot shelf) does
+  not fix it, flattening the tier mix does not fix it, deepening the queue does
+  not fix it, and teaching the bot to plan against the whole window rather than
+  the child at the front of it narrows the gap by about half and no more.
 
-The instant dye respawn (design §8's "cap doubles as a floor" stopgap) is worth
-retiring here as the pity spawner lands, since scarcity is what makes dye
-*order* matter — but on the numbers above it is a fine-tuning lever, not the
-fix, and §8.3's 5 s guarantee caps how hard it can ever bite.
+The reason is structural rather than numeric. A nested ladder is a **fixed
+bundle** — one secondary, over one particular primary, over a raw — because a
+jar tints everything already on the strand and a cube taken afterwards stays
+raw (design §4). Demand is spread uncorrelated across seven colors. So the
+extra candy a longer strand buys is mostly candy nobody ordered: the batching
+maker's sell-through measures ~40% against the grinder's ~65%.
 
-## Phase 6 — Mobile & responsive (L)
+Making batching pay is therefore a **rules** question, not a tuning one, and it
+is left open here rather than papered over. The candidates, none of them in
+this phase's scope:
+
+- a combo bonus for serving several children off one chopped batch, so the
+  batch is worth something as a batch;
+- orders that ask for a nested set rather than a single color, so demand has the
+  shape a ladder produces;
+- one jar-crossing tinting the whole strand in a single move rather than one
+  segment per move, so a long strand is genuinely faster to dye.
+
+Both bots are still kept, for the reason they always were: tightening the ramp
+until the *grinder* dies on schedule would calibrate the game around the
+strategy it least wants to reward. The ramp is tuned so the maker playing as
+intended dies on schedule, and the grinder outliving them is the open finding
+made visible rather than hidden.
+
+## Phase 6 — Mobile & responsive (L) ◀ current
 
 - Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold);
   optional virtual D-pad behind a setting.

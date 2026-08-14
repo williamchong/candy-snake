@@ -391,18 +391,39 @@ grew out of.)
 Endless ramp, driven by elapsed time and/or candies served (whichever fires
 first — keeps both slow and fast players on curve):
 
-| Stage    | Approx. time | Order mix (T1/T2/T3) | Max queue | Patience | Snake speed |
-| -------- | ------------ | -------------------- | --------- | -------- | ----------- |
-| Warm-up  | 0–2 min      | 100 / 0 / 0          | 1         | 45 s     | 5 cells/s   |
-| Primary  | 2–5 min      | 30 / 70 / 0          | 2         | 40 s     | 6 cells/s   |
-| Mixing   | 5–8 min      | 10 / 50 / 40         | 3         | 35 s     | 7 cells/s   |
-| Rush     | 8+ min       | 5 / 35 / 60          | 4         | 30 s     | 8 cells/s (cap) |
+The curve is anchored on the rows below and interpolated between them, so every
+knob moves smoothly rather than stepping at a stage boundary. Time here is
+counted from the **handover** — the moment the third opening level is served —
+not from the start of the run, so a player who takes their time learning does
+not find the rush already waiting. `core/difficulty.ts` holds the table.
 
-- Arrival interval shrinks smoothly within each stage.
-- The rare **brown-accepting customer** (~5% after the Mixing stage) only
-  appears if a brown candy is on the shelf.
-- All numbers above are initial tuning targets, expected to change in the
-  balancing phase (see implementation plan).
+| Stage    | Since handover | Order mix (T1/T2/T3) | Max queue | Patience | Arrival | Snake speed |
+| -------- | -------------- | -------------------- | --------- | -------- | ------- | ----------- |
+| Warm-up  | *(pre-tutorial — kept as the shape the ramp grew out of)* | 100 / 0 / 0 | 1 | 45 s | — | 5 cells/s |
+| Handover | 0 s            | 10 / 50 / 40         | 3         | 35 s     | 12 s    | 5 cells/s   |
+| Settled  | 1 min          | 10 / 50 / 40         | 3         | 35 s     | 10 s    | 7 cells/s   |
+| Rush     | 3 min          | 5 / 35 / 60          | 4         | 30 s     | 6 s     | 8 cells/s (cap) |
+| Past it  | 7 min          | 5 / 35 / 60          | 4         | 28 s     | 4 s     | 8 cells/s (cap) |
+| Backstop | 15 min         | 5 / 35 / 60          | 4         | 22 s     | 2.8 s   | 8 cells/s (cap) |
+
+- Demand starts at the **Mixing** row but speed starts at Warm-up's, and eases
+  up to Mixing's over the first minute. The opening levels have already taught
+  all three tiers, so dropping the order mix back would read as going backwards
+  — but a strand that jumped 40% faster the instant the third child was served
+  would lurch.
+- **Arrival interval is the lever that ends a run.** Speed caps at 8 cells/s, so
+  past the Rush row the window is the only thing still tightening; a curve that
+  flattened while the player still had headroom would never bring the run to an
+  end (§1: difficulty ramps *until lives run out*).
+- Whichever of elapsed time and candies served is further along drives the
+  curve, so a fast player is not held back by the clock and a slow one is not
+  overrun by it.
+- The rare **brown-accepting customer** (~5% once the ramp has settled) only
+  appears if a brown candy is on the shelf. Because a new arrival sweeps the
+  rack, they are served the moment they walk up: the cleanup is the whole visit.
+- Measured against the reference bots, a maker who batches dies around 8 minutes
+  on most seeds. See the implementation plan for what those runs said — including
+  the one finding this table could not fix.
 
 ## 8. Spawn fairness rules
 
@@ -419,12 +440,24 @@ rules, so nothing respawns until the whole snake has cleared it.
 4. Pickups never spawn on the snake, stations, or the cell directly in front
    of the head (no "free" accidental pickups).
 
-Rule 3 is not built yet (Phase 5), so until it lands rule 2's cap doubles as a
-floor: one jar of each primary is kept on the map at all times, and the opening
-levels narrow that to their own stock (§7). That floor is deliberately more
-generous than the finished game — it makes every color reachable without asking
-what anyone ordered — and the pity spawner replaces it rather than adding to
-it, taking its stock list from the orders actually waiting.
+5. **Baseline jar:** if rule 3 is asking for nothing and the floor is bare, one
+   jar is put out anyway, rolled. Without it the only jars that ever appeared
+   would be ones a waiting child already needed, and a maker could never build
+   ahead of the window — which is the whole point of the strand.
+
+Rule 3's "within 5 s" is a **ceiling on how long an order may be unfillable**,
+not a wait every pickup has to serve. Measured at the full five, two dyes cost
+more than most orders have patience for and the game grinds to a halt; the
+implementation keeps the actual delay well under it (`core/pity.ts`), long
+enough that a jar does not reappear under the maker's feet the instant it is
+spent. Scarcity here is *which* jars, not how long they take.
+
+Rules 3 and 5 replaced Phase 4's stopgap, which kept one jar of every primary on
+the map at all times. That floor was deliberately more generous than the
+finished game — it made every color reachable without asking what anyone
+ordered — and with it gone the *order* dyes are picked up in starts to matter.
+The opening levels are untouched by any of this: their board is stocked with
+exactly what their one order needs (§7), so nothing on it can starve.
 
 ## 9. Scoring
 

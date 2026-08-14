@@ -11,9 +11,10 @@ your shop window — before their patience runs out.
 **Play it:** <https://williamchong.github.io/candy-snake/> (deployed from `main`).
 
 **Status:** playable end to end on desktop — opening levels, customers, lives,
-score, game over, restart. Mobile, the cheat sheet and persistence are still
-ahead; the [implementation plan](docs/implementation-plan.md) tracks which
-phase the work is on.
+score, a difficulty ramp that will eventually beat you, game over, restart.
+Mobile, the cheat sheet and persistence are still ahead; the
+[implementation plan](docs/implementation-plan.md) tracks which phase the work
+is on.
 
 ## Develop
 
