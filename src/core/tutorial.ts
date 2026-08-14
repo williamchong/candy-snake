@@ -19,7 +19,7 @@ import { RAW, type ColorMask, type GameState } from './types';
  */
 export interface TutorialLevel {
   readonly want: ColorMask;
-  /** The only dye jars the spawner stocks while this level is running. */
+  /** The only dye jars this level permits; `stocksDyes` decides when they go out. */
   readonly stock: readonly Primary[];
 }
 
@@ -75,12 +75,15 @@ export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Pri
  * §7's promise that none of the tutorial's furniture is removed mid-run. That
  * is why this is a separate question from `stockedPrimaries`: the permitted set
  * still only grows.
+ *
+ * Only an opening level withholds, so this takes a level rather than the
+ * endless game's `undefined` — the endless board is stocked by the pity spawner
+ * and never comes through here.
  */
 export const stocksDyes = (
-  level: TutorialLevel | undefined,
+  level: TutorialLevel,
   state: Pick<GameState, 'snake'>,
-): readonly Primary[] =>
-  level === undefined || state.snake.body.length > 0 ? stockedPrimaries(level) : [];
+): readonly Primary[] => (state.snake.body.length > 0 ? level.stock : []);
 
 /**
  * Whether the board should be carrying a sugar cube. The endless game always

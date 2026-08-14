@@ -100,13 +100,17 @@ const batchCells = (colors: ColorMask[]): Segment[] =>
  * nothing else on the board: the next move cuts it loose, and one more per
  * segment draws it in.
  */
-const layBatchAtBlock = (game: Game, colors: ColorMask[]): void => {
-  game.state.pickups = [];
+const standAtBlockWith = (game: Game, colors: ColorMask[]): void => {
   game.state.snake = {
     head: at(BENCH.x - 1, BENCH.y),
     dir: Dir.Right,
     body: batchCells(colors),
   };
+};
+
+const layBatchAtBlock = (game: Game, colors: ColorMask[]): void => {
+  game.state.pickups = [];
+  standAtBlockWith(game, colors);
 };
 
 /** Moves needed to cut a batch loose and draw every segment of it in. */
@@ -799,8 +803,9 @@ describe('Game opening levels', () => {
 
   /**
    * Pulls one cube into the strand, in the maker's path rather than wherever
-   * the seed dropped it. An opening level holds its jars back until there is
-   * something to dye (design §7), so this is what puts them on the floor.
+   * the seed dropped it — replacing whatever else was on the floor. An opening
+   * level holds its jars back until there is something to dye (design §7), so
+   * this is what puts them out.
    */
   const pullCube = (game: Game): void => {
     game.state.pickups = [createSugar(cellAheadOf(game))];
@@ -840,9 +845,7 @@ describe('Game opening levels', () => {
     const cubes = (): number =>
       game.state.pickups.filter((pickup) => pickup.kind === 'sugar').length;
 
-    // In the maker's path, rather than wherever the seed dropped it.
-    game.state.pickups = [createSugar(cellAheadOf(game))];
-    run(game, passThrough(game));
+    pullCube(game);
     expect(game.state.snake.body).toHaveLength(1);
 
     // A level is one candy, so the floor stays bare for as long as the maker
@@ -903,11 +906,7 @@ describe('Game opening levels', () => {
     // The third level's own candy, cut from the strand the jars were laid for
     // rather than from `layBatchAtBlock`'s bare board — the claim below is
     // about what survives the handover, so nothing may sweep the floor first.
-    game.state.snake = {
-      head: at(BENCH.x - 1, BENCH.y),
-      dir: Dir.Right,
-      body: batchCells([third?.want ?? RAW]),
-    };
+    standAtBlockWith(game, [third?.want ?? RAW]);
     run(game, chopThrough([third?.want ?? RAW]) + GAP_MOVES);
 
     expect(game.state.tutorialIndex).toBe(3);

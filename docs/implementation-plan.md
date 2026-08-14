@@ -118,10 +118,10 @@ Two of those three are met. The third — the batching bot outscoring the grinde
 — is **not**, and the balance record below sets out why it is a rules question
 rather than a tuning one, along with the three candidate rule changes. It is
 carried forward as an open finding rather than counted as done. The human
-playtest half of the first criterion has now had two sittings, and neither
-answered that half — nobody played long enough to die. They answered
+playtest half of the first criterion has now had three sittings, and none of
+them answered that half — nobody has played long enough to die. They answered
 other things instead, including the open finding arrived at from the far end —
-twice, by two different players, in two sittings. See the two records below.
+twice, by two different players, in two sittings. See the three records below.
 
 ### Where the balance landed
 
@@ -302,7 +302,9 @@ names the level and the exact wrong move rather than describing a general fog.
 
 It also falsifies something the docs asserted: design §7 claimed the level-2
 lesson was "taught by retry rather than by text". Retry was the mechanism, and
-four players in, it has not taught anybody. Two things were working against it.
+four players have now come through level 2 without it landing — this is the one
+who showed why, by taking the retry and spending it the same way. Two things
+were working against it.
 The board laid the cube and the jar **at the same time**, so the level offered
 two moves where its own "remove the options" rule says it offers one — and the
 wrong one is the louder, being a saturated color wearing a symbol against an

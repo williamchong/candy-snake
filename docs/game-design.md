@@ -358,12 +358,12 @@ well as *what*:
   the strand, so crossing the jar first is not a mistake the player is able to
   make either. A board holding a cube and a jar at once offers two moves and the
   wrong one is the *louder* one — the jar is a saturated color wearing a symbol
-  and the cube is off-white — which is how three playtesters came to drive
-  straight at the jar and stall there. With the jar withheld there is one thing
-  on the floor to take, and when it does arrive the strand is already carrying
-  something, so crossing it *visibly turns a segment*. That is the lesson
-  delivered as cause and effect rather than as a mistake to be inferred from a
-  splash.
+  and the cube is off-white — which is how a playtester came to drive straight
+  at the jar, over and over, and never take a cube at all. With the jar withheld
+  there is one thing on the floor to take, and when it does arrive the strand is
+  already carrying something, so crossing it *visibly turns a segment*. That is
+  the lesson delivered as cause and effect rather than as a mistake to be
+  inferred from a splash.
 
 Difficulty here is authored by removing options.
 
@@ -394,8 +394,8 @@ Difficulty here is authored by removing options.
   be soft-locked: a level's jar is not on the floor until there is a strand to
   dye, and a jar wasted on a bodiless strand respawns anyway, because the stock
   rule keeps it on the board. The level-2 lesson is not taught by retry — retry
-  was tried, and three playtesters drove at the jar again instead of learning
-  from it (see §7 above). It is taught by not offering the wrong move.
+  was tried, and a playtester met it by driving at the jar again rather than by
+  learning from it. It is taught by not offering the wrong move.
 - These three levels **are** the teaching, on their own: no captions, no
   toasts, no words anywhere on the screen. What the player is shown is a board
   holding exactly one useful move and a child holding up what they want, which

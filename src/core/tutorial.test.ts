@@ -128,23 +128,19 @@ describe('stocksSugar', () => {
 });
 
 describe('stocksDyes', () => {
-  const level = tutorialFor(42)[1];
+  const level = tutorialFor(42)[1]!;
 
   it('holds the level’s jar back while there is nothing to dye', () => {
     expect(stocksDyes(level, strand(0))).toEqual([]);
   });
 
   it('lays it once the first cube is on the strand', () => {
-    expect(stocksDyes(level, strand(1))).toEqual(level?.stock);
+    expect(stocksDyes(level, strand(1))).toEqual(level.stock);
   });
 
   it('does not wait on a batch already cut loose', () => {
     // The cut piece is the level's candy on its way through the block, not a
     // strand to dye — so this is the same empty-handed board as above.
     expect(stocksDyes(level, strand(0, 2))).toEqual([]);
-  });
-
-  it('never withholds a jar from the endless board', () => {
-    expect(stocksDyes(undefined, strand(0))).toEqual(PRIMARIES);
   });
 });

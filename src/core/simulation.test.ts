@@ -456,7 +456,7 @@ const TARGET_TICKS = 30_000;
  * measurement twice. Sixteen makes the reshuffle visible as noise instead of
  * reading as a curve that stopped biting.
  */
-const SWEEP = [1, 17, 404, 9_001, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
+const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
 
 /**
  * Where the balance stands *after* the ramp went in, measured rather than
@@ -491,17 +491,24 @@ const SWEEP = [1, 17, 404, 9_001, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
  */
 describe('the reference players, after the ramp went in', () => {
   /**
-   * One sweep per bot, shared between the tests below. `play` is a pure
+   * The runs behind the tests below, memoised per (bot, seed). `play` is a pure
    * function of (seed, ticks, goal) — the core takes all its randomness from
-   * the seeded rng (architecture §2) — so re-running a sweep can only produce
-   * what the last one did. Nothing here may step these games further.
+   * the seeded rng (architecture §2) — so re-running one can only produce what
+   * the last one did. Nothing here may step these games further.
+   *
+   * Per seed rather than per sweep, because the sweeps overlap: `SWEEP` opens
+   * with `SEEDS`, and the four would otherwise be played out twice.
    */
-  const sweeps = new Map<Goal, RunResult[]>();
-  const target = (goalOf: Goal): RunResult[] => {
-    const sweep =
-      sweeps.get(goalOf) ?? SEEDS.map((seed) => play(seed, TARGET_TICKS, goalOf));
-    sweeps.set(goalOf, sweep);
-    return sweep;
+  const runs = new Map<Goal, Map<number, RunResult>>();
+  const target = (goalOf: Goal, seeds: readonly number[] = SEEDS): RunResult[] => {
+    const bySeed = runs.get(goalOf) ?? new Map<number, RunResult>();
+    runs.set(goalOf, bySeed);
+
+    return seeds.map((seed) => {
+      const run = bySeed.get(seed) ?? play(seed, TARGET_TICKS, goalOf);
+      bySeed.set(seed, run);
+      return run;
+    });
   };
 
   it('ends a batching run inside the window the ramp is aimed at', () => {
@@ -510,15 +517,18 @@ describe('the reference players, after the ramp went in', () => {
     // of them still come through ten minutes alive, which is variance rather
     // than a curve that cannot bite. Measured 12/16 with level 2 holding its
     // jar back and 14/16 without — the same rate, re-rolled.
-    const swept = SWEEP.map((seed) => play(seed, TARGET_TICKS, batcherGoal));
+    const swept = target(batcherGoal, SWEEP);
     expect(
       swept.filter((run) => run.diedAtMs !== undefined).length,
     ).toBeGreaterThanOrEqual(10);
 
-    // When it does close one out, it closes it out late. Asked of the four,
-    // which are the seeds the ramp was tuned against.
-    for (const run of target(batcherGoal)) {
-      if (run.diedAtMs !== undefined) expect(run.diedAtMs).toBeGreaterThan(7 * 60_000);
+    // And when it closes one out, it closes it out late. Asked of the four the
+    // ramp was tuned against — and asked of at least one of them, so that a
+    // sweep where nobody died could not pass this by having nothing to check.
+    const tuned = target(batcherGoal).filter((run) => run.diedAtMs !== undefined);
+    expect(tuned.length).toBeGreaterThanOrEqual(1);
+    for (const run of tuned) {
+      expect(run.diedAtMs).toBeGreaterThan(7 * 60_000);
     }
   });
 
