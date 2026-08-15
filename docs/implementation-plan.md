@@ -7,7 +7,8 @@ Sizes are relative (S < M < L), not calendar promises.
 References: [game-design.md](./game-design.md), [architecture.md](./architecture.md).
 
 > **Status: Phase 7 is the current phase**; 0–6 are done and marked ✅ below,
-> with Phase 6's real-device pass called out there as outstanding.
+> with Phase 6's real-device pass called out there as outstanding — it has now
+> had its first report, which is not the same as having been run.
 > This plan is where phase status is tracked — anything else that mentions it
 > (the README) links here rather than restating it.
 
@@ -117,12 +118,14 @@ is ever primary-starved, and the batching bot outscores the grinder.
 
 Two of those three are met. The third — the batching bot outscoring the grinder
 — is **not**, and the balance record below sets out why it is a rules question
-rather than a tuning one, along with the three candidate rule changes. It is
-carried forward as an open finding rather than counted as done. The human
-playtest half of the first criterion has now had four sittings, and none of
-them answered that half — nobody has played long enough to die. They answered
-other things instead, including the open finding arrived at from the far end —
-twice, by two different players, in two sittings. See the four records below.
+rather than a tuning one, along with the three candidate rule changes it opened
+with — of which the sittings since have struck one, added three more, and hold a
+fourth pending a measurement. It is carried forward as an open finding rather
+than counted as done. The human playtest half of the first criterion has now had
+five sittings, and none of them answered that half — nobody has played long
+enough to die. They answered other things instead, including the open finding
+arrived at from the far end, three times, by three different players. See the
+five records below.
 
 ### Where the balance landed
 
@@ -405,6 +408,123 @@ language §7 allows itself.
   untouched, since it is about what the candy is *worth* and not how fast it is
   made.
 
+### What the fifth sitting proposed — six items against one test
+
+One player, the sixth. Unlike the four sittings before it, this one did not
+report confusion — it arrived with a list of six designs instead, which is why
+it adds nothing to the comprehension count Phase 7 keeps. It is the most useful
+sitting yet for the open finding and the easiest to get wrong: one of the six
+puts a new lever on the half of that finding the second sitting named, two more
+push at it from the side, and two fail the test this document already wrote for
+exactly this kind of proposal.
+
+- **"Nothing tells you a child is about to leave — make them flash."** —
+  **scheduled, and it is a legibility bug rather than a missing feature.** There
+  *is* a warning: `ui/customerView.ts` swaps the face at 40% of the bar, and
+  design §5 asks for the clock to show twice. So this is the wrong stage shown
+  the wrong way, which is a different job from adding one. Phase 7's juice list
+  already carried the urgency pulse; the rule it now has to satisfy is recorded
+  there rather than here.
+- **A low-patience, high-cost customer (技安).** — **rejected, by the test at
+  the end of the second sitting.** A child who demands one candy quickly and
+  takes an extra life for missing rewards the maker who takes whatever is
+  nearest — the grinder, which that same sitting confirmed is what people find
+  on their own. It taxes the long strand, and it worsens the *temporal* half of
+  the open finding at the moment that half is what we are trying to fix.
+  Half of it is also already built, and that is the trap rather than the
+  feature: `matchIndex` serves the most impatient first, so a low-patience child
+  would silently divert every matching candy away from the rest of the queue.
+  The character is worth keeping and the knobs want inverting — a memorable
+  child who wants a **secondary**, pays a premium, and waits **longer** than the
+  rest is a customer worth pulling a strand for. That version joins the
+  candidate list. The version proposed does not.
+- **A rush period (高峰期): many children at once, worth more.** — **on the
+  list, and the strongest new idea in the batch**, for a reason that is not
+  variety. The batching maker's problem is a fixed bundle of about four colors
+  against three or four places at the window; a rush deepens the window, which
+  gives the bundle more targets, and a rush that can be *seen coming* is an
+  invitation to build ahead of it. That is the first sitting's "more children at
+  the window" lever in the one shape that does not have to be paid for as a
+  permanently harder game. It fits `core/difficulty.ts` cleanly: a rush is one
+  more pure term over ramp position, with no rng in it, so determinism survives
+  and it is unit-tested like the rest of the table. Three things constrain it.
+  - **It cannot deepen the queue past four.** `ui/layout.ts` sizes the portrait
+    pitch as `(board.width - 60) / 4` with a comment naming four, landscape runs
+    a flat 84 px pitch inside a column of at most 300, and
+    `CustomerQueue.standingX` clamps nothing. A fifth child walks off the frame.
+    So the rush moves `arrivalIntervalMs` and nothing else, or it is a layout
+    job first.
+  - **A rush is only a peak if the trough is shallower**, which means the anchor
+    table moves — and every change to spawn timing re-rolls every free cell
+    drawn after it, as the third and fourth sittings both had to measure. It
+    rides the retune's sweep rather than paying for its own.
+  - **It has to be telegraphed without words** (design §11): children crowding
+    at the door, a bell. A drawn thing, not a caption.
+
+  On "and worth more points": the rush already pays more by volume, and
+  `core/scoring.ts` has three terms in it already. A flat per-serve bonus inside
+  the window if anything, never a fourth multiplier.
+- **A combo for serving several children in a row.** — **candidate one, now
+  asked for by three players in three sittings.** The scope is unchanged from
+  the first sitting's entry — a serve counter on `Severed`, the term in
+  `core/scoring.ts` — as is the second sitting's correction that the **meter**
+  may be the load-bearing half. It stays second in the order, for the reason the
+  second sitting gave: it pays for a batch nobody can currently afford to build.
+
+  The Overcooked half of the proposal — **serving in the order the children
+  arrived** — is **struck**, on two grounds. There is no verb for it: matching
+  is automatic (`deliverCandy` → `matchIndex`), design §5 states the
+  most-impatient rule with a reason and asserts an invariant on it, and design
+  §10 has no action button to hold a candy back with, which is the thing that
+  makes this game work one-handed. And it would pay out for nothing anyway: the
+  ramp moves `patienceMs` by a few seconds over minutes while every bar drains
+  in real time, so the most impatient child is always the one who has waited
+  longest. The bonus would fire on almost every serve and mean nothing.
+- **A longer strand moves faster.** — **held, and the target is right.** This is
+  the open finding reached from the chair again, and it aims at the half the
+  second sitting named — that a ladder costs more trip time than a customer's
+  patience affords. It is only the second lever anyone has aimed at that half
+  and the first that is not `patienceMs`, which is why it is held rather than
+  rejected. But the lever fights three things already written down.
+  - Design §7 gives the 8 cells/s cap a job: past the Rush row speed has capped
+    and the window is the only thing still tightening, which is what brings a
+    run to an end at all. Length-boosted speed punches through that.
+  - 125 ms is a floor rather than a preference. `GameScene`'s catch-up ceiling
+    is 100 ms, and under it one frame advances two grid moves with nothing
+    adjacent to slide between — the strand would teleport, which is the one
+    thing this board does not do.
+  - And it fails the harshening test *quietly*, which makes it the subtlest one
+    yet. A long strand is already harder to steer, having more of itself to
+    run into; making it faster as well compounds the difficulty exactly where
+    the player is most invested. That is a tax on batching wearing a reward's
+    clothes.
+
+  It also pulls against the item below: a faster strand is a shorter window for
+  the same gesture. The cheaper lever for the same target is already named —
+  `patienceMs` against what a ladder costs in trip time — and it is one number
+  in one table. **Retune and measure first.** If trip time is still binding
+  afterwards this comes back **bounded**: the ramp's `moveIntervalMs` is the
+  slow end, length pulls toward the existing 125 ms cap, and the cap stays
+  exactly where design §7 put it. Early on that is a real reward (200 ms down
+  toward 150); late on it offers nothing, which is the honest tension in it and
+  the thing a sweep would have to answer.
+- **Swipe steering lags the grid on a phone.** — **this is Phase 6's
+  outstanding real-device pass reporting in, and it goes first.** Recorded
+  there rather than here, since it is not a balance question.
+
+Two of the six tax a long strand more than a short one, which makes five such
+instincts across three sittings. Two of them push the other way, which is the
+first time a sitting has produced more than one. The test is earning its place,
+and it is still the first thing to check any difficulty proposal against.
+
+**The order of attack is unchanged in its first step and gains two entries.**
+Retune `patienceMs` and measure; build the combo *and* the rush against that
+same sweep; and only if trip time is still binding does the speed candidate come
+back, bounded. What has changed is that the first two things to actually do are
+no longer balance work at all — the swipe and the expiry warning are Phase 6 and
+Phase 7 items with playtest evidence behind them now, and both are cheaper than
+anything in this paragraph.
+
 ## Phase 6 — Mobile & responsive (L) ✅
 
 - Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold).
@@ -425,6 +545,11 @@ tests plus smoke runs at 960×640, 390×844 and 844×390. **The real-device pass
 is outstanding** — it cannot be run headless, and it is what the "comfortably"
 in the criterion actually rests on. Until a phone has been held, this phase is
 complete in code and unconfirmed in the hand.
+
+A phone has now been held once, and it reported one thing. That is not the pass
+— one player on one device is a data point, not a validation — but it landed on
+exactly the risk this phase was told to check early and checked late. See "What
+the first device report said", below.
 
 ### What the responsive pass settled
 
@@ -465,10 +590,57 @@ complete in code and unconfirmed in the hand.
   meant a toggle with nowhere to live. Whether it is wanted at all is a question
   for the real-device pass, and if the answer is yes it lands beside the setting
   that switches it.
-- **The swipe adapter needed no change.** `bindSwipe` divides pointer
-  coordinates by `scene.scale.displayScale` to get CSS pixels, which under
-  `RESIZE` is 1 — so the conversion degrades to a no-op and the thumb threshold
-  stays the same physical distance it always was.
+- **The swipe adapter needed no change *for the resize*.** `bindSwipe` divides
+  pointer coordinates by `scene.scale.displayScale` to get CSS pixels, which
+  under `RESIZE` is 1 — so the conversion degrades to a no-op and the thumb
+  threshold stays the same physical distance it always was. That is a claim
+  about scaling and it stands. It was read at the time as the adapter being
+  *finished*, which is a different claim and not one this pass tested: what the
+  threshold should be was never in question here, only that resizing did not
+  move it. The first device report says the threshold itself is too long.
+
+### What the first device report said — the swipe commits too late
+
+It came in on the fifth playtest sitting, alongside five balance proposals
+recorded under Phase 5.
+
+**The complaint.** A swipe is a gesture with travel in it and the strand moves a
+cell at a time regardless, so the turn lands a block past the one that was
+meant. That is a touch complaint rather than a steering complaint — a key press
+has no travel at all, which is why four sittings on a keyboard never raised it.
+
+**What is and is not the cause.** Three things could produce it and only one is
+likely.
+
+- `SWIPE_THRESHOLD_PX` is 20 CSS pixels. A thumb covers that in something like
+  50–100 ms; against the ramp's floor of 125 ms per cell, that is most of a cell
+  travelled before the turn is even *recognised*. This is the suspect.
+- Tick quantisation is already minimal and is not it: `advance` calls
+  `takeTurn` before it moves anything, so a buffered turn is spent at the top of
+  the move rather than waiting one out.
+- The view interpolates between cells (`moveProgress`), so a turn that landed on
+  time can still *look* late. This cannot be ruled out from a description and
+  wants watching on the device rather than reasoning about here.
+
+**What to try, in order.** Drop the threshold to 12–14 px — a tap jitters under
+five, so there is room, and it is one constant with unit tests already around
+it. Do **not** deepen the buffer: `MAX_QUEUED` is 2, and raising it makes the
+game feel worse rather than better, because the extra turns it would hold are
+ones the player has already stopped wanting. Then hold the phone again, which is
+the half of this that cannot be done from here.
+
+**It makes the D-pad question live for the first time.** This phase dropped the
+D-pad with a condition attached — whether it is wanted at all is for the
+real-device pass, and if the answer is yes it lands beside the setting that
+switches it — and Phase 7 is building that settings screen now, so the decision
+finally has somewhere to go. It is *not* made yet, and the order above is why: a
+threshold that is simply too long is a swipe problem with a swipe fix, and a
+D-pad added to cover for it would be the wrong answer permanently installed.
+
+**It also pulls against the fifth sitting's speed candidate** — a faster strand
+is a shorter window for the same gesture. Recorded in both places, because the
+two would be worked by different phases and neither should discover the other
+late.
 
 ## Phase 7 — Cheat sheet, hints & UX polish (M) ◀ current
 
@@ -480,6 +652,10 @@ complete in code and unconfirmed in the hand.
   they stock — design §11 — so no toasts, no captions, no seen-once flags. That
   is the position the note under "Done when" now puts on trial.)
 - Settings screen: sound, D-pad toggle, left-hand mode, high-contrast symbols.
+  The D-pad's *existence* is a live question again rather than a settled one —
+  the first device report (Phase 6) is the condition it was dropped under coming
+  due. The swipe threshold is tried first; the toggle is only built if that
+  leaves the gesture wanting.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
   serve confetti, patience-bar urgency pulse, and the stale-candy toss off the
   rack (design §5) — `candy-staled` reaches `GameScene` today and plays nothing,
@@ -487,6 +663,27 @@ complete in code and unconfirmed in the hand.
   for the player or against them. Now that the strand is drawn as one rope
   (design §2), stretching it along its travel axis as it is pulled belongs here
   too.
+- **The urgency pulse is the one juice item with a rule attached**, and it has a
+  playtest behind it now: the fifth sitting reported no warning at all before a
+  child walks out. There is one — `ui/customerView.ts` swaps the face to
+  `FaceWorried` at `IMPATIENT_AT`, 40% of the bar — so this is a legibility
+  failure of something already built rather than a missing feature, and it is
+  worth building against what is actually wrong with it.
+  - **The stage that is missing is a later one, on an absolute clock.** 40% is
+    the *mood* threshold and can stay fractional; the alarm cannot, because the
+    ramp takes patience from 35 s to 22 s and a fraction therefore shrinks the
+    warning exactly as the game speeds up. What the player is asking is whether
+    they can still get there, which is a question in seconds — so the critical
+    stage fires on remaining **ms**, at something like the last five.
+  - **Motion is the whole point.** A texture swap is invisible in peripheral
+    vision, and design §11 has the queue read in glances taken from steering.
+  - **Design §2's comfort constraint binds it**: soft and slow, an alpha or
+    scale breath rather than a hard high-contrast blink, and worth pulsing only
+    the child who is actually in trouble — four alarms at once is noise, not
+    urgency.
+  - **`patienceFraction` stays untouched.** The bar and the score bonus read it
+    together on purpose (design §9), so the alarm reads the clock beside it and
+    never changes what a serve pays.
 - Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted.
 
 **Done when:** a new player understands mixing without leaving the game, and
@@ -522,6 +719,14 @@ comprehension data points are now board-authoring bugs rather than evidence
 against design §11 — which is the case for re-asking the other three, not for
 declaring the position safe.
 
+**A sixth player, in the fifth sitting, adds nothing to this count** — and that
+is worth writing down rather than leaving as a silence, since every sitting so
+far has added to it. They understood the game well enough to propose six changes
+to it, so they are evidence neither for design §11 nor against it. The one thing
+they could not read was the patience clock, which is a juice item on this
+phase's own list and not a teaching one. The count stays at five players across
+four sittings, and the case for re-asking the other three stands unchanged.
+
 ## Phase 8 — Persistence, high scores & release (S)
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
@@ -556,7 +761,11 @@ declaring the position safe.
   fallback held in reserve (instant chop, staggered animation) is close to
   what shipped, minus the freeze.
 - **Swipe latency vs. grid ticks** — mid-drag threshold detection (arch §8);
-  validate on real devices early in Phase 6, not at the end.
+  validate on real devices early in Phase 6, not at the end. **This one fired.**
+  It was validated at the end rather than early, and the first device report
+  (Phase 6) says the 20 px threshold commits the turn a block late. The
+  mitigation was the right one and was simply not exercised in time; the fix is
+  identified and is one constant. Open.
 - **Color confusion for colorblind players** — symbols are in from Phase 2,
   not bolted on later.
 - **Balance is opinion** — seeded simulations make tuning comparable
