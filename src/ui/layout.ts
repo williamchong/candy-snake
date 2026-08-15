@@ -74,6 +74,26 @@ export interface HudFrame {
     readonly pitch: number;
     readonly offstage: number;
   };
+  /**
+   * The cheat sheet: where its tab sits, the box the wheel fills when it is
+   * open, and how big one jar in that wheel is drawn. The tab is one fixed size
+   * at every viewport — design §10's 44 px touch floor is geometry, so it is
+   * settled here rather than left to the widget — while `radius` and `node`
+   * shrink together the way the rack's `pitch` and `slot` do.
+   *
+   * `panel.at` is the box's centre. It is *not* the circle the jars stand on —
+   * that sits a little lower, for the reason `wheelSeats` gives.
+   */
+  readonly sheet: {
+    readonly tab: Vec2;
+    readonly panel: {
+      readonly at: Vec2;
+      readonly width: number;
+      readonly height: number;
+    };
+    readonly radius: number;
+    readonly node: number;
+  };
 }
 
 export interface Frame {
@@ -167,6 +187,77 @@ const shelfRun = (span: number): { pitch: number; slot: number } => {
 const OFFSTAGE_MARGIN = 60;
 
 /**
+ * The cheat-sheet tab, at design §10's touch floor. One size at every viewport:
+ * a thumb is the same width on a phone as the finger on a trackpad, so this is
+ * the one measurement in the file that does not flex with the screen. It is the
+ * first hit-testable object in the game, which is what makes the floor binding
+ * here rather than theoretical.
+ */
+export const TAB_SIZE = 44;
+
+/** A jar in the wheel is a jar on the board, at the size it is authored at. */
+const WHEEL_NODE = CELL_SIZE;
+/** Below this a node is too small to read a symbol off — the rack's own floor. */
+const MIN_WHEEL_NODE = 18;
+/**
+ * How far the jars sit from the wheel's centre, in nodes. Tight on purpose: the
+ * whole panel has to clear the board inside a phone's header band, and every
+ * tenth here costs about three pixels of panel in each direction.
+ *
+ * It is also what leaves no room at the centre. Brown — the over-mix — belongs
+ * at the middle, equidistant from all three jars, but it would collide with the
+ * pair results below about 2.2, and a wheel that wide no longer fits the
+ * smallest phone upright. Design §4 asks for six nodes, so six is what this
+ * spread is sized for.
+ */
+const WHEEL_SPREAD = 1.45;
+/** Breathing room inside the panel's own frame. */
+const SHEET_PAD = 8;
+
+/**
+ * The wheel is a function of one number. Three jars sit on a circle at
+ * −90°/30°/150°, and each pair's candy sits at the midpoint of the two jars
+ * that make it — which on an equilateral triangle is exactly half the radius
+ * out from the centre. So the triangle spans `√3·radius` across and
+ * `1.5·radius` down, and the panel is that plus a node of overhang and the pad.
+ */
+const TRIANGLE_W = Math.sqrt(3);
+const TRIANGLE_H = 1.5;
+const WHEEL_W = TRIANGLE_W * WHEEL_SPREAD + 1;
+const WHEEL_H = TRIANGLE_H * WHEEL_SPREAD + 1;
+
+interface Wheel {
+  readonly node: number;
+  readonly radius: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Sizes the wheel to the space it has been given, the way `shelfRun` sizes the
+ * rack: the node and the radius shrink together rather than the panel running
+ * off the screen. The floor is a floor and not a target — a wheel at
+ * `MIN_WHEEL_NODE` is what the smallest phone upright gets, and nothing else.
+ */
+const wheelRun = (spanW: number, spanH: number): Wheel => {
+  const node = clamp(
+    Math.floor(
+      Math.min((spanW - 2 * SHEET_PAD) / WHEEL_W, (spanH - 2 * SHEET_PAD) / WHEEL_H),
+    ),
+    MIN_WHEEL_NODE,
+    WHEEL_NODE,
+  );
+  const radius = Math.round(node * WHEEL_SPREAD);
+
+  return {
+    node,
+    radius,
+    width: Math.round(TRIANGLE_W * radius) + node + 2 * SHEET_PAD,
+    height: Math.round(TRIANGLE_H * radius) + node + 2 * SHEET_PAD,
+  };
+};
+
+/**
  * The largest whole-pixel cell that fits the rectangle the board has been left,
  * capped at the authored size. Whole pixels rather than a fractional best fit
  * because the cell is what every position on the board is a multiple of.
@@ -229,6 +320,19 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   const footY = board.y + board.height - QUEUE_FOOT;
   const shelf = shelfRun(footY - CHILD_HEADROOM - shelfTop);
 
+  // The sheet takes the corner of the frame furthest from the kitchen, and the
+  // band above the children's heads that the rack has already had to clear.
+  // Its span is measured from the rack's far edge rather than from the board,
+  // so clearing the rack and clearing the board are both structural — a wider
+  // window moves the rack and the panel follows it.
+  const shelfX = columnX + 28;
+  const sheetRight = insets.left + availW - GUTTER;
+  const sheetFloor = footY - CHILD_HEADROOM;
+  const wheel = wheelRun(
+    sheetRight - (shelfX + shelf.slot / 2) - GUTTER,
+    sheetFloor - shelfTop,
+  );
+
   return {
     orientation: 'landscape',
     cell,
@@ -236,11 +340,27 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
     hud: {
       score: { x: columnX, y: insets.top + 40 },
       lives: { at: { x: columnX + 8, y: livesY }, pitch: LIVES_PITCH },
-      shelf: { at: { x: columnX + 28, y: shelfTop }, ...shelf, axis: 'column' },
+      shelf: { at: { x: shelfX, y: shelfTop }, ...shelf, axis: 'column' },
       queue: {
         front: { x: columnX + 42, y: footY },
         pitch: QUEUE_PITCH,
         offstage: view.width + OFFSTAGE_MARGIN,
+      },
+      sheet: {
+        tab: {
+          x: Math.round(sheetRight - TAB_SIZE / 2),
+          y: Math.round(insets.top + availH - GUTTER - TAB_SIZE / 2),
+        },
+        panel: {
+          at: {
+            x: Math.round(sheetRight - wheel.width / 2),
+            y: Math.round(sheetFloor - wheel.height / 2),
+          },
+          width: wheel.width,
+          height: wheel.height,
+        },
+        radius: wheel.radius,
+        node: wheel.node,
       },
     },
   };
@@ -276,6 +396,23 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
   // has to fit in is that width.
   const shelf = shelfRun(board.width);
 
+  // The sheet takes the band above the board — the only slack upright, and the
+  // top edge design §4 asks for. It hangs from the board's top edge rather than
+  // sitting under the frame's, so a wheel too tall for the band overflows
+  // upward, off the screen where a test catches it, rather than down onto the
+  // kitchen where nothing would. The tab sits beside the panel and not over it:
+  // centred, a 44 px tab would cover the top jar on the smallest phone.
+  const wheel = wheelRun(availW - 2 * GUTTER, board.y - insets.top - GUTTER);
+  // Hung off the board's top edge, but never at the cost of its own head: on the
+  // smallest phone the wheel at its floor is within a few pixels of the whole
+  // band, so the gutter above the kitchen is what gives way rather than the
+  // panel climbing off the top of the screen.
+  const sheetBottom = clamp(board.y - GUTTER / 2, insets.top + wheel.height, board.y);
+  const sheetAt = {
+    x: Math.round(board.x + board.width / 2),
+    y: Math.round(sheetBottom - wheel.height / 2),
+  };
+
   return {
     orientation: 'portrait',
     cell,
@@ -307,6 +444,15 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
         pitch: -queuePitch,
         offstage: -OFFSTAGE_MARGIN,
       },
+      sheet: {
+        tab: {
+          x: Math.round(sheetAt.x - wheel.width / 2 - GUTTER / 4 - TAB_SIZE / 2),
+          y: Math.round(insets.top + TAB_SIZE / 2),
+        },
+        panel: { at: sheetAt, width: wheel.width, height: wheel.height },
+        radius: wheel.radius,
+        node: wheel.node,
+      },
     },
   };
 };
@@ -317,6 +463,91 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
  */
 export const layout = (view: Viewport, insets: Insets = NO_INSETS): Frame =>
   view.width >= view.height ? landscapeFrame(view, insets) : portraitFrame(view, insets);
+
+/**
+ * The wheel's seating chart, as indices into `PRIMARIES`: each pair of jars,
+ * in the order their blended result is seated by `wheelSeats`. The topology
+ * lives here and the colour lives in `core/colors.ts`; the widget zips the two,
+ * so which candy is drawn where cannot drift from which jars make it.
+ */
+export const WHEEL_PAIRS = [
+  [0, 1],
+  [0, 2],
+  [1, 2],
+] as const;
+
+/** −90°/30°/150°: one jar at the top, two along the bottom. */
+const JAR_ANGLES = [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6] as const;
+
+const seatAt = (centre: Vec2, radius: number, angle: number): Vec2 => ({
+  x: Math.round(centre.x + radius * Math.cos(angle)),
+  y: Math.round(centre.y + radius * Math.sin(angle)),
+});
+
+const midpoint = (a: Vec2, b: Vec2): Vec2 => ({
+  x: Math.round((a.x + b.x) / 2),
+  y: Math.round((a.y + b.y) / 2),
+});
+
+/** A blended candy's seat, and the two jars the wheel draws a spoke from. */
+export interface WheelResult {
+  readonly at: Vec2;
+  readonly from: Vec2;
+  readonly to: Vec2;
+}
+
+export interface WheelSeats {
+  readonly jars: readonly Vec2[];
+  readonly results: readonly WheelResult[];
+}
+
+/**
+ * Where each of the wheel's six nodes sits: the three jars, and the three
+ * candies they blend into, each at the midpoint of the two jars that make it.
+ * Drawn between them rather than beside them because that is the whole claim
+ * the picture makes — this one and this one give you that one.
+ *
+ * A result carries the two jars it came from rather than an index back into
+ * them, so the widget draws its spokes from what it was handed and never has
+ * to know the seating order to find its own endpoints.
+ */
+export const wheelSeats = (sheet: HudFrame['sheet']): WheelSeats => {
+  // The circle's centre is not the panel's. A triangle standing on two feet
+  // reaches a full radius up and only half a radius down, so its box is
+  // lopsided about the circle it is drawn on — and it is the *box* that has to
+  // sit square in the panel. Dropping the circle a quarter radius is what
+  // centres the picture rather than the geometry it was built from.
+  const centre = { x: sheet.panel.at.x, y: sheet.panel.at.y + sheet.radius / 4 };
+  const jars = JAR_ANGLES.map((angle) => seatAt(centre, sheet.radius, angle)) as [
+    Vec2,
+    Vec2,
+    Vec2,
+  ];
+
+  // Seated off the same table the colours are mixed from, rather than off a
+  // second copy of it written out here: spelling the three pairs again is how
+  // the wheel comes to draw orange where green belongs, with every test still
+  // green because each node would still be inside the panel.
+  return {
+    jars,
+    results: WHEEL_PAIRS.map(([left, right]) => ({
+      at: midpoint(jars[left], jars[right]),
+      from: jars[left],
+      to: jars[right],
+    })),
+  };
+};
+
+/**
+ * Whether a pointer landed on the cheat-sheet tab. GameScene's swipe listens
+ * scene-wide and cannot see UIScene's objects, so it asks the layout instead —
+ * see the dead zone in `input/swipe.ts`.
+ */
+export const hitsTab = (frame: Frame, x: number, y: number): boolean => {
+  const { tab } = frame.hud.sheet;
+
+  return Math.abs(x - tab.x) <= TAB_SIZE / 2 && Math.abs(y - tab.y) <= TAB_SIZE / 2;
+};
 
 /**
  * The middle of what the player can actually see — what a full-screen message

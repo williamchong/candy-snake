@@ -2,8 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { COLS, ROWS } from '../core/board';
 import { SHELF_SLOTS } from '../core/shelf';
+import type { Vec2 } from '../core/types';
 import { CELL_SIZE } from '../render/textures';
-import { layout, type Frame, type Viewport } from './layout';
+import {
+  hitsTab,
+  layout,
+  TAB_SIZE,
+  wheelSeats,
+  WHEEL_PAIRS,
+  type Frame,
+  type Viewport,
+} from './layout';
 
 /** The desktop frame the game shipped at before it had to be responsive. */
 const DESKTOP: Viewport = { width: 960, height: 640 };
@@ -25,6 +34,46 @@ const shelfEnd = (frame: Frame): number => {
   const start = axis === 'column' ? at.y : at.x;
   return start + (SHELF_SLOTS - 1) * pitch + slot / 2;
 };
+
+interface Rect {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+const around = (centre: Vec2, width: number, height: number): Rect => ({
+  left: centre.x - width / 2,
+  right: centre.x + width / 2,
+  top: centre.y - height / 2,
+  bottom: centre.y + height / 2,
+});
+
+/** The box the cheat sheet fills when it is open. */
+const sheetRect = (frame: Frame): Rect => {
+  const { panel } = frame.hud.sheet;
+  return around(panel.at, panel.width, panel.height);
+};
+
+/** The tab's touch target, which is the tab whatever the tab is drawn as. */
+const tabRect = (frame: Frame): Rect => around(frame.hud.sheet.tab, TAB_SIZE, TAB_SIZE);
+
+const boardRect = (frame: Frame): Rect => ({
+  left: frame.board.x,
+  right: frame.board.x + frame.board.width,
+  top: frame.board.y,
+  bottom: frame.board.y + frame.board.height,
+});
+
+/** Touching edges is not overlapping — the gutter is allowed to be nothing. */
+const overlaps = (a: Rect, b: Rect): boolean =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+const onScreen = (rect: Rect, view: Viewport): boolean =>
+  rect.left >= 0 &&
+  rect.top >= 0 &&
+  rect.right <= view.width &&
+  rect.bottom <= view.height;
 
 describe('layout', () => {
   it('keeps the desktop frame drawing the board at its authored size', () => {
@@ -159,6 +208,150 @@ describe('layout', () => {
     expect(hud.queue.front.x).toBeLessThan(view.width);
   });
 
+  it('hangs the cheat sheet off the far corner in landscape', () => {
+    const frame = layout(DESKTOP);
+    const { sheet } = frame.hud;
+
+    // Tab in the bottom corner of the frame, on the serving side — the far
+    // side from the kitchen, and the corner design §4 asks for on desktop.
+    expect(sheet.tab.x).toBeGreaterThan(frame.board.x + frame.board.width);
+    expect(sheet.tab.y).toBeGreaterThan(DESKTOP.height - TAB_SIZE - 2 * 16);
+    // Panel and tab hang off the same edge, so the sheet reads as one column
+    // against the serving wall rather than two unrelated things.
+    expect(sheetRect(frame).right).toBe(tabRect(frame).right);
+  });
+
+  it('puts the cheat-sheet tab on the top edge in portrait', () => {
+    const view = { width: 390, height: 844 };
+    const frame = layout(view);
+
+    expect(frame.orientation).toBe('portrait');
+    expect(frame.hud.sheet.tab.y).toBeLessThan(frame.board.y);
+    expect(tabRect(frame).top).toBeGreaterThanOrEqual(0);
+    // The drawer opens above the kitchen, and the tab sits beside it rather
+    // than over it — centred, a 44px tab would cover the topmost jar.
+    expect(sheetRect(frame).bottom).toBeLessThanOrEqual(frame.board.y);
+    expect(overlaps(tabRect(frame), sheetRect(frame))).toBe(false);
+  });
+
+  it('shrinks the wheel to fit a small phone', () => {
+    // The same bargain the rack makes: the node and the radius come down
+    // together rather than the panel running off the screen.
+    const small = layout({ width: 320, height: 568 }).hud.sheet;
+    const roomy = layout({ width: 768, height: 1024 }).hud.sheet;
+
+    expect(small.node).toBeLessThan(roomy.node);
+    expect(small.radius).toBeLessThan(roomy.radius);
+    expect(small.panel.height).toBeLessThan(roomy.panel.height);
+  });
+
+  it.each(VIEWPORTS)(
+    'never covers the kitchen with the cheat sheet on %s',
+    (_name, view) => {
+      // Design §4's one non-negotiable: the sheet is allowed to veil the HUD,
+      // and never the grid the player is steering on.
+      const frame = layout(view);
+
+      expect(overlaps(sheetRect(frame), boardRect(frame))).toBe(false);
+      expect(overlaps(tabRect(frame), boardRect(frame))).toBe(false);
+    },
+  );
+
+  it.each(VIEWPORTS)('keeps the cheat sheet on screen on %s', (_name, view) => {
+    const frame = layout(view);
+
+    expect(onScreen(sheetRect(frame), view)).toBe(true);
+    expect(onScreen(tabRect(frame), view)).toBe(true);
+  });
+
+  it.each(VIEWPORTS)('keeps the wheel inside its own panel on %s', (_name, view) => {
+    // The panel's size is a formula over the node, and a formula is exactly the
+    // kind of thing that goes quietly wrong when a constant beside it moves.
+    const frame = layout(view);
+    const { node } = frame.hud.sheet;
+    const panel = sheetRect(frame);
+    const wheel = wheelSeats(frame.hud.sheet);
+    const seats = [...wheel.jars, ...wheel.results.map((result) => result.at)];
+
+    expect(wheel.jars).toHaveLength(3);
+    expect(wheel.results).toHaveLength(WHEEL_PAIRS.length);
+    for (const seat of seats) {
+      const box = around(seat, node, node);
+
+      expect(box.left).toBeGreaterThanOrEqual(panel.left);
+      expect(box.right).toBeLessThanOrEqual(panel.right);
+      expect(box.top).toBeGreaterThanOrEqual(panel.top);
+      expect(box.bottom).toBeLessThanOrEqual(panel.bottom);
+    }
+  });
+
+  it('seats each candy between the two jars that actually make it', () => {
+    // The claim the whole picture makes. `core/colors.ts` blends the pair that
+    // `WHEEL_PAIRS` names, so if a result were seated between any other two
+    // jars the wheel would quietly teach the wrong recipe — and every other
+    // assertion here would still pass, because it would still be inside the
+    // panel.
+    const wheel = wheelSeats(layout(DESKTOP).hud.sheet);
+
+    wheel.results.forEach((result, index) => {
+      const [left, right] = WHEEL_PAIRS[index] ?? [0, 0];
+
+      expect(result.from).toEqual(wheel.jars[left]);
+      expect(result.to).toEqual(wheel.jars[right]);
+      expect(result.at.x).toBe(Math.round((result.from.x + result.to.x) / 2));
+      expect(result.at.y).toBe(Math.round((result.from.y + result.to.y) / 2));
+    });
+  });
+
+  it.each(VIEWPORTS)('knows what landed on the cheat-sheet tab on %s', (_name, view) => {
+    // What the swipe's dead zone asks, so that pressing the tab opens the
+    // drawer without also steering the strand. A pointer just outside has to
+    // steer as normal, or the HUD would be eating gestures meant for the game.
+    const frame = layout(view);
+    const { tab } = frame.hud.sheet;
+
+    expect(hitsTab(frame, tab.x, tab.y)).toBe(true);
+    expect(hitsTab(frame, tab.x - TAB_SIZE / 2, tab.y)).toBe(true);
+    expect(hitsTab(frame, tab.x - TAB_SIZE / 2 - 1, tab.y)).toBe(false);
+    expect(hitsTab(frame, tab.x, tab.y + TAB_SIZE / 2 + 1)).toBe(false);
+    // The middle of the kitchen is never the tab, whatever the viewport.
+    expect(hitsTab(frame, frame.board.x + frame.board.width / 2, frame.board.y)).toBe(
+      false,
+    );
+  });
+
+  it.each(VIEWPORTS)('keeps the cheat-sheet tab a thumb wide on %s', (_name, view) => {
+    // Asserting the constant against itself would prove nothing. What can
+    // actually go wrong is a 44px target hanging off the edge of a small
+    // phone, leaving less than a thumb of it to press (design §10).
+    const tab = tabRect(layout(view));
+
+    expect(tab.right - tab.left).toBeGreaterThanOrEqual(44);
+    expect(tab.bottom - tab.top).toBeGreaterThanOrEqual(44);
+    expect(onScreen(tab, view)).toBe(true);
+  });
+
+  it.each(VIEWPORTS)(
+    'keeps the cheat sheet clear of the rack and the queue on %s',
+    (_n, view) => {
+      const frame = layout(view);
+      const panel = sheetRect(frame);
+
+      if (frame.orientation === 'landscape') {
+        // The column is the rack's, top to bottom; the sheet takes what is left
+        // beyond it and stays above the tallest child's head.
+        expect(panel.left).toBeGreaterThanOrEqual(
+          frame.hud.shelf.at.x + frame.hud.shelf.slot / 2,
+        );
+        expect(panel.bottom).toBeLessThanOrEqual(frame.hud.queue.front.y);
+        return;
+      }
+      // Upright the sheet is above the board and the strip is below it, so the
+      // only neighbour it can collide with is the row of hearts.
+      expect(panel.right).toBeLessThanOrEqual(frame.hud.lives.at.x);
+    },
+  );
+
   it('takes the safe area out of the frame before laying anything out', () => {
     const view = { width: 390, height: 844 };
     const notch = { top: 59, right: 0, bottom: 34, left: 0 };
@@ -171,6 +364,9 @@ describe('layout', () => {
     // indicator pushes the whole queue up rather than sitting under it.
     expect(inset.hud.queue.front.y).toBeLessThan(bare.hud.queue.front.y);
     expect(inset.hud.queue.front.y).toBeLessThanOrEqual(view.height - notch.bottom);
+    // A top-edge control's whole failure mode: the cheat-sheet tab sitting
+    // under the notch, where it can be seen and not pressed.
+    expect(inset.hud.sheet.tab.y - TAB_SIZE / 2).toBeGreaterThanOrEqual(notch.top);
   });
 
   it('holds a floor under the cell size on a viewport too small to fit one', () => {

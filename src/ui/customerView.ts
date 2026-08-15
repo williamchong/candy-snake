@@ -9,6 +9,7 @@ import {
   makeDrawn,
   makeSprite,
   paint,
+  PANEL_FILL,
   place,
   show,
   type Drawn,
@@ -50,13 +51,8 @@ const HEIGHT = TEXTURE_SIZE * SCALE;
 
 /** A customer, in ink diluted toward the chrome: shop, not candy (design §4). */
 const SKIN_TINT = 0xa08fb4;
-/**
- * The bubble: a step *lighter* than the page, where the rest of the chrome is
- * darker than it. It is the one panel a candy has to read against, and raw
- * sugar is nearly white — on a darker ground the palest candy would be the only
- * one that had to be hunted for.
- */
-const BUBBLE_TINT = 0xe7dcf0;
+/** The bubble is a panel like any other, and reads against the same ground. */
+const BUBBLE_TINT = PANEL_FILL;
 
 /** Rows above the standing line, in screen pixels. */
 const BODY_Y = -HEIGHT / 2;

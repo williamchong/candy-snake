@@ -31,6 +31,15 @@ export const BORDER = 0xc9b4dd;
 export const CHROME_WIDTH = 2;
 
 /**
+ * The ground any panel lays over the page — a child's speech bubble, the cheat
+ * sheet's drawer. A shade lighter than the floor rather than darker than it: it
+ * is what a candy has to read against, and raw sugar is nearly white, so on a
+ * darker ground the palest candy would be the only one that had to be hunted
+ * for.
+ */
+export const PANEL_FILL = 0xe7dcf0;
+
+/**
  * The HUD's layers, named for the same reason the board's are: so a widget
  * cannot end up above its own frame by accident. The board keeps its own,
  * deeper table — the two scenes never share a display list.
@@ -48,6 +57,22 @@ export const HudDepth = {
    */
   LeavingIcon: 3,
   LeavingGlyph: 4,
+  /**
+   * The cheat sheet, which is an overlay rather than another widget beside the
+   * rest: it veils whatever HUD it opens over, and is meant to (design §4 —
+   * semi-transparent, and never over the kitchen). So it sits above the lot.
+   */
+  SheetPanel: 5,
+  SheetIcon: 6,
+  SheetGlyph: 7,
+  /**
+   * The tab reads as sitting on the drawer it opens, so it is drawn above it.
+   * Two layers because the tab is a frame with a jar inside it, and a frame
+   * that shares its icon's depth is left to display-list insertion order to
+   * separate — the accident this table exists to prevent.
+   */
+  SheetTab: 8,
+  SheetTabIcon: 9,
 } as const;
 
 export interface Drawn {
@@ -123,6 +148,20 @@ export const place = (entry: Drawn, x: number, y: number): void => {
 export const show = (entry: Drawn, visible: boolean): void => {
   entry.image.setVisible(visible);
   entry.glyph?.setVisible(visible);
+};
+
+/**
+ * Draws a pair at a fraction of its authored size, for the HUD widgets that
+ * have to shrink to the space the layout gave them.
+ *
+ * The two halves take different numbers, which is the reason this is here
+ * rather than at each call site: the sprite is drawn at `PIXEL_SCALE` because
+ * it is baked at half its display size, and the glyph at 1 because it is baked
+ * at exactly its own. That asymmetry belongs to this module, not to the widgets.
+ */
+export const scaleDrawn = (entry: Drawn, ratio: number): void => {
+  entry.image.setScale(PIXEL_SCALE * ratio);
+  entry.glyph?.setScale(GLYPH_SCALE * ratio);
 };
 
 /** Colorless items keep whatever tint they were built with. */

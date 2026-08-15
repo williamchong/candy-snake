@@ -9,10 +9,11 @@ import {
   makeDrawn,
   paint,
   place,
+  scaleDrawn,
   show,
   type Drawn,
 } from '../render/drawn';
-import { PIXEL_SCALE, TextureKey } from '../render/textures';
+import { TextureKey } from '../render/textures';
 import type { Frame } from './layout';
 
 /**
@@ -69,8 +70,7 @@ export class ShelfStrip {
       const y = axis === 'column' ? at.y + step : at.y;
 
       box.setPosition(x, y).setSize(slot, slot);
-      candy.image.setScale(PIXEL_SCALE * ratio);
-      candy.glyph?.setScale(ratio);
+      scaleDrawn(candy, ratio);
       place(candy, x, y);
     });
   }

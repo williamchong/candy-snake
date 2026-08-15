@@ -3,8 +3,10 @@ import Phaser from 'phaser';
 import { RED } from '../core/colors';
 import { STARTING_LIVES, type Game } from '../core/game';
 import type { GameEvent } from '../core/types';
+import { bindHotkey, HotKey } from '../input/keyboard';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { glyphTextureKey } from '../render/textures';
+import { CheatSheet } from '../ui/cheatSheet';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
 import { onFrame } from '../ui/responsive';
@@ -38,6 +40,7 @@ export class UIScene extends Phaser.Scene {
   private lives: Phaser.GameObjects.Image[] = [];
   private queue!: CustomerQueue;
   private shelf!: ShelfStrip;
+  private sheet!: CheatSheet;
   /**
    * Hearts last drawn. Reset in `create`, not at the field: Phaser reuses the
    * scene instance between runs, so a value carried over from the last run
@@ -67,6 +70,14 @@ export class UIScene extends Phaser.Scene {
 
     this.shelf = new ShelfStrip(this);
     this.queue = new CustomerQueue(this);
+    // Built fresh here rather than held at the field, for the same reason the
+    // hearts are reset above: the scene instance outlives the run. Whether the
+    // player wants the sheet is remembered by `cheatSheet.ts` itself, which is
+    // what survives instead.
+    this.sheet = new CheatSheet(this);
+    bindHotkey(this, HotKey.CheatSheet, () => {
+      this.sheet.toggle();
+    });
 
     // Everything above is built at the origin and put somewhere by the layout
     // pass, which runs once here and again whenever the device changes shape.
@@ -84,6 +95,7 @@ export class UIScene extends Phaser.Scene {
 
       this.shelf.applyFrame(frame);
       this.queue.applyFrame(frame);
+      this.sheet.applyFrame(frame);
     });
   }
 
@@ -101,6 +113,7 @@ export class UIScene extends Phaser.Scene {
     // Real elapsed time, not the core's fixed slice: the children walk on the
     // display's clock, the way every other tween in the HUD does.
     this.queue.render(state.customers, delta);
+    this.sheet.render(delta);
 
     if (state.lives !== this.shownLives) {
       this.shownLives = state.lives;
@@ -128,5 +141,15 @@ export class UIScene extends Phaser.Scene {
         this.queue.depart(event.customer.id, Mood.Walkout);
         return;
     }
+  }
+
+  /**
+   * A turn the player asked for and the queue accepted. GameScene's second
+   * one-way channel into the HUD, and the only thing here that hangs off input
+   * rather than off state: the cheat sheet takes itself down once the player is
+   * playing, which is a fact about the player and not about the run.
+   */
+  steered(): void {
+    this.sheet.steered();
   }
 }

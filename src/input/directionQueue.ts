@@ -13,9 +13,18 @@ export const MAX_QUEUED = 2;
 export class DirectionQueue implements TurnSource {
   private readonly queued: Dir[] = [];
   private committed: Dir;
+  /**
+   * Told about turns that landed, and not about ones this queue refused. Both
+   * adapters converge here, so it is the one place that can say "the player is
+   * steering" without either of them knowing the other exists — which is what
+   * lets the HUD's cheat sheet get out of the way (design §4) whichever way
+   * the player is playing.
+   */
+  private readonly onAccepted: (() => void) | undefined;
 
-  constructor(initial: Dir) {
+  constructor(initial: Dir, onAccepted?: () => void) {
     this.committed = initial;
+    this.onAccepted = onAccepted;
   }
 
   /** Returns false when the turn was rejected (full, reversal, or a no-op). */
@@ -26,6 +35,7 @@ export class DirectionQueue implements TurnSource {
     if (dir === previous || dir === OPPOSITE[previous]) return false;
 
     this.queued.push(dir);
+    this.onAccepted?.();
     return true;
   }
 

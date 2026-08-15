@@ -78,7 +78,7 @@ candy-snake/
     │   └── GameOverScene.ts
     ├── input/
     │   ├── anyInput.ts        # "press any key" for the menu / game-over screens
-    │   ├── keyboard.ts        # arrows/WASD → DirectionQueue
+    │   ├── keyboard.ts        # arrows/WASD → DirectionQueue; hotkeys
     │   ├── touch.ts           # swipe detector (+ optional virtual d-pad)
     │   └── directionQueue.ts  # 2-deep buffer, 180° reversal rejection
     ├── render/
@@ -92,7 +92,7 @@ candy-snake/
     │   ├── customerQueue.ts   # the line at the window, keyed by customer id
     │   ├── shelfStrip.ts      # the six candy slots, level with the bench
     │   ├── text.ts            # one answer to "what does screen text look like"
-    │   ├── cheatSheet.ts      # collapsible mixing strip
+    │   ├── cheatSheet.ts      # the mixing wheel, and when it shows itself
     │   └── layout.ts          # responsive anchoring (portrait/landscape)
     └── persist/
         └── storage.ts         # typed localStorage wrapper (scores, settings)

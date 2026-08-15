@@ -6,6 +6,7 @@ import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
 import { bindSwipe } from '../input/swipe';
 import { BoardView } from '../render/boardView';
+import { hitsTab, type Frame } from '../ui/layout';
 import { onFrame } from '../ui/responsive';
 import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
@@ -31,6 +32,12 @@ export class GameScene extends Phaser.Scene {
   private turns!: DirectionQueue;
   private view!: BoardView;
   private accumulatorMs = 0;
+  /**
+   * The last layout, kept only so the swipe knows where the HUD's tab is.
+   * Assigned before `create` returns — `onFrame` runs its callback the moment
+   * it subscribes — and no pointer can arrive before then.
+   */
+  private frame!: Frame;
 
   constructor() {
     super(SceneKey.Game);
@@ -40,19 +47,27 @@ export class GameScene extends Phaser.Scene {
     // The core is deterministic per seed; the scene picks a fresh one so
     // sugar does not land in the same places on every reload.
     this.core = new Game({ ...DEFAULT_CONFIG, seed: Date.now() });
-    this.turns = new DirectionQueue(this.core.state.snake.dir);
+    this.turns = new DirectionQueue(this.core.state.snake.dir, () =>
+      this.hud()?.steered(),
+    );
     this.view = new BoardView(this);
     this.accumulatorMs = 0;
 
     // Both adapters normalize into the same queue, so nothing downstream of
     // here knows which one the player is using (architecture §8).
     bindKeyboard(this, this.turns);
-    bindSwipe(this, this.turns);
+    // The HUD's cheat-sheet tab is the one place on the glass that is not a
+    // swipe. It lives in the other scene, which has its own input plugin and so
+    // cannot stop this one seeing the press — hence asking the shared layout.
+    bindSwipe(this, this.turns, (x, y) => hitsTab(this.frame, x, y));
 
     // Fitting the board is one position and one scale on the container it all
     // lives in, so a resize mid-run costs nothing and disturbs nothing — the
     // core never hears about it (architecture §9).
-    onFrame(this, (frame) => this.view.applyFrame(frame));
+    onFrame(this, (frame) => {
+      this.frame = frame;
+      this.view.applyFrame(frame);
+    });
 
     // The HUD runs in parallel and reads the same core, read-only
     // (architecture §6).

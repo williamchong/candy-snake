@@ -63,7 +63,18 @@ export class SwipeTracker {
   }
 }
 
-export const bindSwipe = (scene: Phaser.Scene, queue: DirectionQueue): void => {
+export const bindSwipe = (
+  scene: Phaser.Scene,
+  queue: DirectionQueue,
+  /**
+   * Where a drag must not start. The cheat-sheet tab is drawn by the HUD, which
+   * is a separate scene with its own input plugin — pressing it does not stop
+   * these handlers from seeing the same pointer, so a drag off the tab would
+   * both open the drawer and turn the strand. The rect comes from the shared
+   * layout, so GameScene never has to ask the HUD anything.
+   */
+  isDeadZone: (x: number, y: number) => boolean,
+): void => {
   // One tracker for every pointer, which holds only because the game leaves
   // Phaser's `input.activePointers` at its default of 1 — a second finger on
   // the glass produces no events at all. Turning multitouch on for some other
@@ -87,6 +98,16 @@ export const bindSwipe = (scene: Phaser.Scene, queue: DirectionQueue): void => {
   };
 
   scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    // Declining here leaves the tracker unarmed, which makes `move` and `up`
+    // decline the rest of the gesture too rather than only its first pixels —
+    // so there is no "ignore this drag" flag to raise and forget to lower.
+    //
+    // Tested in game units, not CSS pixels: the layout is computed against
+    // `scale.gameSize`, which is the space `pointer.x` is already in. The
+    // conversion below exists only to keep the threshold a physical distance,
+    // and using it here would move the tab out from under the finger.
+    if (isDeadZone(pointer.x, pointer.y)) return;
+
     tracker.down(cssX(pointer), cssY(pointer));
   });
 
