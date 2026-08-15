@@ -13,7 +13,8 @@ your shop window — before their patience runs out.
 **Status:** playable end to end — opening levels, customers, lives, score, a
 difficulty ramp that will eventually beat you, game over, restart — on desktop
 and, with swipe steering and a layout that follows the screen, on a phone in
-either orientation. The cheat sheet and persistence are still ahead; the
+either orientation. The mixing wheel is in, on a tab that gets out of the way
+once you start steering. Juice, audio and persistence are still ahead; the
 [implementation plan](docs/implementation-plan.md) tracks which phase the work
 is on.
 

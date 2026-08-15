@@ -647,7 +647,10 @@ late.
 - Collapsible mixing cheat sheet (edge tab, auto-collapse, persisted state) —
   the non-obstructive requirement from design §4, drawn as the wordless mixing
   wheel that section specifies. It is the only place in the game a recipe is
-  shown at all, now that the queue holds none.
+  shown at all, now that the queue holds none. **This one is built** — three
+  jars with each pair's candy between them and a spoke from each jar to what it
+  makes; see below. Persisted only as far as the page is loaded, which is where
+  Phase 8 picks it up.
 - (The three lessons are already carried by Phase 4's opening levels and what
   they stock — design §11 — so no toasts, no captions, no seen-once flags. That
   is the position the note under "Done when" now puts on trial.)
@@ -727,11 +730,71 @@ they could not read was the patience clock, which is a juice item on this
 phase's own list and not a teaching one. The count stays at five players across
 four sittings, and the case for re-asking the other three stands unchanged.
 
+### What the cheat sheet settled
+
+**The wheel is one number.** Three jars on a circle and each pair's candy at the
+midpoint of the two that make it — which on an equilateral triangle is exactly
+half the radius out — so the panel's whole size is a multiple of the node, and
+fitting it to a phone is one `clamp`. That is `shelfRun`'s bargain again and it
+is written the same way, because "shrink a run to the space it was given" is now
+the second thing this layout has had to do and will not be the last.
+
+**Two bugs the arithmetic caught that an eye would not have.** A triangle's
+bounding box is *not* centred on the circle it is drawn on — it reaches a full
+radius up and half a radius down — so the wheel had to drop a quarter radius
+inside its own panel or the top jar sat outside it by about four pixels. And
+bottom-anchoring the portrait panel to the board's edge pushed it three pixels
+off the top of the screen on the smallest phone, where the band above the board
+is 78 px and the wheel at its floor is 73. Both were found by the swept
+assertions before any of it was drawn, which is the case for `layout.ts` staying
+Phaser-free stated as a result rather than as a principle.
+
+**The 44 px floor cost nothing, which was not the expectation.** Phase 6
+recorded that the floor "has to be applied" once a discrete tap target exists,
+and the obvious way to pay for it was to reserve a band and let the board
+shrink. It turned out unnecessary: landscape boards are height-bound at every
+viewport in the table, so the tab takes the frame's bottom corner beside the
+serving column, and upright the header band is already 56 px. No board is a
+pixel smaller than it was.
+
+**Brown stays off the wheel, and now there is a measurement behind it.** The
+centre of the wheel is where an over-mix belongs, but the results ring has to
+move out to about 2.2 nodes before there is room — and mutating the spread to
+2.2 fails the on-screen assertion on a 320×568 phone. Design §4 asks for six,
+six is what fits, and the constant that would change is one line with a comment
+saying this.
+
+**Auto-collapse hangs off `DirectionQueue.push` and nothing else.** It is the
+one place that knows a turn was *accepted* rather than merely pressed, and both
+adapters converge on it, so the HUD learns "the player is steering" without
+either adapter knowing the other exists. The rule it feeds — armed once on the
+first turn, never restarted, latched after it fires, cancelled for good by a
+manual toggle — is pure and unit-tested, and deliberately does **not** persist:
+a courtesy collapse that was remembered would leave every player collapsed
+forever a few seconds into their first game.
+
+**The tab is the first hit-testable object in the game, and it needed a dead
+zone rather than a flag.** UIScene and GameScene hold separate input plugins, so
+pressing the tab does not stop GameScene's scene-wide swipe from seeing the same
+pointer — a drag off the tab would have opened the drawer *and* turned the
+strand. `bindSwipe` now declines to arm its tracker inside a rect the layout
+hands it, which kills the whole gesture rather than its first pixels, so there
+is no state to raise and forget to lower. GameScene reads the rect from the
+frame it already subscribes to, so the one-way HUD direction survives.
+
+**What is not yet known** is whether it teaches anybody anything. That is the
+phase's own criterion, five players deep, and it cannot be answered from here.
+
 ## Phase 8 — Persistence, high scores & release (S)
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
   (wire-up — earlier phases used in-memory defaults). No seen-hints: the
-  opening levels replaced them.
+  opening levels replaced them. The cheat sheet is the first of those defaults
+  and names what it wants: two function bodies in `ui/cheatSheet.ts` read and
+  write whether the player has asked for the wheel, holding it in module state
+  so it already survives menu → game → game over → game. Pointing them at the
+  settings blob is the whole of that wire-up, and nothing else about the sheet
+  moves.
 - Game-over score breakdown + high-score table on menu.
 - Social-card meta and a lighthouse sanity pass. (Title and an inline favicon
   are already in `index.html`, and the Pages workflow has been deploying `main`
