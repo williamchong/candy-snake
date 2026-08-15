@@ -785,6 +785,54 @@ frame it already subscribes to, so the one-way HUD direction survives.
 **What is not yet known** is whether it teaches anybody anything. That is the
 phase's own criterion, five players deep, and it cannot be answered from here.
 
+### What the sixth sitting settled — the window was not at the bench
+
+One question, and it is the whole finding: *why are the customers not waiting
+near the cutting counter?* They were not. The block cuts on rows 2–4 of the
+right wall — the top of it — and the standing line was pinned to the bottom of
+the kitchen, so on a desktop frame the child stood some 340 px below the bench,
+with the rack and the cheat sheet filling the gap. Design §2 and §5 both say the
+window is beside the block; **this was the layout disagreeing with the docs, not
+a decision anyone had made.** The line is the block's own last row now, and the
+rack takes the column below it.
+
+**It cost nothing in the queue's own code, because a customer has no position.**
+`Customer` is `{ id, want, patience }` and always was, so where a child stands
+is HUD geometry and one anchor in `ui/layout.ts`. The line also stays
+*horizontal*, which is what kept `CustomerView` out of the diff: children walk
+along x, and a vertical line would have meant rewriting the walk, the door and
+the step-out-of-lane on a second axis to gain nothing the swap gives for free.
+
+**The column is oversubscribed on the smallest phone sideways, and always was.**
+At 568×320 it has to hold the score, the hearts, a child (112 px of bubble, body
+and walk-off lane), six rack slots (106 px at their floor) and a cheat sheet
+(73 px) in about 290 px of height, with only the rack and the sheet able to
+share a row. Moving the taller thing to the top costs more than the column has,
+so the standing line is fenced on both sides — no higher than the hearts allow,
+no lower than leaves the rack its floor — and where the two fences cross, the
+rack wins and the bubble is what overlaps: a rack drawn off the bottom of the
+screen is not a crowded HUD but a missing one. The alternative was a second
+landscape arrangement, which is two layouts to keep true rather than one.
+
+**The review caught two things the screenshots did not.** `hud.shelf.at` is the
+first slot's *centre*, not the rack's top edge, so budgeting the child's
+clearance against it left the top slot half a slot too high — on every desktop
+and tablet frame the patience bar drained straight across whatever candy was
+racked there, invisible in a screenshot because the opening levels have no
+clock. And the rack, now hung off the window rather than off the board, no
+longer had the board's own bottom bounding it: on a phone sideways with a home
+indicator it ran into and past the safe area. Both are why the standing line is
+clamped from below as well as above, and why `layout.test.ts` now asserts
+against the child's *bar* rather than the line they stand on.
+
+**A constant set by eye was wrong by twelve pixels, and only this move exposed
+it.** `CHILD_HEADROOM` claimed a child needs 78 px above their standing line;
+`customerView.ts` puts the bubble's box 90 px above it. Nothing had ever been
+placed against the top of a child before — the rack cleared them from below —
+so the error was invisible until the hearts landed on it, which they did
+immediately on a phone held sideways. It is measured from the view's own
+constants now, and the lives row moved up 8 px to pay for the difference.
+
 ## Phase 8 — Persistence, high scores & release (S)
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
