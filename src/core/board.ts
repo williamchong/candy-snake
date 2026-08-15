@@ -43,7 +43,7 @@ export const freeCells = (occupied: ReadonlySet<number>): Vec2[] => {
  * that column, so the right column stays usable as a lane — crossing the block
  * always chops, and that has to be a choice rather than a toll.
  */
-const CHOP_BLOCK_HEIGHT = 3;
+export const CHOP_BLOCK_HEIGHT = 3;
 
 /**
  * Off the row the maker spawns in, rather than centred on the wall. The maker

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { COLS, ROWS } from '../core/board';
+import { CHOP_BLOCK_HEIGHT, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
 import { CELL_SIZE } from '../render/textures';
 import {
+  CHILD_HEADROOM,
+  CHILD_UNDERFOOT,
   hitsTab,
   layout,
+  LIVES_CLEARANCE,
   TAB_SIZE,
   wheelSeats,
   WHEEL_PAIRS,
@@ -27,6 +30,12 @@ const VIEWPORTS: ReadonlyArray<readonly [string, Viewport]> = [
   ['a small phone, landscape', { width: 568, height: 320 }],
   ['a small phone, portrait', { width: 320, height: 568 }],
 ];
+
+/** Where the rack's first slot starts, along whichever axis it runs. */
+const shelfStart = (frame: Frame): number => {
+  const { at, slot, axis } = frame.hud.shelf;
+  return (axis === 'column' ? at.y : at.x) - slot / 2;
+};
 
 /** Where the rack's last slot ends, along whichever axis it runs. */
 const shelfEnd = (frame: Frame): number => {
@@ -141,24 +150,50 @@ describe('layout', () => {
     expect(phone.hud.shelf.slot).toBeLessThan(desktop.hud.shelf.slot);
   });
 
-  it.each(VIEWPORTS)('keeps the rack clear of the lives row on %s', (_name, view) => {
-    // The rack hangs level with the bench, but on a short screen the board
-    // rides high enough that the bench row is above the hearts — and a rack
-    // hung there is drawn straight through them.
+  it.each(VIEWPORTS)('keeps the front child clear of the lives row on %s', (_n, view) => {
+    // What the window's clamp actually buys. The line wants the bench's row,
+    // but on a short screen the board rides high enough that a child standing
+    // there would hold their bubble up through the hearts.
     const { hud, orientation } = layout(view);
     if (orientation !== 'landscape') return;
 
-    const rackTop = hud.shelf.at.y - hud.shelf.slot / 2;
-    expect(rackTop).toBeGreaterThan(hud.lives.at.y);
+    expect(hud.queue.front.y - CHILD_HEADROOM).toBeGreaterThanOrEqual(
+      hud.lives.at.y + LIVES_CLEARANCE,
+    );
+  });
+
+  it('stands the front child at the serving window in landscape', () => {
+    // What the playtest asked for: a child was waiting the length of the column
+    // away from the counter their candy is cut on. The standing line is the
+    // bench's own last row now, so the block and the window read as one place
+    // (design §2, §10).
+    const { hud, board, cell } = layout(DESKTOP);
+    const lastRow = board.y + (CHOP_BLOCK_TOP + CHOP_BLOCK_HEIGHT - 1) * cell;
+
+    expect(hud.queue.front.y).toBeGreaterThanOrEqual(lastRow);
+    expect(hud.queue.front.y).toBeLessThanOrEqual(lastRow + cell);
+    // In the serving lane against that wall, not out in the sheet's corner.
+    expect(hud.queue.front.x).toBeGreaterThanOrEqual(board.x + board.width);
+    expect(hud.queue.front.x).toBeLessThan(hud.sheet.tab.x - TAB_SIZE / 2);
   });
 
   it.each(VIEWPORTS)('keeps the rack clear of the queue on %s', (_name, view) => {
-    // The two share the landscape column, and a child is a good deal taller
-    // than the line they stand on.
+    // The two share the landscape column, the window above and the rack below
+    // it — which is the order a candy travels in, offered to the queue first
+    // and racked only if nobody there wants it (design §5). What has to clear
+    // the top slot is not the standing line but everything hanging off it: the
+    // patience bar, and the lane a child steps into on their way out.
     const frame = layout(view);
-    if (frame.orientation !== 'landscape') return;
-
-    expect(shelfEnd(frame)).toBeLessThan(frame.hud.queue.front.y);
+    const { shelf, queue } = frame.hud;
+    if (frame.orientation === 'landscape') {
+      expect(queue.front.y + CHILD_UNDERFOOT).toBeLessThanOrEqual(shelfStart(frame));
+      return;
+    }
+    // Upright the rack is the row above the strip's child rather than below,
+    // so it is the bubble over their head that has to clear it.
+    expect(shelf.at.y + shelf.slot / 2 + CHILD_HEADROOM).toBeLessThanOrEqual(
+      queue.front.y,
+    );
   });
 
   it.each(VIEWPORTS)('lands on whole pixels on %s', (_name, view) => {
@@ -338,12 +373,17 @@ describe('layout', () => {
       const panel = sheetRect(frame);
 
       if (frame.orientation === 'landscape') {
-        // The column is the rack's, top to bottom; the sheet takes what is left
-        // beyond it and stays above the tallest child's head.
+        // The column is the rack's, window to floor; the sheet takes what is
+        // left beyond it, in the corner below the child's own feet.
         expect(panel.left).toBeGreaterThanOrEqual(
           frame.hud.shelf.at.x + frame.hud.shelf.slot / 2,
         );
-        expect(panel.bottom).toBeLessThanOrEqual(frame.hud.queue.front.y);
+        expect(panel.bottom).toBeGreaterThan(frame.hud.queue.front.y);
+        expect(panel.bottom).toBeLessThanOrEqual(tabRect(frame).top);
+        // Right-aligned to the frame, which is what keeps a wheel that has
+        // outgrown its band off the queue: it rises past the line rather than
+        // into the children, who queue from the wall outward.
+        expect(panel.left).toBeGreaterThan(frame.hud.queue.front.x);
         return;
       }
       // Upright the sheet is above the board and the strip is below it, so the

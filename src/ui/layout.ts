@@ -1,4 +1,4 @@
-import { CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
+import { CHOP_BLOCK_HEIGHT, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
 import { STARTING_LIVES } from '../core/game';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
@@ -55,7 +55,8 @@ export interface HudFrame {
    * The rack: where its first slot sits, how far apart they step, which way
    * they run, and how big each one is drawn. The size is here rather than in
    * `ShelfStrip` because on a phone held sideways the rack has to fit between
-   * the bench and the queue, and six slots at the desktop pitch do not.
+   * the queue and the bottom of the frame, and six slots at the desktop pitch
+   * do not.
    */
   readonly shelf: {
     readonly at: Vec2;
@@ -151,8 +152,14 @@ const SHELF_ROW = 30;
 const QUEUE_ROW = 150;
 
 const LIVES_PITCH = 26;
-/** What the rack has to clear below the row of hearts, in the landscape column. */
-const LIVES_CLEARANCE = 32;
+/**
+ * Where the hearts sit in the landscape column. Load-bearing, unlike the score
+ * above them: the window hangs off this row on a screen too short to put it
+ * level with the bench.
+ */
+const LIVES_ROW = 76;
+/** Half a heart: what anything hung below the row has to clear it by. */
+export const LIVES_CLEARANCE = 16;
 
 /** The rack at its roomiest — the desktop pitch, and the cap everywhere else. */
 const SHELF_PITCH = 44;
@@ -163,14 +170,23 @@ const SLOT_RATIO = 40 / SHELF_PITCH;
 
 const QUEUE_PITCH = 84;
 
-/** A floor line set by eye, just inside the bottom of the kitchen. */
-const QUEUE_FOOT = 20;
+/** How far into the serving lane the child at the window stands, from its near edge. */
+const QUEUE_INSET = 42;
 
 /**
- * How much room a child needs above the line they stand on — their own height
- * plus the bubble over their head. What the rack has to keep clear of.
+ * How much room a child needs above the line they stand on: their own height,
+ * the gap over their head and the bubble that sits in it — `customerView.ts`'s
+ * `BUBBLE_Y` plus half a bubble. What the row of hearts has to keep clear of,
+ * and measured rather than eyeballed because on a short screen the hearts land
+ * exactly on it.
  */
-const CHILD_HEADROOM = 78;
+export const CHILD_HEADROOM = 90;
+/**
+ * And below it: the patience bar draining at their feet, and the lane a child
+ * steps down into on their way out before they walk off — `customerView.ts`'s
+ * `BAR_Y` and its `LEAVING_LANE`, whichever reaches further, which is the lane.
+ */
+export const CHILD_UNDERFOOT = 22;
 
 /**
  * Sizes the rack to the run it has been given. Six slots at the desktop pitch
@@ -281,13 +297,13 @@ const boardFrame = (x: number, y: number, cell: number): BoardFrame => ({
   scale: cell / CELL_SIZE,
 });
 
-/** The screen y of a board row's centre — how the rack hangs level with the bench. */
+/** The screen y of a board row's centre — how the window lines up with the bench. */
 const rowCentreY = (board: BoardFrame, cell: number, row: number): number =>
   board.y + row * cell + cell / 2;
 
 /**
  * Board left, serving column right, against the wall the chopping block cuts on
- * — bench, rack and child reading down one side (design §10).
+ * — bench, child and rack reading down one side (design §10).
  */
 const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   const availW = view.width - insets.left - insets.right;
@@ -301,36 +317,66 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
     cell,
   );
 
-  // The column hugs the board rather than the frame edge, so the rack stays
+  // The column hugs the board rather than the frame edge, so the window stays
   // beside the bench however much slack a wide window leaves over.
   const columnX = board.x + board.width + GUTTER;
 
-  // Rack and queue share the column top to bottom, so the rack gets whatever is
-  // left between the bench it hangs level with and the tallest child below it.
-  //
-  // Level with the bench is the *preference*, not the rule: on a short screen
-  // the board rides high enough that the bench row is above the lives, and a
-  // rack hung there would be drawn through the hearts. Design §10 asks for the
-  // rack on the block's wall, which it still is.
-  const livesY = insets.top + 84;
-  const shelfTop = Math.max(
-    rowCentreY(board, cell, CHOP_BLOCK_TOP),
-    livesY + LIVES_CLEARANCE,
-  );
-  const footY = board.y + board.height - QUEUE_FOOT;
-  const shelf = shelfRun(footY - CHILD_HEADROOM - shelfTop);
+  // Tight under the score rather than clear of it: the hearts are the ceiling
+  // the window hangs from on a short screen, so every pixel spent above them is
+  // one the child is pushed down the column by.
+  const livesY = insets.top + LIVES_ROW;
+  // The rack and the tab hang off the same edge and must stay on it.
+  const frameFloor = insets.top + availH - GUTTER;
+  // What six slots need at the floor of `shelfRun` — the rack cannot be asked
+  // for less, so it is the room the window has to leave under itself.
+  const floorRun = shelfRun(0);
+  const rackMin = (SHELF_SLOTS - 1) * floorRun.pitch + floorRun.slot;
 
-  // The sheet takes the corner of the frame furthest from the kitchen, and the
-  // band above the children's heads that the rack has already had to clear.
+  // The window is the bench's own row: the child at the head of the queue
+  // stands level with the last cell the block cuts on, a gutter to the right of
+  // the wall it cuts against, so a candy's path reads across one row rather
+  // than the length of the column (design §10).
+  //
+  // Level with the bench is the *preference*, not the rule, and it is fenced on
+  // both sides: a child hung at the bench row on a short screen would hold their
+  // bubble up through the hearts, and one hung too low leaves the rack running
+  // off the bottom of the frame. Where the two fences cross — the smallest phone
+  // sideways, which is over-subscribed whatever this file does — the rack wins
+  // and the bubble is what overlaps, because a rack drawn off the screen is not
+  // a crowded HUD but a missing one.
+  const footY = Math.min(
+    Math.max(
+      rowCentreY(board, cell, CHOP_BLOCK_TOP + CHOP_BLOCK_HEIGHT - 1),
+      livesY + LIVES_CLEARANCE + CHILD_HEADROOM,
+    ),
+    insets.top + availH - rackMin - GUTTER / 2 - CHILD_UNDERFOOT,
+  );
+  const childFloor = footY + CHILD_UNDERFOOT;
+
+  // The rack takes the column below the window, which is the order a candy
+  // actually travels in: it is offered to the queue first and racked only if
+  // nobody there wants it (design §5).
+  const shelfX = columnX + 28;
+  const rackTop = childFloor + GUTTER / 2;
+  const shelf = shelfRun(frameFloor - rackTop);
+
+  // The sheet takes the corner of the frame furthest from the kitchen: below
+  // the child's feet where the column can pay for it, beyond the rack, and hung
+  // off the top of its own tab so that a wheel too tall for the band grows up
+  // the column rather than down over the tab. `wheelRun`'s floor outranks the
+  // band it is handed, so on a short screen the panel does reach back past the
+  // standing line — clear of the children only because it is right-aligned to
+  // the frame and they queue from the wall outward.
+  //
   // Its span is measured from the rack's far edge rather than from the board,
   // so clearing the rack and clearing the board are both structural — a wider
   // window moves the rack and the panel follows it.
-  const shelfX = columnX + 28;
   const sheetRight = insets.left + availW - GUTTER;
-  const sheetFloor = footY - CHILD_HEADROOM;
+  const tabY = Math.round(frameFloor - TAB_SIZE / 2);
+  const sheetFloor = tabY - TAB_SIZE / 2 - GUTTER / 2;
   const wheel = wheelRun(
     sheetRight - (shelfX + shelf.slot / 2) - GUTTER,
-    sheetFloor - shelfTop,
+    sheetFloor - childFloor,
   );
 
   return {
@@ -340,17 +386,21 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
     hud: {
       score: { x: columnX, y: insets.top + 40 },
       lives: { at: { x: columnX + 8, y: livesY }, pitch: LIVES_PITCH },
-      shelf: { at: { x: shelfX, y: shelfTop }, ...shelf, axis: 'column' },
+      // `at` is the first slot's centre and `rackTop` its top edge: the run
+      // starts half a slot below the clearance the child was given, or the
+      // patience bar drains across the candy in the top slot.
+      shelf: {
+        at: { x: shelfX, y: Math.round(rackTop + shelf.slot / 2) },
+        ...shelf,
+        axis: 'column',
+      },
       queue: {
-        front: { x: columnX + 42, y: footY },
+        front: { x: columnX + QUEUE_INSET, y: footY },
         pitch: QUEUE_PITCH,
         offstage: view.width + OFFSTAGE_MARGIN,
       },
       sheet: {
-        tab: {
-          x: Math.round(sheetRight - TAB_SIZE / 2),
-          y: Math.round(insets.top + availH - GUTTER - TAB_SIZE / 2),
-        },
+        tab: { x: Math.round(sheetRight - TAB_SIZE / 2), y: tabY },
         panel: {
           at: {
             x: Math.round(sheetRight - wheel.width / 2),
@@ -438,7 +488,7 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
         axis: 'row',
       },
       queue: {
-        front: { x: right - 2 * QUEUE_FOOT, y: stripTop + QUEUE_ROW },
+        front: { x: right - QUEUE_INSET, y: stripTop + QUEUE_ROW },
         // The window is at the right-hand end, so the line runs back to the
         // left and the door is off that edge.
         pitch: -queuePitch,

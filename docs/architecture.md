@@ -90,7 +90,7 @@ candy-snake/
     ├── ui/
     │   ├── customerView.ts    # one child: walk, bubble, face, patience bar
     │   ├── customerQueue.ts   # the line at the window, keyed by customer id
-    │   ├── shelfStrip.ts      # the six candy slots, level with the bench
+    │   ├── shelfStrip.ts      # the six candy slots, under the window
     │   ├── text.ts            # one answer to "what does screen text look like"
     │   ├── cheatSheet.ts      # the mixing wheel, and when it shows itself
     │   └── layout.ts          # responsive anchoring (portrait/landscape)
@@ -252,7 +252,11 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   it is a parallel scene with its own camera, so text stays readable and touch
   targets stay full size however far the board has had to shrink.
   - **Landscape:** customers + shelf + score in the right column, beside the
-    chopping block's wall (design §10).
+    chopping block's wall (design §10), reading bench → child → rack: the
+    standing line is the block's own last row, and the rack takes the column
+    below it. Level with the bench is a preference with a clamp, the way the
+    rack's own top was — the child's bubble has to clear the hearts, and on a
+    phone sideways the board rides high enough that the bench row does not.
   - **Portrait:** score and lives in a band *above* the board, the rack and the
     queue in a strip *below* it. A board that already fills the width leaves no
     column beside it, so the strip goes under — with the rack right-aligned and

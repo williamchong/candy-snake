@@ -526,7 +526,13 @@ High scores (top 10, with date) persist in `localStorage`.
   both orientations: customer window, shelf and score anchor there, so the
   candy's path (bench → shelf → child) never doubles back across the screen.
 - Landscape: bench on the right wall, customer window + shelf + score in the
-  right column.
+  right column — and the window is the **bench's own row**, with the shelf
+  running down the column beneath it. A child waiting at the far end of the
+  column from the counter their candy is cut on is the one thing a playtester
+  asked about unprompted; the order also happens to be the order a candy
+  travels in (offered to the queue first, racked only if nobody wants it, §5).
+  On the shortest phones sideways the column cannot pay for it: the line then
+  sits as high as the score and lives allow and no higher.
 - Portrait: same right column, narrowed — grid on the left, serving strip
   beside it; grid stays square-ish so both orientations share one logical
   board.

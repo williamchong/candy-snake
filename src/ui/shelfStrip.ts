@@ -17,10 +17,10 @@ import { TextureKey } from '../render/textures';
 import type { Frame } from './layout';
 
 /**
- * The candy cache, drawn as a run of slots beside the board and level with the
- * bench. The rack has to sit on the same wall the block cuts against, or the
- * player makes candy at one edge of the board and hunts for where it went at
- * another — bench, rack and queue read down one side (design §10).
+ * The candy cache, drawn as a run of slots beside the board and under the
+ * serving window. The rack has to sit on the same wall the block cuts against,
+ * or the player makes candy at one edge of the board and hunts for where it
+ * went at another — bench, child and rack read down one side (design §10).
  *
  * Which way the run goes, and how big a slot is, both come from the layout: on
  * a phone held sideways six slots at the desktop pitch would run off the bottom
