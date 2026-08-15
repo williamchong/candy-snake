@@ -6,7 +6,8 @@ Sizes are relative (S < M < L), not calendar promises.
 
 References: [game-design.md](./game-design.md), [architecture.md](./architecture.md).
 
-> **Status: Phase 6 is the current phase**; 0–5 are done and marked ✅ below.
+> **Status: Phase 7 is the current phase**; 0–6 are done and marked ✅ below,
+> with Phase 6's real-device pass called out there as outstanding.
 > This plan is where phase status is tracked — anything else that mentions it
 > (the README) links here rather than restating it.
 
@@ -404,10 +405,10 @@ language §7 allows itself.
   untouched, since it is about what the candy is *worth* and not how fast it is
   made.
 
-## Phase 6 — Mobile & responsive (L) ◀ current
+## Phase 6 — Mobile & responsive (L) ✅
 
-- Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold);
-  optional virtual D-pad behind a setting.
+- Touch input: swipe adapter (dead zone, dominant axis, mid-drag threshold).
+  The **virtual D-pad was dropped, not deferred** — see below.
 - Replace fixed FIT with `Scale.RESIZE` + `ui/layout.ts` (landscape/portrait
   anchoring per architecture §9).
 - Page hardening: the document-level half already sits in `index.html`
@@ -419,7 +420,57 @@ language §7 allows itself.
 **Done when:** the same run is comfortably playable one-handed on a phone in
 both orientations.
 
-## Phase 7 — Cheat sheet, hints & UX polish (M)
+The code half is done and the geometry is covered by `ui/layout.ts`'s unit
+tests plus smoke runs at 960×640, 390×844 and 844×390. **The real-device pass
+is outstanding** — it cannot be run headless, and it is what the "comfortably"
+in the criterion actually rests on. Until a phone has been held, this phase is
+complete in code and unconfirmed in the hand.
+
+### What the responsive pass settled
+
+- **The board scales as one container; the HUD does not.** The board keeps
+  drawing at a fixed `CELL_SIZE` in its own coordinates, and `BoardView` fits it
+  to the device with a single position and scale. The alternative — computing a
+  cell size per device and threading it through the render layer — was rejected
+  on inspection rather than on taste: `CELL_SIZE` is the default scale argument
+  of `makeSprite`, so it reaches every sprite in the game, and the accessibility
+  symbols are deliberately baked at their display size (`GLYPH_SIZE`) so
+  nearest-neighbour samples them 1:1. A per-device cell would have made the
+  colorblind fallback of design §4 the thing that went soft. Architecture §9 has
+  been amended to record the container model.
+- **The HUD staying at native size is what makes a phone work at all.** It is a
+  parallel scene with its own camera — a separation originally made so camera
+  shake would not move the score (architecture §6) — and that is now also what
+  keeps text legible and touch targets full-size while the kitchen shrinks.
+- **Portrait puts the HUD either side of the board, not beside it.** A board
+  that fills the width leaves no column, so score and lives take a band above
+  and the rack and queue a strip below, with the rack right-aligned and the
+  queue running back from it. A square board on a tall screen cannot use the
+  whole height whatever it does; splitting the HUD spends that slack on both
+  edges instead of leaving one dead band in the middle.
+- **Two collisions only a phone-sized frame produces**, both found by laying the
+  frames out across eight viewports rather than by looking at a screenshot: six
+  rack slots at the desktop pitch run off the bottom of a phone in landscape
+  (the rack now sizes itself to the run it is given), and the rack hung level
+  with the bench is drawn straight through the hearts once the board rides high
+  enough (it now clears the lives row). Both are asserted per viewport.
+- **The ≥44 px hit-area item was already satisfied, and is worth recording as
+  such rather than as work done.** Every interactive surface in the game is
+  scene-wide: steering is a swipe anywhere (`input/swipe.ts`), and both message
+  screens advance on a tap anywhere (`input/anyInput.ts`). There is no discrete
+  tap target in the game to undersize. When Phase 7 adds the settings screen and
+  the cheat-sheet tab, this stops being true and the floor has to be applied.
+- **The D-pad is dropped rather than carried.** The plan put it "behind a
+  setting" and the settings screen is Phase 7, so building it here would have
+  meant a toggle with nowhere to live. Whether it is wanted at all is a question
+  for the real-device pass, and if the answer is yes it lands beside the setting
+  that switches it.
+- **The swipe adapter needed no change.** `bindSwipe` divides pointer
+  coordinates by `scene.scale.displayScale` to get CSS pixels, which under
+  `RESIZE` is 1 — so the conversion degrades to a no-op and the thumb threshold
+  stays the same physical distance it always was.
+
+## Phase 7 — Cheat sheet, hints & UX polish (M) ◀ current
 
 - Collapsible mixing cheat sheet (edge tab, auto-collapse, persisted state) —
   the non-obstructive requirement from design §4, drawn as the wordless mixing
