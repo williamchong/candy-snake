@@ -1,4 +1,4 @@
-import { PRIMARIES, primariesOf, type Primary } from './colors';
+import { PRIMARIES, blend, primariesOf, type Primary } from './colors';
 import type { Rng } from './rng';
 import { RAW, type ColorMask, type GameState } from './types';
 
@@ -13,9 +13,10 @@ import { RAW, type ColorMask, type GameState } from './types';
  *
  * A restricted board teaches better than any text can, and it restricts *when*
  * as well as *what*: in level 2 the only jar on the floor is the one the order
- * wants, so "wrong dye" is not a mistake the player is able to make, and no jar
- * is laid until the first cube is on the strand (`stocksDyes`), so nor is the
- * wrong order. Difficulty here is authored by removing options.
+ * wants, so "wrong dye" is not a mistake the player is able to make, and it is
+ * on the floor only while it still has something to do (`stocksDyes`) — not
+ * before the first cube is on the strand, and not once the candy has turned.
+ * Difficulty here is authored by removing options.
  */
 export interface TutorialLevel {
   readonly want: ColorMask;
@@ -58,32 +59,44 @@ export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Pri
   level?.stock ?? PRIMARIES;
 
 /**
- * The jars the spawner lays *at this moment*, which an opening level withholds
- * until there is a strand to dye.
+ * The jars the spawner lays *at this moment*: the level's own stock, narrowed
+ * to the ones that would still change the strand.
  *
- * Level 2 teaches the order the two pickups go in, and a board holding both at
- * once does not teach it: the jar is a saturated color with a symbol on it and
- * the cube is off-white, so the wrong move is also the loud one. Withholding
- * the jar until the first cube is on the strand is the same "remove the
- * options" rule the rest of §7 is authored by — applied to *when* rather than
- * to which, so crossing the jar first is not a mistake the player is able to
- * make. The lesson then lands as cause and effect on screen: they cross the
- * jar and watch a segment turn.
+ * That single test covers both halves of the lesson, because a jar with
+ * nothing left to do is a jar the level is not asking for.
  *
- * Withholding never takes a jar off the floor — the spawner only ever adds
+ * - **Before.** An empty strand has no segment to change, so no jar goes out.
+ *   Level 2 teaches the order the two pickups go in, and a board holding both
+ *   at once does not teach it: the jar is a saturated color with a symbol on
+ *   it and the cube is off-white, so the wrong move is also the loud one. With
+ *   the jar held back there is one thing on the floor to take, and when it does
+ *   arrive the maker is carrying something — so the lesson lands as cause and
+ *   effect on screen: they cross the jar and watch a segment turn.
+ * - **After.** Once the candy carries the color, kneading that primary in
+ *   again is a no-op (`blend`), so the level stops laying it. A jar re-laid at
+ *   a fresh cell the moment the strand cleared the last one is what eating food
+ *   and food respawning looks like, and a playtester who had passed level 1
+ *   read it that way: they went on crossing jars instead of taking the finished
+ *   candy to the block. The floor going bare is the level saying it is done.
+ *
+ * This never takes a jar off the floor — the spawner only ever adds
  * (`ensurePickups`), so a jar already laid stays where it is, which is design
  * §7's promise that none of the tutorial's furniture is removed mid-run. That
  * is why this is a separate question from `stockedPrimaries`: the permitted set
- * still only grows.
+ * still only grows. Nor can it soft-lock a level: a strand that still needs a
+ * color still asks for the jar, however it came to need it.
  *
- * Only an opening level withholds, so this takes a level rather than the
+ * Only an opening level rations its jars, so this takes a level rather than the
  * endless game's `undefined` — the endless board is stocked by the pity spawner
  * and never comes through here.
  */
 export const stocksDyes = (
   level: TutorialLevel,
   state: Pick<GameState, 'snake'>,
-): readonly Primary[] => (state.snake.body.length > 0 ? level.stock : []);
+): readonly Primary[] =>
+  level.stock.filter((primary) =>
+    state.snake.body.some((segment) => blend(segment.color, primary) !== segment.color),
+  );
 
 /**
  * Whether the board should be carrying a sugar cube. The endless game always

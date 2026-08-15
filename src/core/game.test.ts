@@ -812,6 +812,16 @@ describe('Game opening levels', () => {
     run(game, passThrough(game));
   };
 
+  /**
+   * Lays a jar of the level's own primary in the maker's path and drives the
+   * strand through it, replacing whatever the level laid — the level chose a
+   * cell, and the test cares only that a jar is crossed.
+   */
+  const crossJar = (game: Game, primary: Primary): void => {
+    game.state.pickups = [createDye(cellAheadOf(game), primary)];
+    run(game, passThrough(game));
+  };
+
   /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
   const chopOne = (game: Game, want: ColorMask): void => {
     layBatchAtBlock(game, [want]);
@@ -890,6 +900,33 @@ describe('Game opening levels', () => {
 
     pullCube(game);
     expect(jarsOn(game)).toEqual([...(third?.stock ?? [])].sort());
+  });
+
+  it('lays no further jar once the level’s one candy is dyed', () => {
+    const game = opening();
+    const primary = game.tutorial[1]?.stock[0] ?? RED;
+
+    serveLevel(game, RAW);
+    pullCube(game);
+    crossJar(game, primary);
+
+    // The cube turned, which is the whole of what level 2 asks for — so the
+    // floor now holds nothing but the block to take it to (design §7).
+    expect(colorsOf(game)).toEqual([primary]);
+    expect(game.state.pickups).toEqual([]);
+
+    // Not just on the move it was spent: a jar re-laid a few cells later is
+    // the same "eat it again" board, arriving late. Driven until the maker
+    // reaches the block, since carrying the candy there is all that is left —
+    // the level below is asserted before the loop as well as after it, so the
+    // condition reads as an exit rather than as a body that may never run.
+    expect(game.state.tutorialIndex).toBe(1);
+    for (let move = 0; move < 25 && game.state.tutorialIndex === 1; move += 1) {
+      run(game, 1);
+      expect(jarsOn(game)).toEqual([]);
+    }
+
+    expect(game.state.tutorialIndex).toBe(2);
   });
 
   it('leaves the tutorial’s own jars standing when it hands over', () => {

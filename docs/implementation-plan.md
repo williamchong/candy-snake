@@ -118,10 +118,10 @@ Two of those three are met. The third — the batching bot outscoring the grinde
 — is **not**, and the balance record below sets out why it is a rules question
 rather than a tuning one, along with the three candidate rule changes. It is
 carried forward as an open finding rather than counted as done. The human
-playtest half of the first criterion has now had three sittings, and none of
+playtest half of the first criterion has now had four sittings, and none of
 them answered that half — nobody has played long enough to die. They answered
 other things instead, including the open finding arrived at from the far end —
-twice, by two different players, in two sittings. See the three records below.
+twice, by two different players, in two sittings. See the four records below.
 
 ### Where the balance landed
 
@@ -339,12 +339,70 @@ Two things this deliberately did **not** do:
   seeds: the ramp closed out 14/16 batching runs before and 12/16 after — the
   same rate, re-rolled. The four canonical seeds happened to sit on the edge of
   it (3 died, then 2), which is why `simulation.test.ts` now asks that rate of
-  the wider draw and keeps the seven-minute floor on the four.
+  the wider draw and keeps the seven-minute floor on the four. (The floor has
+  since moved to that draw as well — see the fourth sitting below.)
 
 One finding fell out of that sweep and is **not** about this change: on the wider
 draw the ramp does not hold its seven-minute floor everywhere — seed 88 kills the
 batcher at 309 s, before this change and after. The four tuned seeds do not
 contain a case that shows it. That belongs to the balance work above, not here.
+
+### What the fourth sitting settled — level 2 taught the wrong thing
+
+The same level, the same player model, one step further in. This player *passed*
+level 1 — they pulled the cube and chopped it — and then, in level 2, went on
+crossing jars long after the candy was dyed, with nothing left to do but carry it
+to the block.
+
+The third sitting fixed the wrong move at the *start* of the level and left the
+identical bug at the end of it. `stocksDyes` withheld the jar until there was a
+strand to dye, but nothing ever said the level was *finished* with dye: the
+spawner's floor of one jar per stocked primary re-laid it the instant the strand
+cleared the last one, at a fresh random cell. That is eating food and food
+respawning, drawn on the board in the loudest thing on it — and it is the same
+diagnosis as last time, which is the point. A player who has learned "the
+colored thing is the thing to take" is not going to unlearn it from a board that
+keeps putting one out.
+
+Note what was *not* wrong: nothing broke. Re-crossing a jar for a primary the
+candy already holds is a no-op (`blend`), so the player was not punished, not
+soft-locked, and not making brown. They were being told there was more to do.
+
+**Fixed in the same place, by finishing the same rule.** `stocksDyes` now lays
+the level's primaries that would still change the strand — which is one test
+covering both ends, because a jar with nothing left to do is a jar the level is
+not asking for. An empty strand has no segment to change, so the jar is still
+held back; a dyed one has nothing left to gain, so it stops coming. Level 3 gets
+it per-jar for free: cross the red and the red stops respawning while the yellow
+stays out. The floor going bare is the level saying it is done, in the only
+language §7 allows itself.
+
+- **Sugar already worked this way**, which is what makes the fix a completion
+  rather than an addition: `stocksSugar` has always rationed the cube by
+  *quantity* — one per level, no restock until it has come back through the
+  block. Dye was rationed by identity and by timing but never by need, and the
+  gap between those two is exactly what the player was reading.
+- **Nothing here can soft-lock a level.** The test is "would this jar still
+  change the strand", so a strand that needs the color still calls the jar back,
+  however it came to need it — including a candy chopped raw by mistake and a
+  fresh cube pulled after it.
+- **It did not retune anything, again, and this time it was measured wider.**
+  The same re-roll caveat applies: one fewer jar spawn shifts every free cell
+  drawn after it. Over 96 seeds, before and after: 81/96 batching runs closed out
+  against 79/96, mean death 475 s against 473 s, 65 of 81 deaths past seven
+  minutes against 61 of 79. The same curve, re-rolled. On the four canonical
+  seeds the re-roll landed badly — 404 now dies at 331 s — which is why the
+  seven-minute floor moves off the four and onto the sweep as the rate it always
+  was.
+- **One assertion was measuring the wrong thing and this exposed it.** "The
+  batcher chops more candy than the grinder" compares a run the ramp closed out
+  at six minutes with one still going at ten, and calls the short one less
+  productive; it held on the four by luck and on only about two thirds of the
+  wider draw, before this change as much as after. Per minute alive, the batcher
+  leads on 96 of 96 seeds either side of it. That is the claim the sentence was
+  always making, so that is what it now asserts — the open finding above is
+  untouched, since it is about what the candy is *worth* and not how fast it is
+  made.
 
 ## Phase 6 — Mobile & responsive (L) ◀ current
 
@@ -384,7 +442,7 @@ both orientations.
 every core event has audiovisual feedback.
 
 The first of those is the criterion at risk, and it now has evidence against it
-from four players across three sittings, all of whom came through Phase 4's
+from five players across four sittings, all of whom came through Phase 4's
 opening levels first. One was "a bit confused at first, just chasing the colored
 things". One understood the game but credited the other games they had played
 for it rather than this one. The third asked, unprompted, for a picture showing
@@ -404,6 +462,14 @@ sitting, above). It was fixed by what the level stocks and when. That is one
 comprehension failure traced to a board that could be re-authored — so before the
 cheat sheet is treated as the fix for the other three, they are worth re-asking
 the same question of.
+
+The fifth says the same thing from a step further along, and says it about the
+same level: a player who had *passed* level 1 kept crossing jars in level 2 after
+the candy was already dyed, because the board kept laying them. Also answered by
+what the level stocks and when (the fourth sitting, above). Two of the five
+comprehension data points are now board-authoring bugs rather than evidence
+against design §11 — which is the case for re-asking the other three, not for
+declaring the position safe.
 
 ## Phase 8 — Persistence, high scores & release (S)
 

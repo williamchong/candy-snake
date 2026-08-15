@@ -364,6 +364,13 @@ well as *what*:
   already carrying something, so crossing it *visibly turns a segment*. That is
   the lesson delivered as cause and effect rather than as a mistake to be
   inferred from a splash.
+- **When they stop.** A level lays a jar only while that jar still has something
+  to do, so once the candy carries the color the floor goes bare and the block is
+  the only thing left on it. Re-laying the jar the moment the strand cleared the
+  last one is eating food and food respawning — a playtester who had passed level
+  1 read it exactly that way and went on crossing jars with a finished candy in
+  hand. The two halves are one rule: a jar is out while the strand still needs
+  it, which for an empty strand is never and for a dyed one is no longer.
 
 Difficulty here is authored by removing options.
 
@@ -392,9 +399,9 @@ Difficulty here is authored by removing options.
   than opening on a whole arrival interval of empty window (12s at Mixing,
   which would read as the game having ended rather than started). Nothing can
   be soft-locked: a level's jar is not on the floor until there is a strand to
-  dye, and a jar wasted on a bodiless strand respawns anyway, because the stock
-  rule keeps it on the board. The level-2 lesson is not taught by retry — retry
-  was tried, and a playtester met it by driving at the jar again rather than by
+  dye, and a strand that still needs the color still calls the jar back, however
+  it came to need it. The level-2 lesson is not taught by retry — retry was
+  tried, and a playtester met it by driving at the jar again rather than by
   learning from it. It is taught by not offering the wrong move.
 - These three levels **are** the teaching, on their own: no captions, no
   toasts, no words anywhere on the screen. What the player is shown is a board

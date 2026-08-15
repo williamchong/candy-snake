@@ -9,7 +9,7 @@ import {
   stocksSugar,
   type TutorialLevel,
 } from './tutorial';
-import { Dir, RAW, type GameState } from './types';
+import { Dir, RAW, type ColorMask, type GameState } from './types';
 
 const tutorialFor = (seed: number): TutorialLevel[] => rollTutorial(createRng(seed));
 
@@ -82,14 +82,22 @@ describe('stockedPrimaries', () => {
   });
 });
 
-/** A maker carrying `segments`, with `cut` more of them on the way to the block. */
-const strand = (segments: number, cut = 0): Pick<GameState, 'snake' | 'severed'> => ({
+/**
+ * A maker carrying `segments` of `color`, with `cut` raw ones on the way to
+ * the block. Those two are named rather than positional: they vary
+ * independently, and a third positional argument would be reached past a
+ * placeholder that says nothing about itself.
+ */
+const strand = (
+  segments: number,
+  { cut = 0, color = RAW }: { cut?: number; color?: ColorMask } = {},
+): Pick<GameState, 'snake' | 'severed'> => ({
   snake: {
     head: { x: 0, y: 0 },
     dir: Dir.Right,
     body: Array.from({ length: segments }, (_unused, index) => ({
       pos: { x: index + 1, y: 0 },
-      color: RAW,
+      color,
     })),
   },
   severed:
@@ -118,12 +126,12 @@ describe('stocksSugar', () => {
   });
 
   it('waits for a cut batch to finish going through the block', () => {
-    expect(stocksSugar(level, strand(0, 1))).toBe(false);
+    expect(stocksSugar(level, strand(0, { cut: 1 }))).toBe(false);
   });
 
   it('keeps the endless board stocked whatever the maker is carrying', () => {
     expect(stocksSugar(undefined, strand(1))).toBe(true);
-    expect(stocksSugar(undefined, strand(0, 3))).toBe(true);
+    expect(stocksSugar(undefined, strand(0, { cut: 3 }))).toBe(true);
   });
 });
 
@@ -141,6 +149,22 @@ describe('stocksDyes', () => {
   it('does not wait on a batch already cut loose', () => {
     // The cut piece is the level's candy on its way through the block, not a
     // strand to dye — so this is the same empty-handed board as above.
-    expect(stocksDyes(level, strand(0, 2))).toEqual([]);
+    expect(stocksDyes(level, strand(0, { cut: 2 }))).toEqual([]);
+  });
+
+  it('lays no more once the candy already carries the color', () => {
+    const primary = level.stock[0]!;
+
+    // Crossing it again would knead in a primary the segment holds, which
+    // changes nothing — so the level stops offering the trip (design §7).
+    expect(stocksDyes(level, strand(1, { color: primary }))).toEqual([]);
+  });
+
+  it('lays only the dye the mix is still short of', () => {
+    const mix = tutorialFor(42)[2]!;
+    const [first, second] = mix.stock;
+
+    expect(stocksDyes(mix, strand(1, { color: first }))).toEqual([second]);
+    expect(stocksDyes(mix, strand(1, { color: mix.want }))).toEqual([]);
   });
 });
