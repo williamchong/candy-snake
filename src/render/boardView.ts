@@ -12,6 +12,7 @@ import {
   type SnakeState,
   type Vec2,
 } from '../core/types';
+import type { Frame } from '../ui/layout';
 import {
   BORDER,
   makeDrawn,
@@ -26,16 +27,15 @@ import { strandSpriteAt } from './strand';
 import { CELL_SIZE, PIXEL_SCALE, STRAND_TEXTURES, TextureKey } from './textures';
 
 /**
- * Board geometry. 16×16 cells at 32 px is 512×512, parked left of centre in
- * the 960×640 frame so the right column stays free for the HUD (design §10,
- * landscape). Temporary: `ui/layout.ts` becomes the only holder of screen
- * geometry once the board has to be responsive (architecture §9).
+ * The board draws itself in its own coordinates — origin at its top-left corner,
+ * 16×16 cells of `CELL_SIZE` — and is fitted to the device by scaling the
+ * container it all lives in (see `applyFrame`). Nothing in here knows the screen
+ * size, which is what keeps `ui/layout.ts` the only file that does
+ * (architecture §9).
  */
-const BOARD_X = 64;
-const BOARD_Y = 64;
+const BOARD_X = 0;
+const BOARD_Y = 0;
 
-/** Where the kitchen ends and the serving column begins — the HUD anchors here. */
-export const BOARD_RIGHT = BOARD_X + COLS * CELL_SIZE;
 /**
  * Chrome thickness in screen pixels. Held separately from `PIXEL_SCALE`: how
  * thick an outline should look is not a function of how many source texels a
@@ -76,12 +76,8 @@ const DYE_FLASH_MS = 120;
 /** Enough to read debris as spilled sugar rather than as live strand. */
 const DEBRIS_ALPHA = 0.5;
 
-/**
- * The pixel centre of a board row. `cellToPixel` is this plus the column, and
- * the HUD uses it to hang the shelf level with the bench (design §10).
- */
-export const rowToPixel = (row: number): number =>
-  BOARD_Y + row * CELL_SIZE + CELL_SIZE / 2;
+/** The pixel centre of a board row; `cellToPixel` is this plus the column. */
+const rowToPixel = (row: number): number => BOARD_Y + row * CELL_SIZE + CELL_SIZE / 2;
 
 /**
  * Every glyph sits directly above the sprite it labels, so the layers pair up.
@@ -100,6 +96,27 @@ const Depth = {
   Head: 8,
   Shard: 9,
 } as const;
+
+/**
+ * Moves freshly built objects into the board's container. `scene.add.*` puts
+ * them on the scene's own display list, so everything the board draws has to be
+ * taken in here or it would sit outside the container and never be scaled with
+ * the rest of it.
+ *
+ * A container keeps its children in insertion order, and the pools build theirs
+ * lazily — so the sort is what stops a sprite spawned late from landing above
+ * the layer that owns it. Cheap enough to do on every adoption: pools grow to
+ * the run's peak and then stop.
+ */
+const adopt = (
+  root: Phaser.GameObjects.Container,
+  ...objects: readonly (Phaser.GameObjects.GameObject | undefined)[]
+): void => {
+  for (const object of objects) {
+    if (object !== undefined) root.add(object);
+  }
+  root.sort('depth');
+};
 
 /**
  * Anything that sits on a board cell. `color` is what a sprite is tinted and
@@ -182,6 +199,7 @@ class SpritePool {
 
   constructor(
     private readonly scene: Phaser.Scene,
+    private readonly root: Phaser.GameObjects.Container,
     private readonly config: PoolConfig,
   ) {}
 
@@ -250,7 +268,10 @@ class SpritePool {
   }
 
   private spawn(at: Vec2): Sliding {
-    return { ...makeDrawn(this.scene, this.config, at), from: at, to: at };
+    const drawn = makeDrawn(this.scene, this.config, at);
+    adopt(this.root, drawn.image, drawn.glyph);
+
+    return { ...drawn, from: at, to: at };
   }
 }
 
@@ -263,7 +284,10 @@ class SpritePool {
 class ShardBurst {
   private readonly sprites: Phaser.GameObjects.Image[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly root: Phaser.GameObjects.Container,
+  ) {}
 
   /** Takes a whole segment, so the puff shows the color that was lost. */
   burst(segment: Segment): void {
@@ -277,6 +301,7 @@ class ShardBurst {
     let sprite = this.sprites.find((candidate) => !candidate.visible);
     if (sprite === undefined) {
       sprite = makeSprite(this.scene, TextureKey.Segment, tint, Depth.Shard, at);
+      adopt(this.root, sprite);
       this.sprites.push(sprite);
     }
 
@@ -339,6 +364,11 @@ const strandPieces = ({ head, body }: SnakeState): Placed[] =>
 
 /** Draws the board from game state. Owns no rules — it only reflects state. */
 export class BoardView {
+  /**
+   * Everything the board draws, held as one object so the whole kitchen is
+   * fitted to the device by a single position and scale (see `applyFrame`).
+   */
+  private readonly root: Phaser.GameObjects.Container;
   private readonly head: SpritePool;
   private readonly segments: SpritePool;
   private readonly sugar: SpritePool;
@@ -351,16 +381,17 @@ export class BoardView {
   private headFlash: Phaser.Tweens.Tween | undefined;
 
   constructor(private readonly scene: Phaser.Scene) {
+    this.root = scene.add.container(0, 0);
     this.drawFloor();
     this.drawStations();
-    this.sugar = new SpritePool(scene, {
+    this.sugar = new SpritePool(scene, this.root, {
       key: TextureKey.Sugar,
       tint: SUGAR_TINT,
       depth: Depth.Pickup,
       slides: false,
     });
     // Jars carry their primary as their color, so one pool serves all three.
-    this.dyes = new SpritePool(scene, {
+    this.dyes = new SpritePool(scene, this.root, {
       key: TextureKey.Dye,
       depth: Depth.Pickup,
       slides: false,
@@ -371,7 +402,7 @@ export class BoardView {
     // never slides. Faded too, because a block the player no longer steers
     // must not read as part of the strand — hue is spoken for by the color
     // system (design §4), so the separation has to come from value.
-    this.debris = new SpritePool(scene, {
+    this.debris = new SpritePool(scene, this.root, {
       key: TextureKey.Segment,
       depth: Depth.Cut,
       slides: false,
@@ -381,7 +412,7 @@ export class BoardView {
     // A batch waiting at the block is the same frozen piece as debris, but it
     // is product rather than spill: full strength, and already wearing the
     // candy shape it is about to leave as.
-    this.batch = new SpritePool(scene, {
+    this.batch = new SpritePool(scene, this.root, {
       key: TextureKey.Candy,
       depth: Depth.Cut,
       slides: false,
@@ -389,19 +420,19 @@ export class BoardView {
     });
     // Every item overrides this with the rope piece its neighbours call for;
     // the straight is only the pool's starting texture.
-    this.segments = new SpritePool(scene, {
+    this.segments = new SpritePool(scene, this.root, {
       key: TextureKey.StrandStraight,
       depth: Depth.Segment,
       slides: true,
       glyphDepth: Depth.SegmentGlyph,
     });
-    this.head = new SpritePool(scene, {
+    this.head = new SpritePool(scene, this.root, {
       key: TextureKey.Head,
       tint: HEAD_TINT,
       depth: Depth.Head,
       slides: true,
     });
-    this.shards = new ShardBurst(scene);
+    this.shards = new ShardBurst(scene, this.root);
   }
 
   /** Call when the core has moved the snake to a new set of cells. */
@@ -472,29 +503,49 @@ export class BoardView {
     });
   }
 
+  /**
+   * Fits the kitchen to the device. The board is authored at one fixed cell
+   * size and everything in it positioned in those units, so the whole of the
+   * responsive pass on this side is a position and a scale — which is what
+   * keeps `CELL_SIZE` a constant, and the accessibility glyphs baked at the
+   * size they are stamped at (design §4).
+   *
+   * Safe to call mid-run and as often as the device fires resizes: it moves the
+   * container and touches nothing else, so a strand mid-slide carries on from
+   * where it was.
+   */
+  applyFrame(frame: Frame): void {
+    this.root.setPosition(frame.board.x, frame.board.y).setScale(frame.board.scale);
+  }
+
   private drawStations(): void {
     for (const cell of CHOP_BLOCK_CELLS) {
-      makeSprite(
-        this.scene,
-        TextureKey.Block,
-        BLOCK_TINT,
-        Depth.Station,
-        cellToPixel(cell),
+      adopt(
+        this.root,
+        makeSprite(
+          this.scene,
+          TextureKey.Block,
+          BLOCK_TINT,
+          Depth.Station,
+          cellToPixel(cell),
+        ),
       );
     }
   }
 
   private drawFloor(): void {
-    this.scene.add
+    const floor = this.scene.add
       .image(BOARD_X, BOARD_Y, TextureKey.Floor)
       .setOrigin(0)
       .setScale(CELL_SIZE)
       .setDepth(Depth.Floor);
 
-    this.scene.add
+    const border = this.scene.add
       .rectangle(BOARD_X, BOARD_Y, COLS * CELL_SIZE, ROWS * CELL_SIZE)
       .setOrigin(0)
       .setStrokeStyle(BOARD_BORDER_WIDTH, BORDER)
       .setDepth(Depth.Floor);
+
+    adopt(this.root, floor, border);
   }
 }

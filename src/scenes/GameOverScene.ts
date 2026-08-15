@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 
 import { onceAnyInput } from '../input/anyInput';
-import { CENTRE_X } from '../ui/layout';
-import { textStyle } from '../ui/text';
+import { onScreenCentre } from '../ui/responsive';
+import { TextStack, type StackRow } from '../ui/text';
 import { SceneKey } from './keys';
 
 /** What the run was worth, handed over by GameScene (architecture §6). */
@@ -17,23 +17,26 @@ const asClock = (elapsedMs: number): string => {
   return `${Math.floor(seconds / 60)}:${`${seconds % 60}`.padStart(2, '0')}`;
 };
 
+/** Centred off the middle of the visible frame — see `MenuScene` for the why. */
+const lines = (summary: RunSummary): readonly StackRow[] => [
+  { text: 'Shop closed', size: 48, dy: -130 },
+  { text: `${summary.score}`, size: 64, dy: -40 },
+  {
+    text: `${summary.served} candies served · ${asClock(summary.elapsedMs)} on the floor`,
+    size: 20,
+    dy: 30,
+  },
+  { text: 'Press any key', size: 22, dy: 120 },
+];
+
 export class GameOverScene extends Phaser.Scene {
   constructor() {
     super(SceneKey.GameOver);
   }
 
   create(summary: RunSummary): void {
-    this.add.text(CENTRE_X, 190, 'Shop closed', textStyle(48)).setOrigin(0.5);
-    this.add.text(CENTRE_X, 280, `${summary.score}`, textStyle(64)).setOrigin(0.5);
-    this.add
-      .text(
-        CENTRE_X,
-        350,
-        `${summary.served} candies served · ${asClock(summary.elapsedMs)} on the floor`,
-        textStyle(20),
-      )
-      .setOrigin(0.5);
-    this.add.text(CENTRE_X, 440, 'Press any key', textStyle(22)).setOrigin(0.5);
+    const stack = new TextStack(this, lines(summary));
+    onScreenCentre(this, (centre, width) => stack.centreOn(centre, width));
 
     onceAnyInput(this, () => this.scene.start(SceneKey.Menu));
   }

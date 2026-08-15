@@ -14,7 +14,6 @@ import {
   type Drawn,
 } from '../render/drawn';
 import { TEXTURE_SIZE, TextureKey } from '../render/textures';
-import { GAME_WIDTH } from './layout';
 
 /**
  * One child at the serving window: they walk in from off-screen, stand in line
@@ -72,14 +71,6 @@ const BAR_HEIGHT = 5;
 /** Below this much patience left the face gives it away before the bar does. */
 const IMPATIENT_AT = 0.4;
 
-/**
- * Where a child is before they arrive and after they go: past the frame's own
- * edge, so nobody is ever seen to pop into or out of existence. They come from
- * the same side they leave by — the far end of the queue is the shop door, and
- * the near end is the window, so the line always faces the counter.
- */
-const OFFSTAGE_X = GAME_WIDTH + 60;
-
 const WALK_SPEED = 260;
 /** How long a step lasts, i.e. half a walk cycle. */
 const STEP_MS = 140;
@@ -104,9 +95,17 @@ export class CustomerView {
   private readonly barFill: Phaser.GameObjects.Rectangle;
 
   /** The standing line: every child in the queue has their feet on it. */
-  private readonly footY: number;
-  private x = OFFSTAGE_X;
-  private targetX = OFFSTAGE_X;
+  private footY: number;
+  /**
+   * Where a child is before they arrive and after they go: past the frame's own
+   * edge, so nobody is ever seen to pop into or out of existence. They come from
+   * the same side they leave by — the far end of the queue is the shop door, and
+   * the near end is the window, so the line always faces the counter. Which edge
+   * that is depends on the layout, so it is handed in rather than fixed.
+   */
+  private offstage: number;
+  private x: number;
+  private targetX: number;
   /** How far below the line they stand: nothing until they step out of it. */
   private lane = 0;
   private mood: Mood = Mood.Waiting;
@@ -119,13 +118,16 @@ export class CustomerView {
   /** Which half of the walk cycle is on screen — see `draw`. */
   private stepping = false;
 
-  constructor(scene: Phaser.Scene, footY: number) {
+  constructor(scene: Phaser.Scene, footY: number, offstage: number) {
     this.scene = scene;
     this.footY = footY;
+    this.offstage = offstage;
+    this.x = offstage;
+    this.targetX = offstage;
 
     // Everything is born off-screen at the same scale, so the four sprites
     // differ only in what they are and where they sit in the stack.
-    const off = { x: OFFSTAGE_X, y: footY };
+    const off = { x: offstage, y: footY };
     const sprite = (
       key: TextureKey,
       tint: number,
@@ -161,13 +163,33 @@ export class CustomerView {
     return this.done;
   }
 
+  /**
+   * The screen changed shape under them. The standing line and the door both
+   * move, and a child already walking out was headed for an edge that may now
+   * be in the middle of the screen — so their exit is re-aimed at the new one.
+   * Where they stand in the line is not set here: `CustomerQueue.render` walks
+   * everyone to their slot every frame, so they slide across rather than jump.
+   */
+  relocate(footY: number, offstage: number): void {
+    const leftFor = this.offstage;
+    this.footY = footY;
+    this.offstage = offstage;
+
+    if (this.targetX === leftFor) this.targetX = offstage;
+    if (this.done) this.x = offstage;
+
+    // The patience bar hangs off the standing line rather than off the walk, so
+    // nothing would move it until the next arrival without this.
+    this.draw(this.stepping);
+  }
+
   /** A child walks on from off-screen and heads for their place in line. */
   arrive(customer: Customer, slotX: number): void {
     this.done = false;
     this.leaving = false;
     this.pauseMs = 0;
     this.lane = 0;
-    this.x = OFFSTAGE_X;
+    this.x = this.offstage;
     this.targetX = slotX;
     this.shownBarWidth = -1;
     this.body.setDepth(HudDepth.Icon);
@@ -245,7 +267,7 @@ export class CustomerView {
     if (this.pauseMs > 0 && this.x === this.targetX) {
       this.pauseMs -= dtMs;
       this.lane = LEAVING_LANE * Math.min(1 - this.pauseMs / REACTION_MS, 1);
-      if (this.pauseMs <= 0) this.targetX = OFFSTAGE_X;
+      if (this.pauseMs <= 0) this.targetX = this.offstage;
       this.draw(false);
       return;
     }

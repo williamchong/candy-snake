@@ -33,6 +33,10 @@ Options:
 - `--url http://localhost:5173/` — drive an already-running server instead of
   starting one (the driver then does not stop anything on exit).
 - `--out /path/shot.png` — screenshot destination.
+- `--viewport 390x844` — load at that size instead of 960×640. The game lays
+  itself out from the real viewport (architecture §9), so the size is part of
+  what is being tested; phone portrait (`390x844`) and landscape (`844x390`)
+  are the two worth checking alongside the desktop default.
 
 Read the screenshot file to visually verify a change. For interactive
 debugging beyond the smoke check (clicking, console inspection), start the

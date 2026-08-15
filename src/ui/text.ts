@@ -1,3 +1,6 @@
+import type Phaser from 'phaser';
+
+import type { Vec2 } from '../core/types';
 import { GLYPH_TINT } from '../render/drawn';
 
 /**
@@ -22,3 +25,49 @@ export const textStyle = (
   color: INK,
   ...extra,
 });
+
+/** Air either side of the longest line, so nothing sits against the frame edge. */
+const MARGIN = 16;
+
+export interface StackRow {
+  readonly text: string;
+  readonly size: number;
+  /** Where the line sits relative to the middle of the frame, in pixels. */
+  readonly dy: number;
+}
+
+/**
+ * A stack of centred lines, which is the whole of what both message screens
+ * are. They are re-centred rather than rebuilt on a resize, because on a phone
+ * the middle of the screen moves when the device is turned over.
+ */
+export class TextStack {
+  private readonly lines: readonly {
+    readonly line: Phaser.GameObjects.Text;
+    readonly dy: number;
+  }[];
+
+  constructor(scene: Phaser.Scene, rows: readonly StackRow[]) {
+    this.lines = rows.map(({ text, size, dy }) => ({
+      line: scene.add.text(0, 0, text, textStyle(size)).setOrigin(0.5),
+      dy,
+    }));
+  }
+
+  /**
+   * `width` is what the line has to fit inside. A narrow phone is narrower than
+   * the title is long, so a line too wide for the frame is scaled down to it
+   * rather than being clipped at both ends — the alternative is picking a font
+   * size that fits the smallest screen and looks lost on every other one.
+   */
+  centreOn({ x, y }: Vec2, width: number): void {
+    const room = width - 2 * MARGIN;
+
+    for (const { line, dy } of this.lines) {
+      // Measured unscaled, or a line that was shrunk once keeps shrinking.
+      line.setScale(1);
+      if (line.width > room) line.setScale(room / line.width);
+      line.setPosition(x, y + dy);
+    }
+  }
+}

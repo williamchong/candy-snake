@@ -7,6 +7,7 @@
  *   node .claude/skills/run-candy-snake/driver.mjs
  *   node .claude/skills/run-candy-snake/driver.mjs --url http://localhost:5173/
  *   node .claude/skills/run-candy-snake/driver.mjs --out /tmp/shot.png
+ *   node .claude/skills/run-candy-snake/driver.mjs --viewport 390x844
  *
  * Exit 0 = game boots clean. Exit 1 = console error, no canvas, or timeout.
  */
@@ -18,10 +19,26 @@ import { chromium } from 'playwright';
 import { createServer } from 'vite';
 
 const { values: flags } = parseArgs({
-  options: { url: { type: 'string' }, out: { type: 'string' } },
+  options: {
+    url: { type: 'string' },
+    out: { type: 'string' },
+    viewport: { type: 'string' },
+  },
 });
 const outPath =
   flags.out ?? join(dirname(fileURLToPath(import.meta.url)), 'screenshot.png');
+
+// The game lays itself out from the real viewport now (architecture §9), so the
+// size the page is loaded at is part of what is being smoke-tested.
+const DEFAULT_VIEWPORT = { width: 960, height: 640 };
+const parseViewport = (value) => {
+  if (!value) return DEFAULT_VIEWPORT;
+
+  const match = /^(\d+)x(\d+)$/i.exec(value.trim());
+  if (!match) throw new Error(`--viewport wants WxH, e.g. 390x844 (got "${value}")`);
+
+  return { width: Number(match[1]), height: Number(match[2]) };
+};
 
 let server;
 let browser;
@@ -40,8 +57,11 @@ try {
   }
   console.log(`loading ${url}`);
 
+  const viewport = parseViewport(flags.viewport);
+  console.log(`viewport ${viewport.width}x${viewport.height}`);
+
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+  const page = await browser.newPage({ viewport });
 
   const consoleErrors = [];
   page.on('console', (msg) => {

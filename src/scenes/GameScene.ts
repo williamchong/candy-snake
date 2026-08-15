@@ -6,6 +6,7 @@ import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
 import { bindSwipe } from '../input/swipe';
 import { BoardView } from '../render/boardView';
+import { onFrame } from '../ui/responsive';
 import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
 import type { UIScene } from './UIScene';
@@ -47,6 +48,12 @@ export class GameScene extends Phaser.Scene {
     // here knows which one the player is using (architecture §8).
     bindKeyboard(this, this.turns);
     bindSwipe(this, this.turns);
+
+    // Fitting the board is one position and one scale on the container it all
+    // lives in, so a resize mid-run costs nothing and disturbs nothing — the
+    // core never hears about it (architecture §9).
+    onFrame(this, (frame) => this.view.applyFrame(frame));
+
     // The HUD runs in parallel and reads the same core, read-only
     // (architecture §6).
     this.scene.launch(SceneKey.UI, { core: this.core });

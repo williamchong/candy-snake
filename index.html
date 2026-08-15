@@ -17,12 +17,14 @@
         margin: 0;
         padding: 0;
         height: 100%;
-        /* Must match the Phaser backgroundColor, or Scale.FIT letterbox bars
-           show as a different color than the game. */
+        /* Must match the Phaser backgroundColor. Scale.RESIZE leaves no
+           letterbox bars, but the page still shows through for the frame or two
+           before the canvas is sized. */
         background: #d8cbe4;
         overscroll-behavior: none;
       }
-      /* Centering is Phaser's job (Scale.CENTER_BOTH) — don't double up with flex. */
+      /* The canvas fills this, and every scene lays itself out from its real
+         size (architecture §9) — so there is nothing left over to centre. */
       #app {
         height: 100%;
       }

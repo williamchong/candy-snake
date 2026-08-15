@@ -235,17 +235,35 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 ## 9. Responsive layout & scaling
 
 - `Phaser.Scale.RESIZE` + a single `layout()` pass (in `ui/layout.ts`) run on
-  create and on `resize` events.
+  create and on `resize` events. `layout.ts` is the only file that knows about
+  screen geometry, and it is pure arithmetic — no Phaser import — so it carries
+  unit tests while the scenes that apply it are covered by the smoke driver.
 - The 16×16 board renders at the largest integer-friendly cell size that fits
-  the available rectangle; HUD regions anchor around it:
+  the available rectangle, **applied as one container transform**: the board
+  draws itself at a fixed `CELL_SIZE` in its own coordinates and `BoardView`
+  scales the container it all lives in. Sizing every sprite per device instead
+  would make `CELL_SIZE` dynamic across `textures.ts`, `drawn.ts` (it is the
+  default scale argument of `makeSprite`) and `boardView.ts`, and would break
+  the accessibility glyphs, which are baked at their display size on purpose.
+  `cell` is still chosen as a whole number, so `CELL_SIZE * scale` is exact.
+- The board is never scaled *up* past the size its sprites are authored at: a
+  large window gets more room around the kitchen, not a bigger kitchen.
+- HUD regions anchor around the board, and the HUD is **not** scaled with it —
+  it is a parallel scene with its own camera, so text stays readable and touch
+  targets stay full size however far the board has had to shrink.
   - **Landscape:** customers + shelf + score in the right column, beside the
     chopping block's wall (design §10).
-  - **Portrait:** the same strip, narrowed and compacted beside the grid.
+  - **Portrait:** score and lives in a band *above* the board, the rack and the
+    queue in a strip *below* it. A board that already fills the width leaves no
+    column beside it, so the strip goes under — with the rack right-aligned and
+    the queue running back from it, which is how design §10's one-sided reading
+    survives the turn. (This supersedes the earlier "narrowed and compacted
+    beside the grid", which assumed a board that did not fill the width.)
+- The rack sizes itself to the run it is given: six slots at the desktop pitch
+  need most of a laptop's height, which a phone held sideways has not got, so
+  pitch and slot shrink together rather than running off the screen.
 - The serving side stays on the block's wall in both orientations: the block's
   cells are a game rule, so they must never depend on the layout.
-- MVP shortcut (early phases only): fixed `Scale.FIT` at 960×640 landscape;
-  the responsive pass replaces it in the mobile phase. `layout.ts` is the only
-  file that knows about screen geometry.
 - Mobile page hardening: `touch-action: none` on the canvas,
   `viewport-fit=cover`, prevent pull-to-refresh/zoom, wake-lock nice-to-have.
 

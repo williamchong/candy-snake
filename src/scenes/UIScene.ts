@@ -1,14 +1,13 @@
 import Phaser from 'phaser';
 
-import { CHOP_BLOCK_TOP } from '../core/board';
 import { RED } from '../core/colors';
 import { STARTING_LIVES, type Game } from '../core/game';
 import type { GameEvent } from '../core/types';
-import { BOARD_RIGHT, rowToPixel } from '../render/boardView';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { glyphTextureKey } from '../render/textures';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
+import { onFrame } from '../ui/responsive';
 import { ShelfStrip } from '../ui/shelfStrip';
 import { textStyle } from '../ui/text';
 import { SceneKey } from './keys';
@@ -17,30 +16,15 @@ import { SceneKey } from './keys';
  * The HUD, running in parallel above GameScene (architecture §6) so that camera
  * effects on the play field never move the score.
  *
- * Everything here reads core state and draws it; nothing writes back. The
- * layout is the landscape column from design §10 — score, lives, the rack level
- * with the bench, then the queue below it, so a candy's whole path reads down
- * one side. Geometry is fixed at 960×640 until `ui/layout.ts` takes it over in
- * the mobile phase (architecture §9).
+ * Everything here reads core state and draws it; nothing writes back. Where any
+ * of it goes is `ui/layout.ts`'s to say (architecture §9) — beside the board on
+ * a wide screen and beneath it on a tall one, so that a candy's whole path still
+ * reads as one run from the bench to the child (design §10).
+ *
+ * The HUD is deliberately *not* scaled with the board: it is a separate scene
+ * with its own camera, so text stays at a readable size and a tap target stays
+ * a tap target however far the kitchen has had to shrink.
  */
-const COLUMN_MARGIN = 24;
-const COLUMN_X = BOARD_RIGHT + COLUMN_MARGIN;
-
-const SCORE_Y = 40;
-const LIVES_Y = 84;
-const LIVES_PITCH = 26;
-
-const SHELF_X = COLUMN_X + 28;
-const SHELF_TOP = rowToPixel(CHOP_BLOCK_TOP);
-
-/**
- * Where the child at the head of the queue stands: a floor line set by eye just
- * inside the bottom of the kitchen, with the line running back from there
- * toward the door, so the whole column reads top to bottom as one path —
- * bench, rack, child. Fixed like the rest of the geometry here until
- * `ui/layout.ts` takes it over (architecture §9).
- */
-const QUEUE_FRONT = { x: COLUMN_X + 42, y: 556 };
 
 /** The window's own events: everything the queue plays rather than draws. */
 type WindowEvent = Extract<
@@ -69,22 +53,38 @@ export class UIScene extends Phaser.Scene {
     this.core = data.core;
 
     this.shownLives = -1;
-    this.scoreText = this.add
-      .text(COLUMN_X, SCORE_Y, '0', textStyle(30))
-      .setOrigin(0, 0.5);
+    this.scoreText = this.add.text(0, 0, '0', textStyle(30)).setOrigin(0, 0.5);
 
     // Hearts in ink rather than red: a life is not a candy, and hue in this
     // game belongs to candies alone (design §4, palette constraints). The heart
     // is red's accessibility symbol, so the shape is already baked.
-    this.lives = Array.from({ length: STARTING_LIVES }, (_unused, life) =>
+    this.lives = Array.from({ length: STARTING_LIVES }, () =>
       makeSprite(this, glyphTextureKey(RED), GLYPH_TINT, HudDepth.Icon, {
-        x: COLUMN_X + 8 + life * LIVES_PITCH,
-        y: LIVES_Y,
+        x: 0,
+        y: 0,
       }),
     );
 
-    this.shelf = new ShelfStrip(this, { x: SHELF_X, y: SHELF_TOP });
-    this.queue = new CustomerQueue(this, QUEUE_FRONT);
+    this.shelf = new ShelfStrip(this);
+    this.queue = new CustomerQueue(this);
+
+    // Everything above is built at the origin and put somewhere by the layout
+    // pass, which runs once here and again whenever the device changes shape.
+    //
+    // Pure repositioning: what each piece *shows* is drawn from core state
+    // every frame regardless, so nothing here has to know what a run is
+    // currently doing.
+    onFrame(this, (frame) => {
+      const { score, lives } = frame.hud;
+
+      this.scoreText.setPosition(score.x, score.y);
+      this.lives.forEach((heart, life) =>
+        heart.setPosition(lives.at.x + life * lives.pitch, lives.at.y),
+      );
+
+      this.shelf.applyFrame(frame);
+      this.queue.applyFrame(frame);
+    });
   }
 
   /**
