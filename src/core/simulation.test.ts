@@ -468,8 +468,9 @@ const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
  * Two of the three findings that opened the phase are answered:
  *
  * - **Losing is possible now.** The maker who batches — the way the color
- *   system is meant to be played — dies inside the 8–10 minute window the plan
- *   is aiming at, where before neither bot could be touched.
+ *   system is meant to be played — dies inside the 4–6 minute window the plan
+ *   is aiming at, where before neither bot could be touched. That window used
+ *   to read 8–10; what moved it is in the plan, under the seventh sitting.
  * - **The window is no longer the only constraint.** The ramp shortens the
  *   arrival interval past what either maker can keep up with, so the run ends
  *   on the queue rather than on the clock running out of customers.
@@ -528,30 +529,47 @@ describe('the reference players, after the ramp went in', () => {
 
   it('ends a batching run inside the window the ramp is aimed at', () => {
     // How often the ramp closes a run out is a rate, so it is asked of the
-    // wider draw (`SWEEP`) rather than of the four. Not every seed: a quarter
-    // of them still come through ten minutes alive, which is variance rather
-    // than a curve that cannot bite. Measured 14/16 with level 2 rationing its
-    // jar and 12/16 without — the same rate, re-rolled.
+    // wider draw (`SWEEP`) rather than of the four. Every seed, now that an
+    // emptied window refills rather than standing open: the queue the run ends
+    // on is one the maker actually had to hold off. Measured 16/16, against
+    // 14/16 when the window admitted one child per interval whatever it held.
     const diedAt = target(batcherGoal, SWEEP)
       .map((run) => run.diedAtMs)
       .filter((ms): ms is number => ms !== undefined);
-    expect(diedAt.length).toBeGreaterThanOrEqual(10);
+    expect(diedAt.length).toBeGreaterThanOrEqual(14);
 
-    // And when it closes one out, it usually closes it out late — which is a
-    // rate too, and so is asked of the same draw. The four the ramp was tuned
-    // against cannot carry this one: with a sample that size a re-rolled seed
-    // dying at 5½ minutes reads as the curve having grown teeth it has not
-    // grown. Measured over 96 seeds: 65 of 81 closed-out runs pass seven
-    // minutes here, 61 of 79 before — and the early tail predates both, which
-    // is the balance work's finding rather than this one's (see the plan).
-    // Two thirds of them, as integers rather than as a ratio — and said aloud
-    // in the message, since the cross-multiplied numbers on their own report a
-    // failure nobody can read the rate back out of.
+    // *When* it closes them out is the target itself, and the median is what
+    // carries it: the tail is a re-roll on any given seed (anything that moves
+    // a spawn re-rolls every free cell drawn after it) but the middle of the
+    // draw is not. Measured 5.1 min, over deaths running 3.2 … 8.7.
+    //
+    // The window reads 4–6 rather than the 8–10 it was written with, and the
+    // reason is not that the curve grew teeth. It is that nothing new arrives
+    // after the three-minute mark: max queue is done at 2 min, the order mix
+    // and the speed cap at 3, and past those only two numbers move — patience
+    // and the arrival interval — neither of which adds a thing to do. A target
+    // past the last of the levers was asking the ramp to hold attention with
+    // arithmetic. See the plan's seventh sitting.
+    const sorted = [...diedAt].sort((a, b) => a - b);
+    const median =
+      sorted.length % 2 === 1
+        ? sorted[(sorted.length - 1) / 2]!
+        : (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2;
+    // Said once for both ends, since a median outside the window fails one of
+    // them and the reader wants the same number either way.
+    const measured = `median death at ${(median / 60_000).toFixed(1)} min`;
+    expect(median, measured).toBeGreaterThanOrEqual(4 * 60_000);
+    expect(median, measured).toBeLessThanOrEqual(6 * 60_000);
+
+    // And the long tail stays a tail. Not a bound on the median twice over: a
+    // draw could sit dead centre and still send a quarter of its runs past the
+    // point the levers ran out, which is the thing the target is against.
+    // Measured 2 of 16.
     const late = diedAt.filter((ms) => ms > 7 * 60_000);
     expect(
-      late.length * 3,
+      late.length * 4,
       `${late.length} of ${diedAt.length} closed-out runs passed seven minutes`,
-    ).toBeGreaterThanOrEqual(diedAt.length * 2);
+    ).toBeLessThanOrEqual(diedAt.length);
   });
 
   it('buys a batching maker more candy per minute than a grinder', () => {
@@ -572,15 +590,33 @@ describe('the reference players, after the ramp went in', () => {
   });
 
   it('still pays it nothing for the extra work — the open finding', () => {
+    // Every extra candy the batcher makes is made for a window that did not
+    // ask for it. That is an invariant — it holds on a run or it does not — so
+    // the four carry it. Measured 16 of 16 across the wider draw as well.
     const grinders = target(grinderGoal);
-
     target(batcherGoal).forEach((batcher, seed) => {
-      const grinder = grinders[seed]!;
-
-      // Every extra candy above is made for a window that did not ask for it…
-      expect(batcher.staled).toBeGreaterThan(grinder.staled);
-      // …so the maker doing more work scores less for it, on every seed.
-      expect(batcher.game.state.score).toBeLessThan(grinder.game.state.score);
+      expect(batcher.staled).toBeGreaterThan(grinders[seed]!.staled);
     });
+
+    // Whether the maker doing more work is *paid* less for it used to be an
+    // invariant too, asked of the same four. A window that refills has taken
+    // it off that footing: a fixed bundle has more targets to land on when
+    // three children are waiting than when one is, and on one seed in the draw
+    // that is now enough to put the batcher ahead. One seed is not a closure —
+    // it is the first movement anything has produced on this finding, and it
+    // is a proportion now, so it moves to the draw that can carry a proportion
+    // (`SWEEP`, and see its own note on why four cannot).
+    //
+    // Measured 1 of 16, against 0 of 16 before. Closing the finding means this
+    // number crossing the halfway mark and the assertion inverting with it —
+    // not the assertion being deleted.
+    const sweptGrinders = target(grinderGoal, SWEEP);
+    const ahead = target(batcherGoal, SWEEP).filter(
+      (batcher, seed) => batcher.game.state.score > sweptGrinders[seed]!.game.state.score,
+    );
+    expect(
+      ahead.length * 4,
+      `the batching maker outscored the grinder on ${ahead.length} of ${SWEEP.length} seeds`,
+    ).toBeLessThanOrEqual(SWEEP.length);
   });
 });

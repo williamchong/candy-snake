@@ -71,7 +71,7 @@ export class Game {
   private readonly config: GameConfig;
   private readonly rng: Rng;
   private moveAccMs = 0;
-  /** Time the window has been empty, against the current arrival interval. */
+  /** Time the window has had room, against the current arrival gap. */
   private waitMs = 0;
   /**
    * Time on the endless ramp, which only starts once the opening levels are
@@ -439,11 +439,43 @@ export class Game {
   }
 
   /**
+   * How long until the next child walks up, given how many are already there.
+   *
+   * A flat interval cannot fill a window: children arrived on a metronome
+   * whatever the queue held, so a maker serving faster than the interval left
+   * the window empty for the rest of it and the queue never rose above one —
+   * `maxQueue` was unreachable by construction, and design §7's "max queue 3"
+   * was a number nobody ever saw. An order you cannot see is an order you
+   * cannot plan a ladder against, which is the shape of what the second
+   * sitting reported (implementation plan).
+   *
+   * So the gap is a share of the interval, scaled by how full the window is:
+   * `arrivalIntervalMs` is the gap with **one slot left** to fill, and an
+   * emptier window fills proportionally faster. A queue near capacity is under
+   * exactly the pressure the table always named; a queue that has just been
+   * cleared refills instead of leaving the maker to wait out the rest of an
+   * interval in front of an empty window.
+   *
+   * That is more demand over a run, not the same demand rearranged, and it is
+   * meant to be: on the same anchor table it closes a batching run out at 5
+   * minutes where the flat interval took 8 (the plan's seventh sitting).
+   *
+   * Counting `length + 1` rather than `length` is what keeps a window with no
+   * interval shut: `Infinity` times a positive share is still `Infinity`,
+   * where times zero it would be `NaN` and let every child straight in. It is
+   * also what leaves the tutorial's own window untouched — one slot, empty, so
+   * the share is 1 and the gap is exactly the beat it always was.
+   */
+  private arrivalGapMs(intervalMs: number, maxQueue: number): number {
+    return (intervalMs * (this.state.customers.length + 1)) / maxQueue;
+  }
+
+  /**
    * Brings the next child to the window once the wait is up. The clock only
    * runs while there is room, so clearing a full queue cannot dump the backlog
-   * all at once — and the interval is read fresh each time, so the wait a
-   * tutorial level started carries over into the next one. The handover to the
-   * endless ramp sets the clock itself, in `finishOpeningLevel`.
+   * all at once — and the gap is read fresh each time, so the wait a tutorial
+   * level started carries over into the next one. The handover to the endless
+   * ramp sets the clock itself, in `finishOpeningLevel`.
    */
   private admitCustomer(dtMs: number, events: GameEvent[]): void {
     const level = this.openingLevel;
@@ -464,7 +496,7 @@ export class Game {
     if (this.state.customers.length >= window.maxQueue) return;
 
     this.waitMs += dtMs;
-    if (this.waitMs < window.intervalMs) return;
+    if (this.waitMs < this.arrivalGapMs(window.intervalMs, window.maxQueue)) return;
     // Before the serve below, which is the last opening level's way of ending:
     // clearing the clock after it would wipe the handover's own setting.
     this.waitMs = 0;
@@ -551,19 +583,23 @@ export class Game {
    *
    * The arrival clock has stood still all level: a queue with no room never
    * counts (see `admitCustomer`), so it reads 0 at every opening serve. Left
-   * there, the window would stand empty for a whole interval — 12s at Mixing —
-   * right after three levels paced a second apart. Crediting the wait already
-   * served brings the first real child on that same beat instead. A window
-   * with no interval to speak of has no wait to credit: `Infinity` would sit
-   * level with the guard rather than under it, and admit a child at once.
+   * there, the window would stand empty for the handover's whole gap right
+   * after three levels paced a second apart. Crediting the wait already served
+   * brings the first real child on that same beat instead. A window with no
+   * interval to speak of has no wait to credit: `Infinity` would sit level
+   * with the guard rather than under it, and admit a child at once.
    */
   private finishOpeningLevel(): void {
     this.state.tutorialIndex += 1;
     if (this.openingLevel !== undefined) return;
 
     // Read after the index moved, so this is the handover row the ramp starts
-    // at rather than the tutorial's own beat.
-    const served = this.stage.arrivalIntervalMs - TUTORIAL_ARRIVAL_GAP_MS;
+    // at rather than the tutorial's own beat — and the *gap* an empty window
+    // waits there, not the interval a nearly full one does.
+    const stage = this.stage;
+    const served =
+      this.arrivalGapMs(stage.arrivalIntervalMs, stage.maxQueue) -
+      TUTORIAL_ARRIVAL_GAP_MS;
     this.waitMs = Number.isFinite(served) ? Math.max(0, served) : 0;
   }
 

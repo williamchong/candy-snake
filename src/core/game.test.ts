@@ -774,6 +774,30 @@ describe('Game serving window', () => {
 
     expect(game.state.customers).toHaveLength(MIXING_STAGE.maxQueue);
   });
+
+  it('brings children in faster the emptier the window is', () => {
+    // `arrivalIntervalMs` is the gap with one slot still to fill, so each of
+    // the three below is due a third of it more than the one before: 4s, 8s,
+    // 12s. A flat interval would have made all three 12s — and a maker who
+    // clears the window inside one, as any of them will, would then never see
+    // it hold more than a single child (design §7's "max queue 3").
+    const game = newGame({ stage: MIXING_STAGE });
+    const due = [4_000, 8_000, 12_000];
+
+    due.forEach((gapMs, index) => {
+      game.step(gapMs - 100, NO_TURNS);
+      expect(game.state.customers).toHaveLength(index);
+      game.step(100, NO_TURNS);
+      expect(game.state.customers).toHaveLength(index + 1);
+    });
+
+    // Which fills the three slots in two intervals rather than three — the
+    // whole of the difference above, and the reason an emptied window is back
+    // under pressure before the maker has finished enjoying having cleared it.
+    expect(due.reduce((sum, gapMs) => sum + gapMs, 0)).toBe(
+      MIXING_STAGE.arrivalIntervalMs * 2,
+    );
+  });
 });
 
 describe('Game opening levels', () => {

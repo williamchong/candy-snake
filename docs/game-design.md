@@ -396,8 +396,9 @@ Difficulty here is authored by removing options.
   at all times.)
 - A level ends when its customer is served; the next child walks up a second
   later — and so does the endless game's first, which inherits that beat rather
-  than opening on a whole arrival interval of empty window (12s at Mixing,
-  which would read as the game having ended rather than started). Nothing can
+  than opening on the handover's own empty-window gap (4s at Mixing — a third
+  of its 12s interval, the window being empty of all three slots — which would
+  read as the game having ended rather than started). Nothing can
   be soft-locked: a level's jar is not on the floor until there is a strand to
   dye, and a strand that still needs the color still calls the jar back, however
   it came to need it. The level-2 lesson is not taught by retry — retry was
@@ -441,15 +442,35 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   past the Rush row the window is the only thing still tightening; a curve that
   flattened while the player still had headroom would never bring the run to an
   end (§1: difficulty ramps *until lives run out*).
+- **The Arrival column is the gap with one slot left to fill**, not a flat
+  metronome, and an emptier window fills proportionally faster. Of three slots:
+  an empty window waits a third of the column figure, one child already waiting
+  makes it two thirds, and two makes it the whole figure. So an empty window
+  fills in two intervals rather than three, and a window near capacity is under
+  exactly the pressure the column always named. That is more demand over a run
+  rather than the same demand rearranged, and deliberately so: on this same
+  table it ends a batching run at 5 minutes where a flat interval took 8.
+- **Read flat, the Max queue column was unreachable.** Children arrived on a
+  fixed beat whatever the window held, so any maker who served faster than the
+  interval emptied it and kept it empty, and the queue never rose above one on
+  any seed at any point on the ramp. A player who can only ever see one order
+  cannot plan a ladder against the window, which is the whole point of the
+  window being deeper than one.
 - Whichever of elapsed time and candies served is further along drives the
   curve, so a fast player is not held back by the clock and a slow one is not
   overrun by it.
 - The rare **brown-accepting customer** (~5% once the ramp has settled) only
   appears if a brown candy is on the shelf. Because a new arrival sweeps the
   rack, they are served the moment they walk up: the cleanup is the whole visit.
-- Measured against the reference bots, a maker who batches dies around 8 minutes
-  on most seeds. See the implementation plan for what those runs said — including
-  the one finding this table could not fix.
+- Measured against the reference bots, a maker who batches dies around 5 minutes
+  on most seeds, against a target of 4–6. The target read 8–10 until the seventh
+  sitting, which is where the case for moving it is: **every lever that adds a
+  new thing to do is spent by the 3-minute mark** — max queue at 2 min, the order
+  mix and the speed cap at 3 — and past those only patience and the arrival
+  interval move, neither of which adds anything, only subtracts slack. A target
+  set past the last of the levers was asking this table to hold attention with
+  arithmetic. See the implementation plan for those runs — including the one
+  finding this table could not fix.
 
 ## 8. Spawn fairness rules
 
