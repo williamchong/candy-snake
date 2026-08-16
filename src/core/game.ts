@@ -39,6 +39,7 @@ import {
   type GameConfig,
   type GameEvent,
   type GameState,
+  type Pickup,
   type Segment,
   type Severed,
   type SnakeState,
@@ -270,7 +271,8 @@ export class Game {
   private cutAtBlock(before: SnakeState, events: GameEvent[]): void {
     if (!isChopBlock(this.state.snake.head) || this.state.snake.body.length === 0) return;
 
-    events.push({ type: 'strand-cut', batch: this.sever(0, 'chop', before) });
+    const batch = this.sever(0, 'chop', before, events);
+    events.push({ type: 'strand-cut', batch });
   }
 
   /**
@@ -285,24 +287,39 @@ export class Game {
       if (pickup === undefined) continue;
       if (!pickup.open || coversCell(this.state.snake, pickup.pos)) continue;
 
-      this.state.pickups.splice(index, 1);
-
-      if (pickup.kind === 'sugar') {
-        this.state.snake = growTail(this.state.snake, pickup.pos);
-        events.push({
-          type: 'sugar-pulled',
-          pos: pickup.pos,
-          length: snakeLength(this.state.snake),
-        });
-      } else {
-        events.push({
-          type: 'dye-spent',
-          pos: pickup.pos,
-          primary: pickup.primary,
-          kneaded: pickup.kneaded,
-        });
+      if (pickup.kind === 'dye') {
+        this.spendDye(index, pickup, events);
+        continue;
       }
+
+      this.state.pickups.splice(index, 1);
+      this.state.snake = growTail(this.state.snake, pickup.pos);
+      events.push({
+        type: 'sugar-pulled',
+        pos: pickup.pos,
+        length: snakeLength(this.state.snake),
+      });
     }
+  }
+
+  /**
+   * Takes a jar off the board and reports what it managed to color. The two
+   * ways a jar can leave — the strand clearing it, and the strand being cut off
+   * it — differ in *when* they fire and not in what they mean, so the event is
+   * built here rather than at both.
+   */
+  private spendDye(
+    index: number,
+    pickup: Extract<Pickup, { kind: 'dye' }>,
+    events: GameEvent[],
+  ): void {
+    this.state.pickups.splice(index, 1);
+    events.push({
+      type: 'dye-spent',
+      pos: pickup.pos,
+      primary: pickup.primary,
+      kneaded: pickup.kneaded,
+    });
   }
 
   /**
@@ -310,10 +327,8 @@ export class Game {
    * becomes debris rather than disappearing (design §6).
    */
   private breakStrand(hitIndex: number, before: SnakeState, events: GameEvent[]): void {
-    events.push({
-      type: 'strand-broken',
-      severed: this.sever(hitIndex, 'crumble', before),
-    });
+    const severed = this.sever(hitIndex, 'crumble', before, events);
+    events.push({ type: 'strand-broken', severed });
   }
 
   /**
@@ -327,7 +342,12 @@ export class Game {
    * Both cuts end here: a self-hit and a chop differ only in where the strand
    * parts and what becomes of the piece afterwards (design §5, §6).
    */
-  private sever(cutIndex: number, fate: Severed['fate'], before: SnakeState): Segment[] {
+  private sever(
+    cutIndex: number,
+    fate: Severed['fate'],
+    before: SnakeState,
+    events: GameEvent[],
+  ): Segment[] {
     const { snake, severed } = shatterAt(this.state.snake, cutIndex);
     this.state.snake = snake;
 
@@ -337,23 +357,45 @@ export class Game {
     }));
     this.state.severed.push({ segments, fate });
 
-    this.recloseAbandonedPickups();
+    this.releaseAbandonedPickups(events);
     return segments;
   }
 
   /**
-   * Closes every open pickup the strand no longer covers, leaving it on the
-   * board for the head to come back for. Both ways a strand can lose length —
-   * a break, a chop — can abandon a pickup mid-pass, and an open cube whose
-   * cell no tail will ever clear would otherwise plant its segment at a cell
-   * nowhere near the tail (design §6).
+   * Settles every open pickup the strand no longer covers. Both ways a strand
+   * can lose length — a break, a chop — can abandon one mid-pass, and no tail
+   * is ever coming to clear it, so `spendClearedPickups` will never see it
+   * again. The two kinds want opposite answers, for the same reason: *when*
+   * they pay.
+   *
+   * A **cube** pays at spend time, by planting its segment at the cell the tail
+   * has just vacated. Abandoned, there is no such cell — it would plant one
+   * nowhere near the tail — so it is closed again and left for the head to come
+   * back for, which is also fair: the player was given nothing (design §6).
+   *
+   * A **jar** pays at knead time, and the color it kneaded has just left with
+   * the piece that was cut. Closing that one would hand the payment back, and
+   * the bench turns that into a loop: a jar laid on the cell before it is
+   * crossed, kneads the segment behind the head, and is re-closed by the very
+   * chop the player was driving at — free dye, every pass, from a jar that
+   * never leaves. It never leaving is the second half, because a jar on the map
+   * holds its primary's only slot (`missingPickups`, design §8.2), so the board
+   * can no longer lay that color anywhere reachable. Spent, both go away.
+   *
+   * (A jar reaching here has always kneaded at least once — `kneadOpenDyes`
+   * runs before the cut, and a jar the strand covers by anything but the head
+   * has a segment standing on it. `kneaded` is still carried on the event, as
+   * the wasted-dye case does through `spendClearedPickups`.)
    */
-  private recloseAbandonedPickups(): void {
-    this.state.pickups = this.state.pickups.map((pickup) =>
-      pickup.open && !coversCell(this.state.snake, pickup.pos)
-        ? { ...pickup, open: false }
-        : pickup,
-    );
+  private releaseAbandonedPickups(events: GameEvent[]): void {
+    for (let index = this.state.pickups.length - 1; index >= 0; index -= 1) {
+      const pickup = this.state.pickups[index];
+      if (pickup === undefined) continue;
+      if (!pickup.open || coversCell(this.state.snake, pickup.pos)) continue;
+
+      if (pickup.kind === 'dye') this.spendDye(index, pickup, events);
+      else this.state.pickups[index] = { ...pickup, open: false };
+    }
   }
 
   /**

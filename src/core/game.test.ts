@@ -502,6 +502,20 @@ describe('Game shatter', () => {
     expect(game.state.pickups).toEqual([{ kind: 'sugar', pos, open: false }]);
     expect(game.state.snake.body).toHaveLength(3);
   });
+
+  it('spends a jar the lost length was still carrying, rather than closing it', () => {
+    const game = aboutToHitItself();
+    // Same cell as the cube above — the break leaves it with no strand passing
+    // through it — but the jar has already paid, into the segment that is about
+    // to come loose. Closing it would hand that color back for nothing.
+    const pos = at(0, 2);
+    game.state.pickups = [{ kind: 'dye', pos, primary: RED, open: true, kneaded: 0 }];
+
+    const events = drive(game, 1);
+
+    expect(game.state.pickups).toEqual([]);
+    expect(events).toContainEqual({ type: 'dye-spent', pos, primary: RED, kneaded: 1 });
+  });
 });
 
 describe('Game chopping block', () => {
@@ -611,6 +625,24 @@ describe('Game chopping block', () => {
 
     expect(game.state.pickups).toEqual([{ kind: 'sugar', pos, open: false }]);
     expect(game.state.snake.body).toEqual([]);
+  });
+
+  it('spends a jar laid beside it rather than re-closing it every pass', () => {
+    // The jar sits on the cell before the bench, so the same move that kneads
+    // it is the move that chops — which is a lane the player drives *on
+    // purpose*, and the one place the reclose rule turned into a loop: color
+    // taken, batch cut, jar handed straight back. It also held the only slot
+    // its primary has (`missingPickups`), so no red could be laid anywhere
+    // reachable for the rest of the run.
+    const game = aboutToReachBlock([RAW, RAW]);
+    const pos = at(bench.x - 1, bench.y);
+    game.state.pickups = [{ kind: 'dye', pos, primary: RED, open: true, kneaded: 0 }];
+
+    const events = drive(game, 1);
+
+    expect(events).toContainEqual({ type: 'dye-kneaded', pos, primary: RED, color: RED });
+    expect(events).toContainEqual({ type: 'dye-spent', pos, primary: RED, kneaded: 1 });
+    expect(game.state.pickups).toEqual([]);
   });
 
   it('pushes the oldest candy off once the shelf is full', () => {
