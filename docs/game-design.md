@@ -492,9 +492,11 @@ ramp position with no rng in it, so a seeded run still replays exactly.
   game has offered a maker who wants to build ahead of the window.
 - **It has to be seen coming, and it is drawn rather than written** (§11):
   children gather in the shop doorway through the swell, cut by the frame edge,
-  behind the line. Nine seconds is about a trip from the far side of the kitchen
-  to the bench — i.e. long enough to *act* on, which is the whole difference
-  between a rush and an ambush.
+  behind the line. The nine seconds is sized against a whole ladder built from
+  nothing — ~69 moves, 8.6 s at the Rush row's speed — and not against a trip to
+  the bench, which is two. That is the difference between a rush and an ambush:
+  the warning has to be long enough to *start* the thing it is warning you to
+  start, and a batch is the thing.
 - **The trough is shallower than the table, but only just, and the asymmetry is
   measured rather than chosen.** A rate-neutral tide is not a difficulty-neutral
   one: arrivals stop at Max queue, so surplus rate at a peak is clipped the

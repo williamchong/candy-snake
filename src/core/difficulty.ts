@@ -120,9 +120,13 @@ export const RUSH_PERIOD_MS = 60_000;
  *
  * The lull is half the cycle, because that is what the maker builds in — a
  * ladder the window has no room for is the fixed bundle problem, not a batch.
- * The swell is deliberately longer than an eyeblink: it is the telegraph
- * (design §11 wants that drawn, not written), and nine seconds is about the
- * trip time from the far side of the kitchen to the bench.
+ *
+ * The swell is the telegraph (design §11 wants that drawn, not written), and
+ * nine seconds is sized against the thing it is meant to let the player start:
+ * the sugar-supply pass measured a six-rung ladder at ~69 moves, which is 8.6 s
+ * at this row's 125 ms. Not a trip to the bench — that is 16 cells, two
+ * seconds — but a whole batch built from nothing, which is what a maker who
+ * reads the doorway is being given time to do.
  */
 const RUSH_SHAPE: readonly { readonly at: number; readonly intensity: number }[] = [
   { at: 0, intensity: 0 },
