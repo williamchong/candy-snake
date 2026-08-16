@@ -32,7 +32,7 @@ describe('SwipeTracker', () => {
   it('resolves at exactly the threshold and not a pixel below it', () => {
     const tracker = new SwipeTracker();
 
-    expect(SWIPE_THRESHOLD_PX).toBe(20);
+    expect(SWIPE_THRESHOLD_PX).toBe(13);
 
     tracker.down(0, 0);
     expect(tracker.move(SWIPE_THRESHOLD_PX - 1, 0)).toBeUndefined();

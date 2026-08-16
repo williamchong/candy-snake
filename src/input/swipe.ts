@@ -8,8 +8,14 @@ import type { DirectionQueue } from './directionQueue';
  * (architecture §8). Measured in CSS pixels rather than game units — see
  * `bindSwipe` — so the dead zone is the same physical distance under a thumb
  * whatever size the canvas is displayed at.
+ *
+ * Was 20, which the first device report found commits the turn a block late: a
+ * thumb covers 20 px in 50–100 ms, and the difficulty ramp's floor is 125 ms per
+ * cell, so most of a cell was gone before the gesture was even recognised. A tap
+ * jitters under 5 px, so this has room below it and is not yet at the bottom of
+ * the range that report allowed for.
  */
-export const SWIPE_THRESHOLD_PX = 20;
+export const SWIPE_THRESHOLD_PX = 13;
 
 /** The axis a drag has committed to, or nothing while it is still ambiguous. */
 const resolveSwipe = (dx: number, dy: number): Dir | undefined => {
