@@ -472,6 +472,47 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   arithmetic. See the implementation plan for those runs — including the one
   finding this table could not fix.
 
+### The rush (past the 3-minute mark)
+
+The bullet above names the hole and **the rush is what goes in it**, asked for
+from the chair twice: at the 3-minute mark the window stops being a steady drip
+and becomes a **tide**, so what is past the last lever is a shape to read rather
+than a number getting smaller. `core/difficulty.ts` holds it.
+
+One period is a minute: half of it a lull, then a nine-second swell, a peak of
+about twelve seconds, and an ebb. It **moves the Arrival column and nothing
+else** — the standing line is drawn for four children and a fifth walks off the
+frame, so a deeper queue is a layout job first — and it is one pure term over
+ramp position with no rng in it, so a seeded run still replays exactly.
+
+- **The lull is the point as much as the peak is.** A nested ladder is a bundle
+  aimed at several orders at once, and it takes longer to build than it does to
+  sell; against a flat interval there is never a moment to build one. Half a
+  minute of slack, with a visible reason to spend it, is the first thing this
+  game has offered a maker who wants to build ahead of the window.
+- **It has to be seen coming, and it is drawn rather than written** (§11):
+  children gather in the shop doorway through the swell, cut by the frame edge,
+  behind the line. Nine seconds is about a trip from the far side of the kitchen
+  to the bench — i.e. long enough to *act* on, which is the whole difference
+  between a rush and an ambush.
+- **The trough is shallower than the table, but only just, and the asymmetry is
+  measured rather than chosen.** A rate-neutral tide is not a difficulty-neutral
+  one: arrivals stop at Max queue, so surplus rate at a peak is clipped the
+  moment the window fills, while a longer lull is recovery time paid out in
+  full. Balanced to cancel on paper (arrivals at 0.8× and 1.5×) the rush pushed
+  the batching maker's median death from 5.8 minutes to **6.6** — it made the
+  game easier. At 0.95× and 2.6× the same sweep reads 5.79 against a no-rush
+  5.80, 16/16 closed out either way, while mean queue occupancy over a tide
+  swings 2.6 → 3.4 and arrivals 12.6 → 16.4 a minute. **The anchor table above
+  was not touched.**
+- **What it does not do is close the open finding.** The batching bot is ahead
+  on 0 seeds of 16 with the rush in and 0 without — and the reason is the
+  harness rather than the lever: a bot that plans against the window in front of
+  it cannot build ahead of a rush it can see coming, which is the entire
+  behaviour this is meant to reward. The combo meter is still candidate one
+  there. See the implementation plan's eighth sitting, which also has why that
+  draw is re-baselined and must not be read against the older figures.
+
 ## 8. Spawn fairness rules
 
 1. ≥1 sugar on the map at all times; respawn once spent. (The opening levels
@@ -480,6 +521,23 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
 
 A pickup the strand is still passing through counts as on the map for both
 rules, so nothing respawns until the whole snake has cleared it.
+
+A pickup the strand is passing through when it **loses length** — to a chop or a
+break — settles by what it has already paid, and the two kinds differ:
+
+- A **cube** pays when the strand clears it, by becoming the cell the tail has
+  just vacated. Abandoned there is no such cell, so it closes again and waits
+  for the head to come back — which is also fair, since it gave nothing.
+- A **jar** pays when it kneads, and the color it kneaded leaves with the piece
+  that was cut. So it is **spent**, not re-closed. Closing it would hand the
+  payment back, and the bench makes that a loop: a jar laid on the cell before
+  the block is crossed, kneads the segment behind the head, and is re-closed by
+  the very chop the player was driving at — free dye, every pass, from a jar
+  that never leaves. It never leaving is the second half, because rule 2 makes a
+  jar on the map the *only* jar of its primary, so the board can no longer lay
+  that color anywhere reachable. Spent, both problems go away. (Reported from
+  the chair in the eighth sitting, as "a dye near the cutting table won't go
+  away after use".)
 
 3. **Pity timer:** for each active order, compute the set of primaries needed
    that are not satisfiable from (shelf stock ∪ candies derivable from current

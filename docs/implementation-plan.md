@@ -1034,6 +1034,75 @@ not to move a number. Only then does a sugar column mean anything. The candidate
 that add something to do past three minutes — the combo meter and the rush — are
 unaffected by all of this and are still the ones on the list.
 
+### What the eighth sitting settled — the rush is built, and a jar was immortal
+
+Two reports from one player, 1225 points into a run: *the game feels stale*, and
+*a dye that spawns near the cutting table doesn't go away after use*. They turned
+out to be the same complaint twice, which nobody expected and which is the most
+useful thing this sitting produced.
+
+**The jar was the stale part.** `recloseAbandonedPickups` closed every open
+pickup the strand no longer covered, and a chop severs the *whole* body, so the
+snake is head-only the instant it reaches the bench. A jar on the cell before the
+block therefore kneaded the segment behind the head and was then re-closed by the
+chop itself — paid out and still standing, every pass. That is a two-move grind
+loop beside the bench with free dye in it, which is a description of stale
+gameplay rather than a bug next to it. And rule 2 of §8 caps dye at one jar per
+primary, so the immortal jar held its color's only slot: `starvedPrimaries`
+counts a jar on the map as satisfying the need and `endlessStock` lays nothing
+while any dye exists, so the pity spawner could not lay that primary anywhere
+reachable for the rest of the run. **A cube is re-closed and a jar is spent**,
+because a cube pays at spend time and a jar pays at knead time — see design §8.
+
+**The rest of the staleness is the seventh sitting's, confirmed from a chair
+that had not read it.** 1225 points is 16–18 serves, and `rampMs` takes
+`max(elapsed, served × 6000)`, so that player was at *minimum* ramp-minute 1.7
+and in practice past three. Which is exactly where the record already said the
+table stops introducing things.
+
+**So the rush was built.** Design §7 carries the shape and the measurements; what
+belongs here is what the sweep said, including the thing it said first.
+
+Every figure below is measured against a **re-baselined** sweep, and that has to
+be said before any of them are read. The jar fix changes when a pickup is
+spent, which changes when the next one is drawn — and this file has had to note
+three times already that anything moving a spawn re-rolls every free cell drawn
+after it. The batching maker's median death reads **5.80 min** with the rush off
+and the jar fixed, where the sugar-supply pass recorded 5.12 with the jar still
+immortal. That 0.7 is the re-roll and the exploit going away, not the rush,
+which was not in the build for either number. The rush is measured against 5.80.
+
+- **A rate-neutral tide made the game easier.** Arrivals at 0.8× in the lull and
+  1.5× at the peak — mean rate 1.04, balanced on paper — moved the batching
+  maker's median death from 5.80 min to **6.6**. The cause is `admitCustomer`:
+  it stops admitting at `maxQueue`, so surplus rate at a peak is clipped the
+  moment the window fills, while every millisecond of a longer lull is recovery
+  time paid to the maker in full. **The lull is the expensive half.** Nothing in
+  six sittings of tuning notes had said this, because nothing had ever varied
+  arrival rate *within* a run before.
+- **Tuned to 0.95× / 2.6×, the curve did not move.** 5.79 min median against a
+  no-rush 5.80, 16/16 closed out either way, 2 of 16 past seven minutes either
+  way. The anchor table was not touched, again.
+- **And the tide is visible on the board, which is the claim that matters.**
+  Mean queue occupancy over a period swings 2.64 → 3.37 and arrivals 12.6 → 16.4
+  a minute, against 2.60 → 2.67 with the rush off. That is the measurement the
+  seventh sitting invented (`peakQueue`) being asked a question it was built for.
+- **It does not move the open finding, and the harness is why.** The batcher is
+  ahead on **0 of 16 with the rush in and 0 of 16 without** — on the re-baselined
+  draw, where the 1 of 16 the seventh sitting won is one of the things the
+  re-roll took back. So the rush neither gained nor cost anything here. The whole point
+  of a telegraphed rush is building a ladder *into* a peak that has not arrived
+  yet, and `batcherGoal` sizes its batch from the window in front of it — it
+  cannot want a candy for a child who is not there. **This is the fourth time the
+  harness has been blind in the same direction**, after the patience clock
+  (second sitting), the queue (seventh) and the strand length (sugar-supply
+  pass). The `bestLadder` change that pass already listed as the prerequisite is
+  now the prerequisite for two separate measurements.
+- **The doorway crowd is the half that cannot be measured from here.** Whether
+  nine seconds of warning is enough to act on, and whether anyone reads the
+  doorway at all, is a chair question. Every sitting so far has answered
+  something nobody asked, so it will probably not be that.
+
 ## Phase 8 — Persistence, high scores & release (S)
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
