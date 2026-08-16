@@ -588,7 +588,22 @@ describe('the reference players, after the ramp went in', () => {
     // *When* it closes them out is the target itself, and the median is what
     // carries it: the tail is a re-roll on any given seed (anything that moves
     // a spawn re-rolls every free cell drawn after it) but the middle of the
-    // draw is not. Measured 5.1 min, over deaths running 3.2 … 8.7.
+    // draw is not. Measured 5.16 min, over deaths running 4.2 … 7.7, against
+    // 5.79 while the tide still waited for the three-minute mark — the ninth
+    // sitting moved it to `SETTLED_MS` and a shape the maker meets a minute in
+    // is one they have to hold off for the rest of the run.
+    //
+    // The score-ramp pass then keyed the ramp on score rather than on a count
+    // of serves. `MS_PER_POINT` was fitted to leave the median where it was and
+    // did (4.66 → 4.67) — but the same pass found the brown-mercy gate reading
+    // the raw clock where its own rule said "once the ramp has settled", and
+    // fixing *that* is what put the median at 5.16: a maker whose score runs
+    // ahead of the stopwatch now reaches the settled row, and the free serve a
+    // mercy customer is, sooner than the clock would have let them. Both arms
+    // re-measured with the gate fixed read 4.66 (serve count) against 5.16
+    // (score), and this file has had to say three times that a run either side
+    // of a change that moves an rng draw is a different run, not the same one
+    // played harder.
     //
     // The window reads 4–6 rather than the 8–10 it was written with, and the
     // reason is not that the curve grew teeth. It is that nothing new arrives
@@ -611,7 +626,14 @@ describe('the reference players, after the ramp went in', () => {
     // And the long tail stays a tail. Not a bound on the median twice over: a
     // draw could sit dead centre and still send a quarter of its runs past the
     // point the levers ran out, which is the thing the target is against.
-    // Measured 2 of 16.
+    //
+    // Measured **2** of 16, against 3 for the serve count on the same
+    // (mercy-fixed) draw. That is the one thing keying on score bought here,
+    // and the interquartile range says it more plainly: 4.3–6.7 min under the
+    // serve count against 4.7–6.2 under score, so the distribution closed in
+    // from *both* ends. A score is a read on how well a run is going where a
+    // serve count reads only how long it has been going on, so the runs that
+    // used to get away are the ones the curve now catches.
     const late = diedAt.filter((ms) => ms > 7 * 60_000);
     expect(
       late.length * 4,
@@ -629,7 +651,15 @@ describe('the reference players, after the ramp went in', () => {
       // the jars and the block per candy that comes off it.
       expect(choppedPerMinute(batcher)).toBeGreaterThan(choppedPerMinute(grinder));
       // And it is laddering to get there, rather than chopping singles fast.
-      expect(batcher.ladders).toBeGreaterThan(30);
+      // A floor rather than a target, and it has come down from 30 twice in one
+      // sitting for the same arithmetic reason both times: a run that ends
+      // sooner makes fewer cuts, so this counts down with the median it is
+      // measured beside rather than saying anything new when it moves.
+      // Measured 32 … 51 on the four this runs over, bottoming at 32 across the
+      // wider draw — against the grinder's 4 … 9, which is the separation the
+      // number is actually here for. Set below the wider draw's floor so that
+      // asking it of `SWEEP` later would not need a third revision.
+      expect(batcher.ladders).toBeGreaterThan(20);
       // Neither bot ever steers into itself, so none of the gap below is a
       // longer strand being clumsier — it is all what the candy is worth.
       expect(batcher.broken).toBe(0);
@@ -654,7 +684,7 @@ describe('the reference players, after the ramp went in', () => {
     // bot never asks for a fourth segment. A fourth is one it was handed: once
     // the batch is full the goal is the bench, and it stops steering around
     // sugar rather than avoiding it. It spends most of its life carrying one
-    // segment: measured mean 1.20, peak 4.
+    // segment: measured mean 1.31, peak 4.
     //
     // So a green sweep here is evidence about a maker who batches *three*, and
     // about nothing longer. The temporal half of the open finding — that a

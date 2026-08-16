@@ -11,12 +11,32 @@ import { MIXING_STAGE, type StageConfig } from './orders';
  */
 
 /**
- * How much ramp one serve is worth. Design §7 drives difficulty by elapsed time
- * **and/or** candies served, whichever fires first, so that a fast player is not
- * held back by the clock and a slow one is not overrun by it. "Whichever fires
- * first" is a literal `max` below.
+ * How much ramp one point is worth. Design §7 drives difficulty by elapsed time
+ * **and/or** how well the run is going, whichever is further along, so that a
+ * strong player is not held back by the clock and a stalling one still ramps.
+ * "Whichever is further along" is a literal `max` below.
+ *
+ * It used to be 6 000 ms per *serve*, a count. Score replaced it because a
+ * count is not what the player is looking at: the HUD shows a score and nothing
+ * else, so "the shop gets busier as your score climbs" is a rule that can be
+ * read off the screen, where "as you serve your thirtieth candy" cannot be
+ * (design §11 wants the rules legible, and this is the one the whole run hangs
+ * on). What made the swap safe rather than a rebalance is that score turned out
+ * to be the *steadier* measure of the two: traced against ramp position, both
+ * reference bots settle at 65–70 ms per point from ramp-minute 1.5 on, despite
+ * serving at very different rates. So this number is measured rather than
+ * chosen — 70 is where the score term delivers the curve the serve term did.
+ *
+ * The consequence worth knowing before retuning it: `scoreServe` multiplies by
+ * tier, by patience and by streak, so a tier-3 serve made promptly on a capped
+ * streak is 150 points and a late raw is 10. Under the old count both advanced
+ * the ramp 6 s; under this one they advance it 10.5 s and 0.7 s. Playing well
+ * therefore pulls the curve forward, which is the whole point of keying on
+ * score and is also the thing to look at first if the ramp ever feels like it
+ * is punishing a good run. Measured, it tightens the tail rather than the
+ * middle — see the tenth sitting in the implementation plan.
  */
-const MS_PER_SERVE = 6_000;
+const MS_PER_POINT = 70;
 
 /** One row of the table, and where on the ramp it holds. */
 interface Anchor extends StageConfig {
@@ -83,24 +103,32 @@ export const RAMP: readonly Anchor[] = [
 export const SETTLED_MS = RAMP[1]!.atMs;
 
 /**
- * Where the table runs out of things to introduce, and so where the rush
- * begins. Read off the same row `RAMP` calls Rush, for the reason `SETTLED_MS`
- * is: moving the anchor moves this with it.
+ * Where the rush begins — the same moment the speed ease-in ends and the ramp
+ * proper starts, which is why it is `SETTLED_MS` rather than a number of its
+ * own. Moving that anchor moves this with it.
+ *
+ * It used to be the Rush row at three minutes, on the reasoning that a tide
+ * belonged *past* the last lever rather than among them. The ninth sitting is
+ * the second report of staleness and it arrived at **400 points**, which the
+ * harness puts at ramp-minute 0.5–0.6 — so the flat stretch being complained
+ * about is the one between the handover and the tide, not the one after it. A
+ * shape the player meets in the last third of a run is not a shape the run has.
  */
-export const RUSH_FROM_MS = RAMP[2]!.atMs;
+export const RUSH_FROM_MS = SETTLED_MS;
 
 /**
  * The rush (design §7).
  *
- * Past the Rush row every lever that adds a *kind* of thing is spent — max
- * queue at 2 min, the order mix and the speed cap at 3 — and what was left was
- * two numbers getting smaller, which the seventh sitting judged to be labour
- * rather than difficulty. This is the element that goes past that mark: the
- * window stops being a steady drip and becomes a tide, so there is a shape to
- * read and play against rather than a rate to keep up with. A maker who sees
- * one coming has a reason to build a ladder into it instead of chopping singles
- * through a flat interval, which is the batching lever the first sitting asked
- * for in the one shape that is not a permanently harder game.
+ * Every lever that adds a *kind* of thing is spent by the three-minute mark —
+ * max queue at 2 min, the order mix and the speed cap at 3 — and what is left
+ * either side of that is numbers getting smaller, which the seventh sitting
+ * judged to be labour rather than difficulty. This is the element that is not a
+ * number: the window stops being a steady drip and becomes a tide, so there is
+ * a shape to read and play against rather than a rate to keep up with. A maker
+ * who sees one coming has a reason to build a ladder into it instead of
+ * chopping singles through a flat interval, which is the batching lever the
+ * first sitting asked for in the one shape that is not a permanently harder
+ * game.
  *
  * It moves `arrivalIntervalMs` and **nothing else**. `ui/layout.ts` sizes the
  * standing line for four children and `CustomerQueue.standingX` clamps nothing,
@@ -124,9 +152,18 @@ export const RUSH_PERIOD_MS = 60_000;
  * The swell is the telegraph (design §11 wants that drawn, not written), and
  * nine seconds is sized against the thing it is meant to let the player start:
  * the sugar-supply pass measured a six-rung ladder at ~69 moves, which is 8.6 s
- * at this row's 125 ms. Not a trip to the bench — that is 16 cells, two
+ * at the Rush row's 125 ms. Not a trip to the bench — that is 16 cells, two
  * seconds — but a whole batch built from nothing, which is what a maker who
  * reads the doorway is being given time to do.
+ *
+ * Now that the tide starts at `SETTLED_MS` the earliest swells are read at that
+ * row's 143 ms instead, where the same ladder is 9.9 s — a shade longer than
+ * the warning. The warning is deliberately left where it is: the *lull* is the
+ * half a ladder is built in (see `RUSH_SHAPE`), and the swell only has to be
+ * long enough to start one. Sizing it off the slowest row would make it too
+ * long everywhere else, and the swell is measured as a fraction of the period
+ * rather than in moves for the same reason `RAMP` interpolates — one shape,
+ * read the same way at every point on the curve.
  */
 const RUSH_SHAPE: readonly { readonly at: number; readonly intensity: number }[] = [
   { at: 0, intensity: 0 },
@@ -165,11 +202,17 @@ const PEAK_RATE = 2.6;
 
 /**
  * How far along the ramp a run stands, in milliseconds of *equivalent* time.
- * Serving faster than the clock pulls the curve forward; serving slower leaves
+ * Scoring faster than the clock pulls the curve forward; scoring slower leaves
  * the clock to carry it.
+ *
+ * The clock is kept as the floor rather than dropped for score alone, and it is
+ * not decoration: without it a maker who serves just enough to hold their lives
+ * and no more would sit at the handover's twelve-second interval indefinitely,
+ * and design §1 has difficulty ramping *until lives run out*. For anyone
+ * actually playing, the score term is the one that binds.
  */
-export const rampMs = (endlessMs: number, endlessServed: number): number =>
-  Math.max(endlessMs, endlessServed * MS_PER_SERVE);
+export const rampMs = (endlessMs: number, endlessScore: number): number =>
+  Math.max(endlessMs, endlessScore * MS_PER_POINT);
 
 const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
 
@@ -228,12 +271,12 @@ const rushShape = (rampPosMs: number): number => {
 };
 
 /**
- * How far the tide has come in: 0 at the Rush row, 1 a period later.
+ * How far the tide has come in: 0 at the Settled row, 1 a period later.
  *
  * It comes in over its own first period rather than switching on, so that the
- * Rush anchor is still the row as written and the run does not step to an
- * easier interval at the exact moment the rush was added to make it less flat.
- * The whole table is written to move smoothly (design §7).
+ * anchor it starts from is still the row as written and the run does not step
+ * to an easier interval at the exact moment the rush was added to make it less
+ * flat. The whole table is written to move smoothly (design §7).
  */
 const rushSwing = (rampPosMs: number): number =>
   Math.min(Math.max((rampPosMs - RUSH_FROM_MS) / RUSH_PERIOD_MS, 0), 1);
@@ -248,7 +291,7 @@ const rushSwing = (rampPosMs: number): number =>
  * the first, half-strength tide was still easing in would be promising a flood
  * that is not coming.
  *
- * Takes the same (clock, serves) pair `stageAt` does, so where a run stands on
+ * Takes the same (clock, score) pair `stageAt` does, so where a run stands on
  * the ramp stays a question this file answers — the HUD asks how hard the rush
  * is running, not how far along a curve it is.
  *
@@ -257,8 +300,8 @@ const rushSwing = (rampPosMs: number): number =>
  * phase 15 minutes happens to land on — leaving the longest runs the only ones
  * with no rush in them.
  */
-export const rushAt = (endlessMs: number, endlessServed: number): number =>
-  arrivalTideAt(rampMs(endlessMs, endlessServed));
+export const rushAt = (endlessMs: number, endlessScore: number): number =>
+  arrivalTideAt(rampMs(endlessMs, endlessScore));
 
 /** The same, off a ramp position already in hand — `stageAt`'s way in. */
 const arrivalTideAt = (rampPosMs: number): number =>
@@ -290,10 +333,10 @@ export const arrivalRateAt = (rampPosMs: number): number => {
  * "before the handover" and "past the backstop" come out right without a branch
  * that could disagree with the interpolated middle.
  */
-export const stageAt = (endlessMs: number, endlessServed: number): StageConfig => {
+export const stageAt = (endlessMs: number, endlessScore: number): StageConfig => {
   const first = RAMP[0]!;
   const last = RAMP[RAMP.length - 1]!;
-  const pos = rampMs(endlessMs, endlessServed);
+  const pos = rampMs(endlessMs, endlessScore);
   const at = Math.min(Math.max(pos, first.atMs), last.atMs);
   const { from, to, t } = spanAt(RAMP, (anchor) => anchor.atMs, at);
 

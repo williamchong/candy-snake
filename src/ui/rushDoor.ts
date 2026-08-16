@@ -9,7 +9,7 @@ import type { Frame } from './layout';
  * The rush, telegraphed (design §7, §11): children gathering in the shop
  * doorway before the ones who count reach the window.
  *
- * The tide `core/difficulty.ts` runs past the three-minute mark is invisible on
+ * The tide `core/difficulty.ts` runs from the one-minute mark is invisible on
  * its own — an arrival interval is a number, and a player has no way to see one
  * shorten. Seen coming, it is the thing that makes the rush worth having: a
  * maker who reads the doorway has nine seconds to build a ladder into the peak,
@@ -65,8 +65,8 @@ export class RushDoor {
    */
   private intoShop = 1;
   /**
-   * So a calm window — the first three minutes of a run, and half of every
-   * period after — costs one comparison a frame rather than three writes.
+   * So a calm window — the first minute of a run, and half of every period
+   * after — costs one comparison a frame rather than three writes.
    * Starts `false` against sprites built invisible, deliberately: the first
    * calm frame then does one redundant pass and leaves the two agreeing, where
    * starting `true` would trust a claim nothing had established.

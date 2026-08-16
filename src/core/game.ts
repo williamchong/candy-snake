@@ -1,7 +1,7 @@
 import { COLS, ROWS, isChopBlock } from './board';
 import { BROWN, PRIMARIES, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
-import { SETTLED_MS, rushAt, stageAt } from './difficulty';
+import { SETTLED_MS, rampMs, rushAt, stageAt } from './difficulty';
 import { rollOrder, type StageConfig } from './orders';
 import {
   NO_PITY,
@@ -81,6 +81,15 @@ export class Game {
    * stamp, because there is nothing to stamp until the third child is served.
    */
   private endlessMs = 0;
+  /**
+   * What the score read at the handover, so the points the ramp is driven by
+   * can be taken as a difference below. Unlike `endlessMs` there *is* something
+   * to stamp here — `finishOpeningLevel` already has the "that was the third"
+   * branch, and the serve that trips it has been paid by the time it runs — so
+   * this is a stamp rather than a second running total that could drift from
+   * `state.score`.
+   */
+  private handoverScore = 0;
   /** How long each primary has been needed and missing (design §8.3). */
   private pity: PityClock = NO_PITY;
   private nextCustomerId = 1;
@@ -131,19 +140,19 @@ export class Game {
    * through one place so nothing downstream has to know whether it came from
    * the curve or from a pinned row (design §7, `core/difficulty.ts`).
    *
-   * Serves count from the handover too, for the same reason the clock does:
-   * the three opening levels are taught, not earned, and crediting them to the
-   * ramp would start the endless game a fifth of the way up it.
+   * Points count from the handover too, for the same reason the clock does:
+   * the three opening levels are taught, not earned, and crediting what they
+   * pay to the ramp would start the endless game part of the way up it.
    */
   get stage(): StageConfig {
     if (this.config.stage !== undefined) return this.config.stage;
 
-    return stageAt(this.endlessMs, this.endlessServed);
+    return stageAt(this.endlessMs, this.endlessScore);
   }
 
   /**
    * How hard the rush is running right now, 0…1 — the tide `core/difficulty.ts`
-   * puts past the mark where the table stops introducing things (design §7).
+   * runs from the moment the maker is up to speed (design §7).
    *
    * Nothing in the rules reads it: the tide's whole effect is already inside
    * `stage.arrivalIntervalMs`. It is here so the HUD can draw the door filling
@@ -157,16 +166,18 @@ export class Game {
   get rush(): number {
     if (this.config.stage !== undefined) return 0;
 
-    return rushAt(this.endlessMs, this.endlessServed);
+    return rushAt(this.endlessMs, this.endlessScore);
   }
 
   /**
-   * Serves that count toward the ramp. The three opening levels are taught
-   * rather than earned, and crediting them would start the endless game a fifth
-   * of the way up the curve — see `stage`.
+   * Points that count toward the ramp. The three opening levels are taught
+   * rather than earned, and crediting what they pay would start the endless
+   * game part of the way up the curve — see `stage`. A difference rather than
+   * a running total of its own, so it cannot drift from `state.score`, which
+   * only ever climbs.
    */
-  private get endlessServed(): number {
-    return Math.max(0, this.state.served - this.tutorial.length);
+  private get endlessScore(): number {
+    return this.state.score - this.handoverScore;
   }
 
   /**
@@ -594,12 +605,18 @@ export class Game {
    * mistake the color system is built around, and this is the one way it leaves
    * the shelf other than going stale. They are held back until the ramp has
    * settled, so a run's first minutes are not spent teaching that the mistake
-   * pays. Because a new arrival sweeps the rack (`serveFromShelf` above), they
+   * pays — and that is read off the *ramp*, not off the clock. The two used to
+   * be the same question and are not any more: now that score drives the curve,
+   * a maker scoring well reaches the settled row before the stopwatch does, and
+   * gating on `endlessMs` would have held the mercy back from exactly the
+   * player the rest of the ramp had already moved on.
+   * Because a new arrival sweeps the rack (`serveFromShelf` above), they
    * are served the moment they walk up — the cleanup is the whole visit.
    */
   private rollWant(stage: StageConfig): ColorMask {
     const spare = this.state.shelf.some((candy) => candy.color === BROWN);
-    if (spare && this.endlessMs >= SETTLED_MS && this.rng.next() < MERCY_CHANCE) {
+    const settled = rampMs(this.endlessMs, this.endlessScore) >= SETTLED_MS;
+    if (spare && settled && this.rng.next() < MERCY_CHANCE) {
       return BROWN;
     }
 
@@ -661,6 +678,11 @@ export class Game {
   private finishOpeningLevel(): void {
     this.state.tutorialIndex += 1;
     if (this.openingLevel !== undefined) return;
+
+    // The serve that got us here has already been paid (`serveCustomer` adds
+    // to the score before calling this), so the ramp starts from zero points
+    // rather than from what the teaching happened to be worth — see `stage`.
+    this.handoverScore = this.state.score;
 
     // Read after the index moved, so this is the handover row the ramp starts
     // at rather than the tutorial's own beat — and the *gap* an empty window

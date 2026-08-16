@@ -672,13 +672,18 @@ late.
 
 ## Phase 7 — Cheat sheet, hints & UX polish (M) ◀ current
 
-- Collapsible mixing cheat sheet (edge tab, auto-collapse, persisted state) —
-  the non-obstructive requirement from design §4, drawn as the wordless mixing
+- Collapsible mixing cheat sheet (edge tab, persisted state) — the
+  non-obstructive requirement from design §4, drawn as the wordless mixing
   wheel that section specifies. It is the only place in the game a recipe is
   shown at all, now that the queue holds none. **This one is built** — three
   jars with each pair's candy between them and a spoke from each jar to what it
   makes; see below. Persisted only as far as the page is loaded, which is where
   Phase 8 picks it up.
+  - **The auto-collapse is gone**, asked for from the chair: the wheel is shown
+    unless the player has hidden it. See the ninth sitting. It took the tested
+    `SheetState` half of the file with it — visibility stopped being a rule with
+    a decision in it — and the `DirectionQueue` → `UIScene.steered` channel
+    too, which existed for nothing else.
 - (The three lessons are already carried by Phase 4's opening levels and what
   they stock — design §11 — so no toasts, no captions, no seen-once flags. That
   is the position the note under "Done when" now puts on trial.)
@@ -1102,6 +1107,152 @@ which was not in the build for either number. The rush is measured against 5.80.
   nine seconds of warning is enough to act on, and whether anyone reads the
   doorway at all, is a chair question. Every sitting so far has answered
   something nobody asked, so it will probably not be that.
+
+### What the ninth sitting settled — the rush was waiting in the wrong place
+
+Two reports again, and again one of them was not the one anybody was braced for:
+*always show the colour wheel unless I hide it*, and **the game feels stale at
+~400 points**.
+
+**The staleness report moved, and that is the whole finding.** The eighth
+sitting's came at 1225 points and the tide was built for it, starting where the
+anchor table stops introducing things — the Rush row, three minutes. This one
+came at 400. Measured on both reference bots across the sixteen-seed sweep, 400
+points is reached at **ramp-minute 0.5–0.6** (clock 0.7–0.8), which is five or
+six serves past the handover: the flat stretch being complained about is the one
+*before* the tide, not the one after it. The eighth sitting reasoned from 1225
+points to "at minimum ramp-minute 1.7 and in practice past three" and got the
+right answer for that report; nobody then asked what the same arithmetic says
+about a smaller number, and the answer is that most of a run was flat.
+
+So the tide moved to `SETTLED_MS`, which is where the speed ease-in ends and the
+ramp proper begins. It is a one-constant change — `RUSH_FROM_MS` had been read
+off `RAMP[2]` and now reads off `RAMP[1]`, so the anchor table was not touched
+for the third time running.
+
+- **The opening minute is deliberately still flat.** It is the speed ease-in,
+  and a tide laid over a strand still being brought up to pace is two things
+  moving at once with no way to tell which one bit.
+- **It moves the curve, where the tide going in did not.** Batching maker's
+  median death **5.79 → 4.66 min**, 16/16 closed out either way, deaths running
+  3.7 … 7.7 against 3.2 … 7.8. Still inside the 4–6 window, and it is the first
+  change in three sittings that was allowed to spend some of that headroom
+  rather than being tuned to cancel — a shape the player meets a minute in is
+  one they then have to hold off for the rest of the run.
+- **Four candidate start points were measured, not two.** Ramp-minute 3
+  (5.79 median), 2 (4.95), 1 (4.66) and the handover itself (5.94). The
+  handover reading *easier* than minute 1 is the eighth sitting's asymmetry
+  again — down there the baseline interval is 12 s and even a 2.6× peak does
+  not fill a three-slot window, so all the tide buys is lull. Minute 2 measured
+  marginally better than minute 1 on every axis, and was not taken: it is a
+  number between two anchors, where `SETTLED_MS` is a row of the table, and this
+  file has said three times that the tuning should be one thing to read.
+- **The only assertion that moved was a floor, and it moved for an arithmetic
+  reason.** `batcher.ladders > 30` reads 29 now, because a run that ends a
+  minute sooner makes a minute fewer cuts. Lowered to 25, against a grinder's
+  4 … 10 — the separation is what the number is for, and it is still 2.5×.
+
+**The colour wheel now stays up until the player puts it away.** Design §4 had
+it auto-collapse a few seconds after the first turn, which is what
+"non-obstructive" was originally read to mean. From the chair it read as the
+game confiscating the one reference it has: the panel is semi-transparent, sits
+outside the play grid, and *what makes purple* does not stop being a question
+once a player starts steering. The tab is how a player who disagrees puts it
+away, and that choice was already remembered.
+
+- **It took a tested rule out of the codebase, which is the right direction.**
+  `SheetState` existed because *when the sheet hides itself* was a decision with
+  a countdown, a first-turn arming rule and a "settled" latch in it. With the
+  countdown gone there is no decision left — only a remembered preference — so
+  the class, its test file and the carve-out for it in `CLAUDE.md` all went.
+- **And a whole one-way channel with it.** `DirectionQueue.onAccepted` →
+  `GameScene` → `UIScene.steered()` → `SheetState.steered()` existed for this
+  one consumer. Left wired to nothing it would read as a feature.
+
+### What the score-ramp pass measured — the curve keys on the score now
+
+Not a sitting: one question from the same chair as the ninth, and it turned out
+to have a measurement behind it that nobody had taken — *can the difficulty
+curve key on score instead of time?*
+
+**Half of it already did.** `rampMs` has taken `max(elapsed, served × 6000)`
+since Phase 5, so a count of serves was already pulling the curve ahead of the
+clock. The question was really whether *score* was the better of the two
+progress measures, and that is answerable rather than arguable.
+
+**Traced, score is the steadier measure — which nobody expected.** Sampling
+endless score against ramp position across the sixteen-seed sweep:
+
+| ramp | batcher score | ms/point | grinder score | ms/point |
+| ---- | ------------- | -------- | ------------- | -------- |
+| 1.5m | 1108          | 81.3     | 1321          | 68.2     |
+| 2m   | 1623          | 74.0     | 1806          | 66.4     |
+| 3m   | 2570          | 70.0     | 2826          | 63.7     |
+| 4m   | 3465          | 69.3     | 3910          | 61.4     |
+| 5m   | 4445          | 67.5     | 4906          | 61.1     |
+
+Two bots that serve at very different rates agree on ms-per-point to within
+about 10% from ramp-minute 1.5 on. So **70 ms per point is a fitted number, not
+a chosen one**: it is where the score term delivers the curve the serve term
+delivered.
+
+- **The swap on its own is not a rebalance.** Batching maker's median death
+  4.66 → 4.67 min, 16/16 closed out either way. That was the calibration target
+  and it is the whole reason 70 was picked over anything else.
+- **Then the review found the bug the swap had exposed, and the median moved.**
+  `rollWant`'s brown-mercy gate read `endlessMs >= SETTLED_MS` — the raw clock —
+  while its own comment said "held back until the ramp has settled" and every
+  other reader of that anchor goes through `rampMs`. The two questions were
+  nearly the same while the clock and the curve tracked each other. They are not
+  once score drives the curve: a maker scoring well crosses the settled row
+  first, and the old gate held their mercy back from exactly the player the rest
+  of the ramp had already moved on. Fixed, and the median reads **5.16 min**,
+  because a mercy customer is a free serve and strong scorers now get theirs
+  earlier. Both arms re-measured with the gate fixed: **4.66 (serve count)
+  against 5.16 (score)**, both inside 4–6. Nothing above this line was measured
+  on that draw — the fix moves an rng draw, which re-rolls everything after it,
+  for the fourth time in this file.
+- **It tightens the tail, and that survives the re-baseline.** On the
+  mercy-fixed draw, runs past seven minutes 3 → 2 of 16 and IQR 4.3–6.7 →
+  4.7–6.2 min — closing in from *both* ends. Score reads how well a run is
+  *going* where a serve count reads how long it has been going on, so the runs
+  that used to get away are the ones the curve now catches. That is the second
+  finding back to back to come out of the tail rather than the middle.
+- **Four calibrations were measured, and the grinder is the reason 70 won.** At
+  85 and 100 ms/point the grinder — untouchable at 11.9 min for five sittings —
+  comes down to 9.4 and 7.9 min, closing out 15/16 and 16/16. That is a real
+  result on a real problem and it was **not taken**: it costs the batcher
+  headroom (median 4.38 at 100, floor of the target window), and this file has
+  said since Phase 5 that tuning until the *grinder* dies on schedule is tuning
+  the game around the strategy it least wants to reward. Recorded here so the
+  next person does not have to re-measure it — though these four were drawn
+  before the mercy gate was fixed, so they compare with each other and not with
+  the 5.16 above.
+- **It does not move the open finding either.** Batcher ahead on 0 of 16 at 70
+  and 85, 1 of 16 at 100 — noise, and for the reason the eighth sitting already
+  gave: `bestLadder` cannot plan ahead of the window, so no ramp change can
+  reach it. **Fifth time the harness has been blind in the same direction.**
+- **The legibility argument is the one that is not a measurement.** The HUD
+  shows a score and nothing else — there is no serve counter — so keying on
+  score makes the ramp a rule the player can read off the screen. Design §11
+  wants the rules legible and this is the one the whole run hangs on.
+- **The curve advances in jumps now, and the telegraph is what that could
+  cost.** A serve is worth up to 150 points, so it can move the ramp 10.5 s in
+  one step — 17.5% of `RUSH_PERIOD_MS`, and the tide's phase is a modulo of ramp
+  position. A single well-paid serve can therefore skip the doorway crowd
+  forward through a fifth of the cycle, including out of the middle of a swell,
+  and the nine-second warning `RUSH_SHAPE` is built around is the thing that
+  gets shortened. It is monotonic, so the tide never runs backwards, and the
+  serve count had the same property at 6 s a step — this is 1.75× that at worst.
+  Whether it is visible from a chair is a chair question; it is written down
+  here so that "the rush jumped out at me" is diagnosed rather than re-derived.
+- **The double-count is the thing to watch from a chair.** §9 multiplies a serve
+  by tier, by patience and by streak, so the spread per serve is 10 points to
+  150 where the old count paid a flat 6 s for both. Playing well now pulls the
+  curve forward, which is what keying on score *means* — but it also makes the
+  streak bonus partly self-limiting, and whether that reads as pressure or as
+  punishment is a chair question. If it reads as punishment, the fix is to key
+  on base tier points and drop the multipliers, not to abandon score.
 
 ## Phase 8 — Persistence, high scores & release (S)
 

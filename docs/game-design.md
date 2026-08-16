@@ -160,9 +160,16 @@ The mixing table must always be discoverable without blocking play:
    mixing wheel: the three primaries with each pair's result drawn between
    them, in jars and candies with their symbols (§4) rather than in letters —
    the HUD carries no prose (§11), and a wheel is read at a glance where a
-   written table has to be studied. Expanded by default for the first run;
-   state persisted. Semi-transparent, never covers the play grid's active area,
-   auto-collapses after a few seconds of play input.
+   written table has to be studied. Semi-transparent and never covering the
+   play grid's active area, so it costs nothing to leave up.
+3. **It is shown unless the player has hidden it**, and that choice is
+   persisted. It used to take itself down a few seconds after the first turn,
+   which is what "non-obstructive" was originally read to mean. From the chair
+   it read as the game confiscating the one reference it has: *what makes
+   purple* does not stop being a question once a player starts steering, and a
+   panel that is out of the kitchen and see-through is not in the way. The tab
+   is how a player who disagrees puts it away, and the game remembers that they
+   did.
 
 ### Color accessibility
 
@@ -415,8 +422,8 @@ primary and secondary, so dropping back to 100% raw orders would read as going
 backwards. (Warm-up's row is kept in the table as the shape of what the ramp
 grew out of.)
 
-Endless ramp, driven by elapsed time and/or candies served (whichever fires
-first — keeps both slow and fast players on curve):
+Endless ramp, driven by elapsed time and/or **score** (whichever is further
+along — keeps both slow and strong players on curve):
 
 The curve is anchored on the rows below and interpolated between them, so every
 knob moves smoothly rather than stepping at a stage boundary. Time here is
@@ -456,14 +463,48 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   any seed at any point on the ramp. A player who can only ever see one order
   cannot plan a ladder against the window, which is the whole point of the
   window being deeper than one.
-- Whichever of elapsed time and candies served is further along drives the
-  curve, so a fast player is not held back by the clock and a slow one is not
-  overrun by it.
+- **Whichever of elapsed time and score is further along drives the curve**, at
+  70 ms of ramp per point, so a strong player is not held back by the clock and
+  a stalling one still ramps. It was a count of candies served (6 s each) until
+  the score-ramp pass. Score replaced it for a legibility reason first: the HUD
+  shows a score and nothing else, so "the shop gets busier as your score climbs"
+  is a rule the player can read off the screen, where "as you serve your
+  thirtieth candy" is a rule about a number nothing displays (§11).
+  - **The 70 is measured, not chosen.** Traced against ramp position, both
+    reference bots settle at 65–70 ms per point from ramp-minute 1.5 on, despite
+    serving at very different rates — score turns out to be the *steadier* of
+    the two measures across playstyles. At 70 the swap on its own left the
+    batching maker's median death unchanged (4.66 → 4.67 min), which is what it
+    was fitted to do.
+  - **The median then moved anyway, and the cause was a bug the swap exposed.**
+    The brown-mercy gate read the raw clock where its own rule said "once the
+    ramp has settled"; every other reader of that anchor goes through the ramp.
+    Harmless while the clock and the curve were close, it holds the mercy back
+    from exactly the player the rest of the ramp has already moved on once score
+    drives the curve. Fixed, the median reads **5.16 min** — a mercy customer is
+    a free serve, and strong scorers now reach theirs sooner. Re-measured with
+    the gate fixed on both arms: 4.66 (serve count) against 5.16 (score), both
+    inside the 4–6 target.
+  - **What keying on score buys is the tail.** On that same re-measured draw,
+    runs past seven minutes fall 3 of 16 to 2 of 16 and the interquartile range
+    closes from 4.3–6.7 to 4.7–6.2 — in from *both* ends. A score is a read on
+    how well a run is *going* where a serve count reads only how long it has
+    been going on, so the runs that used to get away are the ones the curve now
+    catches.
+  - **Scoring well therefore pulls the curve forward, and that is deliberate.**
+    §9 multiplies a serve by tier, by patience and by streak, so a tier-3 served
+    promptly on a capped streak is 150 points against 10 for a late raw — 10.5 s
+    of ramp against 0.7, where the old count gave both 6 s. This is the first
+    place to look if the ramp ever reads as punishing a good run.
+  - The clock is kept as the floor rather than dropped for score alone: without
+    it a maker who serves just enough to hold their lives could park the curve
+    at the handover's interval indefinitely, and §1 has difficulty ramping
+    *until lives run out*.
 - The rare **brown-accepting customer** (~5% once the ramp has settled) only
   appears if a brown candy is on the shelf. Because a new arrival sweeps the
   rack, they are served the moment they walk up: the cleanup is the whole visit.
-- Measured against the reference bots, a maker who batches dies around 5 minutes
-  on most seeds, against a target of 4–6. The target read 8–10 until the seventh
+- Measured against the reference bots, a maker who batches dies around 5.2
+  minutes on most seeds, against a target of 4–6. The target read 8–10 until the seventh
   sitting, which is where the case for moving it is: **every lever that adds a
   new thing to do is spent by the 3-minute mark** — max queue at 2 min, the order
   mix and the speed cap at 3 — and past those only patience and the arrival
@@ -472,18 +513,30 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   arithmetic. See the implementation plan for those runs — including the one
   finding this table could not fix.
 
-### The rush (past the 3-minute mark)
+### The rush (from the 1-minute mark)
 
 The bullet above names the hole and **the rush is what goes in it**, asked for
-from the chair twice: at the 3-minute mark the window stops being a steady drip
-and becomes a **tide**, so what is past the last lever is a shape to read rather
-than a number getting smaller. `core/difficulty.ts` holds it.
+from the chair twice: once the maker is up to speed the window stops being a
+steady drip and becomes a **tide**, so the ramp carries a shape to read rather
+than only numbers getting smaller. `core/difficulty.ts` holds it.
 
 One period is a minute: half of it a lull, then a nine-second swell, a peak of
 about twelve seconds, and an ebb. It **moves the Arrival column and nothing
 else** — the standing line is drawn for four children and a fifth walks off the
 frame, so a deeper queue is a layout job first — and it is one pure term over
 ramp position with no rng in it, so a seeded run still replays exactly.
+
+- **It starts at the Settled row, not the Rush row.** It was built for the
+  stretch *past* the last lever, on the reasoning that a tide before then would
+  be one more number moving among four. The next report of staleness arrived at
+  **400 points**, which the reference bots put at ramp-minute 0.5–0.6 — inside
+  the first minute, and nowhere near the mark the tide was waiting for. A shape
+  a player only meets in the last third of a run is not a shape the run has, so
+  the tide now runs from the moment the speed ease-in finishes to the end. The
+  minute before it is left flat on purpose: that is the ease-in, and a tide laid
+  over a strand still being brought up to pace is two things moving at once.
+  Measured, this moves the batching maker's median death 5.79 → **4.66 min**,
+  still inside the 4–6 target, 16/16 closed out either way.
 
 - **The lull is the point as much as the peak is.** A nested ladder is a bundle
   aimed at several orders at once, and it takes longer to build than it does to
@@ -496,7 +549,10 @@ ramp position with no rng in it, so a seeded run still replays exactly.
   nothing — ~69 moves, 8.6 s at the Rush row's speed — and not against a trip to
   the bench, which is two. That is the difference between a rush and an ambush:
   the warning has to be long enough to *start* the thing it is warning you to
-  start, and a batch is the thing.
+  start, and a batch is the thing. At the Settled row, where the tide now
+  begins, the same ladder is 9.9 s against a 9 s swell; the swell stays where it
+  is, because the **lull** is the half a ladder is actually built in and the
+  swell only has to be long enough to start one.
 - **The trough is shallower than the table, but only just, and the asymmetry is
   measured rather than chosen.** A rate-neutral tide is not a difficulty-neutral
   one: arrivals stop at Max queue, so surplus rate at a peak is clipped the

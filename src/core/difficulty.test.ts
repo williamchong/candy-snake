@@ -99,19 +99,35 @@ describe('the difficulty curve', () => {
     for (const anchor of RAMP) expect(anchor.moveIntervalMs).toBeGreaterThan(100);
   });
 
-  describe('serves and the clock, whichever fires first', () => {
-    it('lets the clock carry a maker who serves nobody', () => {
+  describe('the score and the clock, whichever is further along', () => {
+    it('lets the clock carry a maker who scores nothing', () => {
+      // The floor, and the reason the clock is kept at all: a maker who serves
+      // just enough to hold their lives must not be able to park the curve.
       expect(rampMs(120_000, 0)).toBe(120_000);
     });
 
-    it('lets serves carry a maker faster than the clock', () => {
-      expect(rampMs(0, 40)).toBeGreaterThan(0);
-      expect(rampMs(1_000, 40)).toBe(rampMs(0, 40));
+    it('lets a score carry a maker faster than the clock', () => {
+      // Two thousand points a minute into a run is well ahead of the clock, and
+      // the curve has to be where the score puts it rather than where the
+      // stopwatch does — that is the whole of what keying on score means.
+      expect(rampMs(60_000, 2_000)).toBeGreaterThan(60_000);
+      expect(rampMs(1_000, 2_000)).toBe(rampMs(0, 2_000));
     });
 
     it('takes whichever is further along, never the sum', () => {
-      const both = rampMs(90_000, 5);
-      expect(both).toBe(Math.max(90_000, rampMs(0, 5)));
+      const both = rampMs(90_000, 500);
+      expect(both).toBe(Math.max(90_000, rampMs(0, 500)));
+    });
+
+    it('pays a hard serve more ramp than an easy one', () => {
+      // The consequence of keying on score rather than counting serves, pinned
+      // because it is the thing a retune has to decide it still wants:
+      // `scoreServe` weights by tier, by patience and by streak, so the curve
+      // now moves by how well a serve went and not merely by that it happened.
+      const easy = rampMs(0, 10); // a raw handed over late, no streak
+      const hard = rampMs(0, 150); // a secondary served promptly, streak capped
+
+      expect(hard).toBeGreaterThan(easy * 10);
     });
   });
 
@@ -122,9 +138,14 @@ describe('the difficulty curve', () => {
         rushAt(from + (RUSH_PERIOD_MS / samples) * step, 0),
       );
 
-    it('leaves the window alone until the table runs out of new things', () => {
-      // The whole case for it is that it goes *past* the last lever (design §7).
-      // A tide before then would be one more number moving among four.
+    it('leaves the window alone until the maker is up to speed', () => {
+      // The opening minute is the speed ease-in (see `SETTLED_MS`), and a tide
+      // laid over a strand still being brought up to pace would be two things
+      // moving at once with no way to tell which one bit. Past that the tide
+      // runs for the whole of the rest of the game — the ninth sitting's
+      // report of staleness came at 400 points, which is inside ramp-minute
+      // one, so a shape that waited for the three-minute mark was a shape most
+      // runs barely met.
       for (let ms = 0; ms <= RUSH_FROM_MS; ms += 5_000) {
         expect(rushAt(ms, 0)).toBe(0);
         expect(arrivalRateAt(ms)).toBe(1);
