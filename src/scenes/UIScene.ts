@@ -28,10 +28,12 @@ import { SceneKey } from './keys';
  * a tap target however far the kitchen has had to shrink.
  */
 
-/** The window's own events: everything the queue plays rather than draws. */
-type WindowEvent = Extract<
+/** The HUD's own events: everything over here that is played rather than drawn. */
+type HudEvent = Extract<
   GameEvent,
-  { type: 'customer-arrived' | 'customer-served' | 'customer-left' }
+  {
+    type: 'customer-arrived' | 'customer-served' | 'customer-left' | 'candy-staled';
+  }
 >;
 
 export class UIScene extends Phaser.Scene {
@@ -122,12 +124,13 @@ export class UIScene extends Phaser.Scene {
   }
 
   /**
-   * Who is waiting is state and is drawn from it, but walking on and walking
-   * off are one-shots — so they hang off the event stream GameScene is already
-   * walking, rather than being guessed at from a customer appearing in or
-   * vanishing from the queue (architecture §6, §7).
+   * What the window and the rack *hold* is state and is drawn from it, but a
+   * child walking on, a child walking off and a candy pushed off the end are
+   * one-shots — so they hang off the event stream GameScene is already walking,
+   * rather than being guessed at from something appearing in or vanishing from
+   * a list (architecture §6, §7).
    */
-  play(event: WindowEvent): void {
+  play(event: HudEvent): void {
     switch (event.type) {
       case 'customer-arrived':
         this.queue.admit(event.customer);
@@ -139,6 +142,17 @@ export class UIScene extends Phaser.Scene {
 
       case 'customer-left':
         this.queue.depart(event.customer.id, Mood.Walkout);
+        return;
+
+      case 'candy-staled':
+        this.shelf.toss(event.color);
+        return;
+
+      default:
+        // Widening `HudEvent` without handling the new member becomes a type
+        // error here rather than a one-shot that quietly never plays — the same
+        // guard `GameScene.play` keeps over the whole event union.
+        event satisfies never;
         return;
     }
   }

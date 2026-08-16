@@ -146,10 +146,12 @@ export class GameScene extends Phaser.Scene {
 
       // The serving window is UIScene's: it draws who is waiting from state,
       // but a child walking on and walking off are one-shots, so they are
-      // handed over rather than left to be inferred (architecture §6).
+      // handed over rather than left to be inferred (architecture §6). The rack
+      // is over there too, and only it knows which slot a stale candy left from.
       case 'customer-arrived':
       case 'customer-served':
       case 'customer-left':
+      case 'candy-staled':
         this.hud()?.play(event);
         return;
 
@@ -158,9 +160,7 @@ export class GameScene extends Phaser.Scene {
       case 'life-lost':
         return;
 
-      // Nothing to play yet; the juice pass (Phase 7) fills these in, including
-      // the stale-candy toss off the rack (design §5).
-      case 'candy-staled':
+      // Nothing to play yet; the juice pass (Phase 7) fills these in.
       case 'strand-broken':
       case 'strand-cut':
       case 'dye-kneaded':

@@ -58,21 +58,29 @@ export const HudDepth = {
   LeavingIcon: 3,
   LeavingGlyph: 4,
   /**
+   * A candy on its way off the rack, which flies over the slots it was pushed
+   * out of — the same situation as the departing child above, and named here for
+   * the same reason: sharing `Icon` with the rack would leave which one is on
+   * top to display-list insertion order.
+   */
+  TossedIcon: 5,
+  TossedGlyph: 6,
+  /**
    * The cheat sheet, which is an overlay rather than another widget beside the
    * rest: it veils whatever HUD it opens over, and is meant to (design §4 —
    * semi-transparent, and never over the kitchen). So it sits above the lot.
    */
-  SheetPanel: 5,
-  SheetIcon: 6,
-  SheetGlyph: 7,
+  SheetPanel: 7,
+  SheetIcon: 8,
+  SheetGlyph: 9,
   /**
    * The tab reads as sitting on the drawer it opens, so it is drawn above it.
    * Two layers because the tab is a frame with a jar inside it, and a frame
    * that shares its icon's depth is left to display-list insertion order to
    * separate — the accident this table exists to prevent.
    */
-  SheetTab: 8,
-  SheetTabIcon: 9,
+  SheetTab: 10,
+  SheetTabIcon: 11,
 } as const;
 
 export interface Drawn {
