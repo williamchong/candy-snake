@@ -67,6 +67,27 @@ const BAR_HEIGHT = 5;
 /** Below this much patience left the face gives it away before the bar does. */
 const IMPATIENT_AT = 0.4;
 
+/**
+ * The last-call stage, and the one thing here counted in seconds rather than in
+ * bar: the ramp takes patience from 35 s down to 22 s, so a fraction would
+ * shrink the warning exactly as the game speeds up. What the player is deciding
+ * is whether they can still get there, which is a question in seconds.
+ *
+ * `patienceFraction` is untouched by this on purpose — the bar and the score
+ * bonus read it together (design §9), so the alarm reads the clock beside it
+ * and never changes what a serve pays.
+ */
+const CRITICAL_MS = 5_000;
+
+/**
+ * The alarm, as a breath rather than a blink: design §2 asks for soft and slow,
+ * and design §11 has the queue read in glances taken from steering — where a
+ * texture swap is invisible and motion is not. Only the child actually inside
+ * the window breathes; four at once would be noise rather than urgency.
+ */
+const BREATH_MS = 800;
+const BREATH_AMOUNT = 0.12;
+
 const WALK_SPEED = 260;
 /** How long a step lasts, i.e. half a walk cycle. */
 const STEP_MS = 140;
@@ -111,6 +132,10 @@ export class CustomerView {
   private done = true;
   /** Whole pixels of bar drawn, so a sub-pixel drain writes nothing. */
   private shownBarWidth = -1;
+  /** Down to the last seconds: the bubble breathes until they are served or go. */
+  private alarmed = false;
+  /** Whether the bubble is off its resting size, so settling it writes once. */
+  private breathing = false;
   /** Which half of the walk cycle is on screen — see `draw`. */
   private stepping = false;
 
@@ -188,6 +213,7 @@ export class CustomerView {
     this.x = this.offstage;
     this.targetX = slotX;
     this.shownBarWidth = -1;
+    this.alarmed = false;
     this.body.setDepth(HudDepth.Icon);
     this.face.setDepth(HudDepth.Glyph);
 
@@ -218,6 +244,9 @@ export class CustomerView {
 
     const left = patienceFraction(patience);
     this.setMood(left <= IMPATIENT_AT ? Mood.Impatient : Mood.Waiting);
+    // Two stages, deliberately measured against two different things: the face
+    // turns at a fraction of the bar, the alarm at a count of seconds.
+    this.alarmed = patience.remainingMs <= CRITICAL_MS;
 
     // 34 px over 35 s is a pixel a second, so all but one frame in sixty would
     // redraw the identical bar.
@@ -237,6 +266,8 @@ export class CustomerView {
   leave(mood?: Mood): void {
     if (mood !== undefined) this.setMood(mood);
     this.leaving = true;
+    // Whatever they were waiting on is settled, one way or the other.
+    this.alarmed = false;
     this.pauseMs = REACTION_MS;
     this.bubble.setVisible(false);
     show(this.want, false);
@@ -303,9 +334,39 @@ export class CustomerView {
     this.body.setPosition(this.x, floor + BODY_Y);
     this.face.setPosition(this.x, floor + BODY_Y);
     this.bubble.setPosition(this.x, floor + BUBBLE_Y);
+    this.breathe();
     place(this.want, this.x, floor + CANDY_Y);
     this.barTrack.setPosition(this.x, this.footY + BAR_Y);
     this.barFill.setPosition(this.x - BAR_WIDTH / 2, this.footY + BAR_Y);
+  }
+
+  /**
+   * The last-seconds alarm: the bubble swells and settles, off the same scene
+   * clock the walk cycle uses, so a row of children in trouble breathes in time
+   * rather than each on its own phase.
+   *
+   * The bubble alone, and not what is inside it: the candy is the order the
+   * player has to read off a glance, so it stays still and crisp while the
+   * bubble moves around it.
+   */
+  private breathe(): void {
+    if (!this.alarmed) {
+      // The one write that settles it, on the frame the alarm ends and no
+      // other. `breathing` is true exactly when the bubble is off its resting
+      // size, so a view handed to the next child cannot inherit a swollen one.
+      if (!this.breathing) return;
+
+      this.breathing = false;
+      this.bubble.setScale(SCALE);
+      return;
+    }
+
+    // Swells from the resting size and settles back to it, rather than either
+    // side of it: a bubble that spends half the alarm *smaller* than normal
+    // reads as receding, which is the opposite of what it is for.
+    const phase = 1 - Math.cos((this.scene.time.now / BREATH_MS) * Math.PI * 2);
+    this.breathing = true;
+    this.bubble.setScale(SCALE * (1 + (BREATH_AMOUNT * phase) / 2));
   }
 
   private hide(): void {
