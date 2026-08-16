@@ -960,6 +960,80 @@ and the target was then argued from the levers rather than from the number.
   found from a chair. A sweep that asserts a death rate and a score gap can be
   entirely green while a headline mechanic is dead on the board.
 
+### What the sugar-supply pass measured — the harness has never built a long strand
+
+A proposal from the chair: more than one sugar cube on the map later on. It is
+the first lever anyone has aimed at the *temporal* half of the open finding that
+is not `patienceMs`, and it has a mechanism in the code rather than only in the
+argument. `missingPickups` lays a cube only when none is on the map, and a pickup
+is spent only once the **whole strand** has cleared it (design §5) — so the Nth
+segment costs a trip to the cube *plus* N moves of dragging before the next cube
+exists at all. Growth is quadratic in length: a six-rung ladder is ~69 moves,
+near ten seconds at the Settled row, before a single jar. Raising the floor
+deletes that N term, and it is the rare proposal that makes a long strand
+*cheaper* — the five harshening instincts recorded across three sittings all
+push the other way. It is also the fifth sitting's held speed candidate in the
+one shape that does not punch through the 8 cells/s cap or the 125 ms teleport
+floor.
+
+It was built as a quota (`ensurePickups` counting cubes rather than switching
+them), a `sugar` column on the anchor table, and a term that counts a cube the
+strand is still dragging as already spent. Four arms, plus the `patienceMs`
+retune the order of attack has had at its front since the second sitting, over
+the same sixteen seeds:
+
+| Arm                           | deaths | median | past 7 min | **batcher ahead** | chopped/min | staled |
+| ----------------------------- | ------ | ------ | ---------- | ----------------- | ----------- | ------ |
+| baseline                      | 16/16  | 5.12   | 2/16       | **1/16**          | 22.5        | 56     |
+| cube while dragging           | 16/16  | 5.33   | 2/16       | **0/16**          | 22.3        | 56     |
+| 1 → 3 cubes up the ramp       | 16/16  | 6.84   | 7/16       | **1/16**          | 26.1        | 84     |
+| both                          | 15/16  | 6.70   | 6/15       | **0/16**          | 26.5        | 91     |
+| patience +15% (Settled, Rush) | 16/16  | 6.10   | 4/16       | **0/16**          | 22.7        | 65     |
+
+**Nothing shipped, and the reason is the column that was added to find out.**
+The sweep now reports how long the strand actually gets, which no sweep ever has:
+the batching maker carries a mean of **1.20 segments** and has never in sixteen
+seeds exceeded **4**. Tripling the sugar on the floor moved that mean to 1.29.
+Supply was never what bound it — `batcherGoal` sizes its batch from `bestLadder`,
+which is the primaries of one waiting order plus the raw beneath them, so the
+tallest thing any order can ask for is two dyes over a raw. The bot never *asks*
+for a fourth segment; four is simply the most it has ever ended up carrying.
+
+**So the verdict is not "the lever is worthless", it is "this harness cannot be
+asked".** The proposal is about what a *long* strand costs, and the bot standing
+in for the maker who builds one has been building three. That is the third time
+the harness has been blind in the same way — the second sitting found the bots
+never feel the patience clock, the seventh that they never reported the queue
+they stood in front of, and this pass that they never wanted the strand the whole
+open finding is about. All three were found by asking the sweep a question it had
+not been built to answer, and none of them showed up as a failing assertion.
+
+What the arms *do* say is worth keeping. Three cubes on the floor buys the maker
+16% more candy a minute and 50% more staling, and pushes the median run from 5.1
+to 6.8 minutes with 7 of 16 past seven — an easier, longer run producing more
+candy nobody ordered, which is the economic half getting worse while the temporal
+half stays untouched. And the retune at the front of the order of attack was
+measured on the same draw for the first time: **+15% patience moves the open
+finding not at all** (1/16 → 0/16) and costs half a minute of the death target.
+The first step in that paragraph has now been tried and it is not the answer
+either.
+
+**Two assertions survive the pass**, both pinning what was measured rather than
+what was hoped: the window reaches all four slots on every seed of the draw, and
+the batching maker's strand stays under two segments on average and never passes
+four. The second says in the file itself that a green sweep here is evidence
+about a maker who batches three and about nothing longer.
+
+**Before any of this is retried, the ceiling comes first.** A bot that builds
+ahead of the window rather than for the order in front of it is what would make
+the question askable, and it is a change to `bestLadder`, not to the game. After
+that, both bots need to take the *nearest* cube rather than the first in the
+array — inert while the floor is one, since with a single cube on the map they
+are the same cube, which is exactly why it can be done ahead of time and proven
+not to move a number. Only then does a sugar column mean anything. The candidates
+that add something to do past three minutes — the combo meter and the rush — are
+unaffected by all of this and are still the ones on the list.
+
 ## Phase 8 — Persistence, high scores & release (S)
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
