@@ -203,9 +203,10 @@ What came out of it, and what is to be done about each:
   sitting names which knob of the two actually matters; see below.
 - **"The candy preparation area — does it score for me or against me?"** — the
   shelf is unreadable, and the reason is in the code rather than in the design:
-  `candy-staled` reaches `GameScene` and plays nothing, so a candy pushed off a
-  full rack goes in silence. Design §5 already asks for the toss, and Phase 7
-  already owns it; this is that item with a playtest behind it now.
+  `candy-staled` reached `GameScene` and played nothing, so a candy pushed off a
+  full rack went in silence. Design §5 already asks for the toss, and Phase 7
+  already owned it; this was that item with a playtest behind it. **Done** — see
+  Phase 7's juice bullet, including what building it turned up.
 - **"Maybe the dye shouldn't respawn straight away, or cap how many there are."**
   — **rejected**, and worth writing down why, because the instinct is right and
   the effect is backwards. Two things put a jar out (design §8.3): pity, which
@@ -424,7 +425,9 @@ exactly this kind of proposal.
   design §5 asks for the clock to show twice. So this is the wrong stage shown
   the wrong way, which is a different job from adding one. Phase 7's juice list
   already carried the urgency pulse; the rule it now has to satisfy is recorded
-  there rather than here.
+  there rather than here. **Built** — and not as a flash: the player asked for
+  the loudest thing they could name, and what the rule asked for was the softest
+  one that still moves.
 - **A low-patience, high-cost customer (技安).** — **rejected, by the test at
   the end of the second sitting.** A child who demands one candy quickly and
   takes an extra life for missing rewards the maker who takes whatever is
@@ -524,6 +527,11 @@ back, bounded. What has changed is that the first two things to actually do are
 no longer balance work at all — the swipe and the expiry warning are Phase 6 and
 Phase 7 items with playtest evidence behind them now, and both are cheaper than
 anything in this paragraph.
+
+**Those first two are now done**, along with the stale toss the first sitting
+asked for, which is why they are struck from the front of this order rather than
+still standing at it. What is left in the paragraph above is the balance work,
+and it is next — starting where it always did, at `patienceMs`.
 
 ## Phase 6 — Mobile & responsive (L) ✅
 
@@ -629,6 +637,18 @@ game feel worse rather than better, because the extra turns it would hold are
 ones the player has already stopped wanting. Then hold the phone again, which is
 the half of this that cannot be done from here.
 
+**The first half is done: the threshold ships at 13 px.** Not 12, and the reason
+is in the tests rather than in the thumb — `swipe.test.ts` asserts that a drag of
+12 px on the dominant axis stays inside the dead zone, and that case is a
+deliberate one. 13 is inside the range this report asked for and still leaves
+better than twice the jitter of a tap under it. The buffer was left at 2.
+
+**The second half is still owed, and cannot be done from here.** Nothing about
+this is settled until the phone has been held again: whether the turn now lands
+on the cell it was meant for, and whether any of the complaint was the view's
+interpolation rather than the threshold — the one cause on the list that a
+description could not rule out.
+
 **It makes the D-pad question live for the first time.** This phase dropped the
 D-pad with a condition attached — whether it is wanted at all is for the
 real-device pass, and if the answer is yes it lands beside the setting that
@@ -661,17 +681,34 @@ late.
   leaves the gesture wanting.
 - Juice pass: eat squash, chop pop + particles, shatter shards + camera shake,
   serve confetti, patience-bar urgency pulse, and the stale-candy toss off the
-  rack (design §5) — `candy-staled` reaches `GameScene` today and plays nothing,
-  which is why the first sitting could not tell whether the shelf was scoring
-  for the player or against them. Now that the strand is drawn as one rope
-  (design §2), stretching it along its travel axis as it is pulled belongs here
-  too.
+  rack (design §5). Now that the strand is drawn as one rope (design §2),
+  stretching it along its travel axis as it is pulled belongs here too.
+  - **The urgency pulse and the stale toss are built** — the two items on this
+    list that had a player behind them rather than only a checklist entry. What
+    is left is the five that do not.
+  - **The toss taught the list something.** `candy-staled` fires once per candy
+    pushed off, and one chop can overflow a full rack several times inside a
+    single tick — and every one of those candies leaves the *same* slot. Played
+    straight they superimpose, so eight losses read as one, which is the very
+    illegibility the effect was added to fix. The tosses are staggered by how
+    many are already in the air — capped, because the stagger drains slower than
+    two batches coming apart can fill it. Any later effect that plays per-item
+    off a single event has the same trap under it: the chop pop is per-cell and
+    so is safe, the serve confetti is per-customer and so is too.
+  - **A pooled HUD effect is not a pooled board effect.** `ShardBurst`'s puffs
+    ride inside `BoardView`'s container, so a resize moves them with everything
+    else; the rack has no container, so a toss in mid-air is aimed at
+    coordinates the next `applyFrame` invalidates — and `Scale.RESIZE` fires
+    that on every frame of a window drag. It cuts them instead. Worth knowing
+    before the next effect is hung off the HUD rather than the board.
 - **The urgency pulse is the one juice item with a rule attached**, and it has a
   playtest behind it now: the fifth sitting reported no warning at all before a
   child walks out. There is one — `ui/customerView.ts` swaps the face to
   `FaceWorried` at `IMPATIENT_AT`, 40% of the bar — so this is a legibility
   failure of something already built rather than a missing feature, and it is
-  worth building against what is actually wrong with it.
+  worth building against what is actually wrong with it. **Built to the four
+  rules below, unchanged** — below `CRITICAL_MS`, 5 s, the bubble swells up to
+  12% and settles again on an 800 ms cycle, and nothing else on the child moves.
   - **The stage that is missing is a later one, on an absolute clock.** 40% is
     the *mood* threshold and can stay fractional; the alarm cannot, because the
     ramp takes patience from 35 s to 22 s and a fraction therefore shrinks the
@@ -687,6 +724,9 @@ late.
   - **`patienceFraction` stays untouched.** The bar and the score bonus read it
     together on purpose (design §9), so the alarm reads the clock beside it and
     never changes what a serve pays.
+  - **The bubble breathes and the candy inside it does not.** The order is the
+    one thing in the queue the player has to actually read off a glance, so the
+    motion is put on the frame around it rather than on it.
 - Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted.
 
 **Done when:** a new player understands mixing without leaving the game, and
@@ -875,8 +915,10 @@ constants now, and the lives row moved up 8 px to pay for the difference.
   validate on real devices early in Phase 6, not at the end. **This one fired.**
   It was validated at the end rather than early, and the first device report
   (Phase 6) says the 20 px threshold commits the turn a block late. The
-  mitigation was the right one and was simply not exercised in time; the fix is
-  identified and is one constant. Open.
+  mitigation was the right one and was simply not exercised in time. The fix has
+  since shipped — the threshold is 13 px — but the risk is not closed, because
+  the thing that caught it is the thing that has to confirm it: **open until the
+  phone says so.**
 - **Color confusion for colorblind players** — symbols are in from Phase 2,
   not bolted on later.
 - **Balance is opinion** — seeded simulations make tuning comparable
