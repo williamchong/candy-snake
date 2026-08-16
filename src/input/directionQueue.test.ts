@@ -45,26 +45,6 @@ describe('DirectionQueue', () => {
     expect(queue.push(Dir.Down)).toBe(false);
   });
 
-  it('reports a turn it accepted, and stays quiet about one it refused', () => {
-    // What the HUD hangs its cheat sheet off: "the player is steering" has to
-    // mean a turn that landed, not a key that was pressed at a wall.
-    let accepted = 0;
-    const queue = new DirectionQueue(Dir.Right, () => {
-      accepted += 1;
-    });
-
-    expect(queue.push(Dir.Right)).toBe(false); // a repeat
-    expect(queue.push(Dir.Left)).toBe(false); // a reversal
-    expect(accepted).toBe(0);
-
-    queue.push(Dir.Up);
-    expect(accepted).toBe(1);
-
-    queue.push(Dir.Left);
-    queue.push(Dir.Down); // the buffer is full by now
-    expect(accepted).toBe(2);
-  });
-
   it('drains in order and then reports empty', () => {
     const queue = new DirectionQueue(Dir.Right);
     queue.push(Dir.Up);

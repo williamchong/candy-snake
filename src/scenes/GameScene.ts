@@ -47,9 +47,7 @@ export class GameScene extends Phaser.Scene {
     // The core is deterministic per seed; the scene picks a fresh one so
     // sugar does not land in the same places on every reload.
     this.core = new Game({ ...DEFAULT_CONFIG, seed: Date.now() });
-    this.turns = new DirectionQueue(this.core.state.snake.dir, () =>
-      this.hud()?.steered(),
-    );
+    this.turns = new DirectionQueue(this.core.state.snake.dir);
     this.view = new BoardView(this);
     this.accumulatorMs = 0;
 

@@ -26,26 +26,25 @@ import { TAB_SIZE, wheelSeats, WHEEL_PAIRS, type Frame, type WheelSeats } from '
  * It is the only place in the game a recipe is shown at all. The opening levels
  * teach mixing by what they stock and the queue shows only what a child wants,
  * both on purpose — a recipe printed beside every order is a table the player
- * reads instead of playing. So this one is drawn rather than written, sits
- * clear of the kitchen, and gets out of the way on its own once the player
- * starts steering.
+ * reads instead of playing. So this one is drawn rather than written and sits
+ * clear of the kitchen.
  *
- * The state half is separated out and pure — no Phaser, and no module state
- * either — because when the sheet hides itself is a rule with a decision in it,
- * and rules in this codebase are unit-tested.
+ * **It stays up until the player puts it away.** It used to take itself down a
+ * few seconds after the first turn, on the reasoning that a wheel left open is
+ * a wheel in the way. From the chair it read as the game confiscating the one
+ * reference it has: the sheet is semi-transparent, sits outside the play grid
+ * and answers a question — *what makes purple* — that does not stop being asked
+ * once a player starts steering. So the sheet is now shown unless the player
+ * has hidden it, and hiding it is a choice they make and the game remembers.
+ * Nothing left here is a rule with a decision in it, which is why there is no
+ * pure state half any more.
  */
-
-/**
- * How long the sheet stays up once the player is playing. Long enough to
- * finish reading it, short enough that it is gone before it is in the way.
- */
-export const AUTO_COLLAPSE_MS = 4_000;
 
 /**
  * Whether the player wants the sheet open, remembered for as long as the page
  * is loaded. Module state rather than scene state so it survives
- * menu → game → game over → game, which is what makes "expanded for the first
- * run" mean the first run rather than every run.
+ * menu → game → game over → game: a player who put the wheel away must not find
+ * it back in the corner of every run after it.
  *
  * Phase 8's `persist/storage.ts` replaces these two bodies with the settings
  * blob and nothing else about the sheet changes.
@@ -57,63 +56,6 @@ const readOpen = (): boolean => remembered ?? true;
 const rememberOpen = (open: boolean): void => {
   remembered = open;
 };
-
-/**
- * When the sheet is up, and when it takes itself down.
- *
- * The rule it exists to hold: automatic collapse happens once, on the first
- * turn the player actually steers, and never again. A countdown that restarted
- * on every turn would never fire while the player was busy, which is exactly
- * when the sheet is in the way; and a sheet that could collapse a second time
- * would take itself down under a player who had just asked for it.
- */
-export class SheetState {
-  private open: boolean;
-  private countdownMs: number | undefined;
-  /** Set once the sheet has been put where it is going to stay. */
-  private settled = false;
-
-  constructor(open: boolean) {
-    this.open = open;
-  }
-
-  get isOpen(): boolean {
-    return this.open;
-  }
-
-  /**
-   * The player asked, by key or by tab. A choice beats a countdown, so this
-   * cancels one and stops any further one being armed.
-   */
-  toggle(): boolean {
-    this.open = !this.open;
-    this.countdownMs = undefined;
-    this.settled = true;
-
-    return this.open;
-  }
-
-  /** A turn landed. The first one starts the clock; later ones do not touch it. */
-  steered(): void {
-    if (!this.open || this.settled || this.countdownMs !== undefined) return;
-
-    this.countdownMs = AUTO_COLLAPSE_MS;
-  }
-
-  tick(dtMs: number): void {
-    if (this.countdownMs === undefined) return;
-
-    this.countdownMs -= dtMs;
-    if (this.countdownMs > 0) return;
-
-    // Collapsing on its own is a courtesy for this run and not a preference, so
-    // it is deliberately not remembered — otherwise every player is collapsed
-    // for good a few seconds into their first game.
-    this.open = false;
-    this.countdownMs = undefined;
-    this.settled = true;
-  }
-}
 
 /** Enough of the kitchen still reads through that the drawer never blinds it. */
 const SHEET_ALPHA = 0.88;
@@ -137,9 +79,7 @@ export class CheatSheet {
   private readonly tabIcon: Phaser.GameObjects.Image;
   /** Three jars then three candies, seated in `wheelSeats`' own order. */
   private readonly seats: readonly Drawn[];
-  private readonly state = new SheetState(readOpen());
-  /** The open-ness the panel currently shows — see `render`. */
-  private shownOpen: boolean | undefined;
+  private open = readOpen();
 
   constructor(scene: Phaser.Scene) {
     // Built off-screen at a placeholder size, like every other HUD widget here;
@@ -167,6 +107,11 @@ export class CheatSheet {
       x: 0,
       y: 0,
     });
+
+    // Before the first frame, not on it: Phaser objects are born visible, so a
+    // player who put the wheel away last run would otherwise see one frame of
+    // it back in the corner of this one.
+    this.apply();
   }
 
   private seat(scene: Phaser.Scene, key: TextureKey, color: number): Drawn {
@@ -232,32 +177,29 @@ export class CheatSheet {
     }
   }
 
-  /** Runs the countdown, and redraws only when the sheet has changed its mind. */
-  render(dtMs: number): void {
-    this.state.tick(dtMs);
-    if (this.state.isOpen === this.shownOpen) return;
-    this.shownOpen = this.state.isOpen;
-
-    this.panel.setVisible(this.state.isOpen);
+  /**
+   * Shows or hides the wheel. Only its *visibility* — `applyFrame` runs on
+   * every layout pass whether the sheet is showing or not, so the wheel is
+   * always already sitting where it belongs and this has nothing to place.
+   */
+  private apply(): void {
+    this.panel.setVisible(this.open);
     this.seats.forEach((drawn) => {
-      show(drawn, this.state.isOpen);
+      show(drawn, this.open);
     });
   }
 
   /**
-   * The C key, or a tap on the tab. Nothing is redrawn here: `applyFrame` runs
-   * on every layout pass whether the sheet is showing or not, so the wheel is
-   * already sitting where it belongs and `render` only has to reveal it.
+   * The C key, or a tap on the tab — the only thing that ever moves the sheet,
+   * which is why the wheel is shown from here rather than from a per-frame
+   * pass. It used to need one: the auto-collapse gave the sheet a countdown
+   * that could change its mind between frames, and with that gone a `render`
+   * hook would be polling a value nothing but this line can write
+   * (architecture §7 — effects hang off events, never off polled state).
    */
   toggle(): void {
-    // The remembering lives out here rather than in `SheetState`, so that the
-    // half of this file with the rule in it holds no module state and a test
-    // can run it as many times as it likes in any order.
-    rememberOpen(this.state.toggle());
-  }
-
-  /** An accepted turn — the player is playing, so the sheet gets out of the way. */
-  steered(): void {
-    this.state.steered();
+    this.open = !this.open;
+    rememberOpen(this.open);
+    this.apply();
   }
 }

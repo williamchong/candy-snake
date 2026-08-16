@@ -35,13 +35,12 @@ The one structural rule that matters (architecture.md §2):
 
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —
-`input/directionQueue.ts`, `input/swipe.ts`, `render/strand.ts`,
-`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free) and
-`ui/cheatSheet.ts` (only its `SheetState` half — when the sheet shows itself
-is a rule, and the drawing around it is not). A type-only `import type Phaser`
-does not count against that: it is erased before the tests run, so such a
-module can hold its own scene binding (as `input/keyboard.ts`,
-`input/swipe.ts` and `ui/cheatSheet.ts` do) and still load under Node.
+`input/directionQueue.ts`, `input/swipe.ts`, `render/strand.ts` and
+`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free).
+A type-only `import type Phaser` does not count against that: it is erased
+before the tests run, so such a module can hold its own scene binding (as
+`input/keyboard.ts`, `input/swipe.ts` and `ui/cheatSheet.ts` do) and still
+load under Node.
 Everything that reaches Phaser at runtime — `scenes/`, `ui/`, and the rest of
 `render/` and `input/` — is verified by the run-candy-snake smoke driver
 instead. The dividing line is the import, not the directory.

@@ -122,7 +122,6 @@ export class UIScene extends Phaser.Scene {
     // display's clock, the way every other tween in the HUD does.
     this.queue.render(state.customers, delta);
     this.door.render(this.core.rush);
-    this.sheet.render(delta);
 
     if (state.lives !== this.shownLives) {
       this.shownLives = state.lives;
@@ -162,15 +161,5 @@ export class UIScene extends Phaser.Scene {
         event satisfies never;
         return;
     }
-  }
-
-  /**
-   * A turn the player asked for and the queue accepted. GameScene's second
-   * one-way channel into the HUD, and the only thing here that hangs off input
-   * rather than off state: the cheat sheet takes itself down once the player is
-   * playing, which is a fact about the player and not about the run.
-   */
-  steered(): void {
-    this.sheet.steered();
   }
 }
