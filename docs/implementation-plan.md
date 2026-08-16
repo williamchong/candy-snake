@@ -112,9 +112,15 @@ over, restart — is playable start to finish with keyboard.
 - Balancing pass: scripted bot simulations + human playtests; adjust the
   tuning table. **Expect to iterate here — budget real playtime.**
 
-**Done when:** a decent player survives ~8–10 min on a first real run and
+**Done when:** a decent player survives ~4–6 min on a first real run and
 death feels earned (post-playtest judgment call), simulation asserts no order
 is ever primary-starved, and the batching bot outscores the grinder.
+
+That first figure read ~8–10 min until the seventh sitting, which retargeted it
+against when the ramp runs out of new things to introduce rather than against
+how long the curve can be made to take. The measurements below were taken under
+the old target and are left as they were written; the seventh sitting's record
+says what moved and why.
 
 Two of those three are met. The third — the batching bot outscoring the grinder
 — is **not**, and the balance record below sets out why it is a rules question
@@ -122,10 +128,12 @@ rather than a tuning one, along with the three candidate rule changes it opened
 with — of which the sittings since have struck one, added three more, and hold a
 fourth pending a measurement. It is carried forward as an open finding rather
 than counted as done. The human playtest half of the first criterion has now had
-five sittings, and none of them answered that half — nobody has played long
+seven sittings, and none of them answered that half — nobody has played long
 enough to die. They answered other things instead, including the open finding
-arrived at from the far end, three times, by three different players. See the
-five records below.
+arrived at from the far end, three times, by three different players. The five
+records below are this phase's; the sixth and seventh sat late enough to be
+recorded under Phase 7, and the seventh is the one that moved this criterion's
+target from ~8–10 min to ~4–6.
 
 ### Where the balance landed
 
@@ -872,6 +880,85 @@ placed against the top of a child before — the rack cleared them from below �
 so the error was invisible until the hearts landed on it, which they did
 immediately on a phone held sideways. It is measured from the view's own
 constants now, and the lives row moved up 8 px to pay for the difference.
+
+### What the seventh sitting settled — the window never filled
+
+One report, from a player 481 points into a run: *the customers still appear
+just one by one, and the difficulty is too easy.* Both halves were true, and the
+first is the cause of the second.
+
+**The queue could never hold more than one child, on any seed, at any point on
+the ramp.** `admitCustomer` counted a flat interval and reset it on every
+arrival, so children came on a metronome whatever the window held. The queue can
+only grow when the maker serves *slower* than the interval — 8.8 s at the point
+this player was reporting from — so any competent maker emptied the window and
+kept it empty. Design §7 has said "max queue 3" since Phase 4 and **nobody had
+ever seen it.** Simulated at 2.5 s, 3.5 s and 5 s per serve, the peak queue depth
+over twelve minutes was 1, 1 and 1.
+
+**That is also the second sitting's finding, arrived at from the other end.** A
+player who asked *"do I have a reason to make the strand longer?"* was looking at
+a window showing one order. A nested ladder is a bundle aimed at several orders
+at once; against a window of one there is nothing to aim it at. The economic
+reading of the open finding — the extra candy is candy nobody ordered — had a
+mechanical floor under it the bot sweeps never showed, because the sweeps
+measured score and sell-through and never once measured **queue occupancy**.
+
+**A second lever was inert for the same reason.** `rampMs` takes
+`max(elapsedMs, served × 6000)` so that a fast player is not held back by the
+clock — but no player can serve faster than children arrive, so `served`
+converges on `elapsed / arrivalInterval`, and the serve term can only win when
+the interval drops under 6 s. It does not until the 3-minute mark. Measured: at
+94 s of play the ramp also read 94 s. Serving briskly bought **nothing**.
+
+**The fix is one expression.** The gap is a share of the interval scaled by how
+full the window is, so `arrivalIntervalMs` now means the gap with one slot left
+to fill and an emptier window fills proportionally faster. Counting `length + 1`
+rather than `length` is load-bearing twice over: a window with no interval stays
+shut (`Infinity × 0` is `NaN`, which would admit everyone, where `Infinity ×` a
+positive share is still `Infinity`), and the tutorial's one-slot window comes out
+bit-identical, so the opening levels needed no special case.
+
+**The anchor table was not touched.** Over the 16-seed sweep, batching runs
+closed out 14/16 → **16/16**, median death 8.4 → **5.1 min**, and the grinder —
+immortal on every seed through six sittings — now dies on 4 of 16. The serve-driven
+lever woke up on its own: a maker serving every 2.5 s is at the Rush row's demand
+by real-minute 2.
+
+**The 8–10 minute target did not survive the question "is that fun, or is it
+labour?"** It does not, and the ramp table says why: every lever that introduces
+a *kind* of thing is spent by the 3-minute mark — max queue is done at 2 min, the
+order mix and the speed cap at 3 — and past those exactly two numbers move,
+patience and the arrival interval, neither of which adds anything to do. Minutes
+3 through 10 were one number getting smaller. **Six sittings and not one player
+has ever played long enough to die**, which is the same verdict from the chair:
+the figure was calibrated against bots, and bots do not get bored. The target is
+**4–6 minutes** now — a minute or two past the last lever, so the peak is played
+at full intensity rather than approached and then endured, and a retry is a
+decision rather than a commitment.
+
+To be plain about the order of events: the retarget and the measurement agree,
+but the fix was not tuned to hit 4–6. It landed there with the table untouched,
+and the target was then argued from the levers rather than from the number.
+
+- **This does not close the open finding, and it moves it for the first time.**
+  The batching maker now outscores the grinder on 1 seed of 16, against 0 before
+  — a deeper window gives a fixed bundle more targets to land on, which is
+  exactly the compounding the first sitting predicted and the record dismissed as
+  measured-one-at-a-time. One seed is not a closure. `simulation.test.ts` says so
+  in the assertion it now makes: the score comparison was a per-seed invariant on
+  four seeds and has become a proportion on sixteen, per that file's own rule
+  that four seeds cannot carry a rate. Closing the finding still means this
+  number crossing half and the assertion inverting, not the assertion going away.
+- **If longer runs are ever wanted, the answer is a new element past 3 minutes,
+  not a gentler curve.** The candidates are already on the list and unchanged:
+  the combo meter (asked for by two separate sittings) and orders that ask for a
+  nested set. Both add something to do at the point the table currently runs out.
+- **The bot harness still cannot see the thing it was blindest to.** The second
+  sitting noted the bots never feel the patience clock; this sitting adds that
+  they never reported the queue they were standing in front of. Both gaps were
+  found from a chair. A sweep that asserts a death rate and a score gap can be
+  entirely green while a headline mechanic is dead on the board.
 
 ## Phase 8 — Persistence, high scores & release (S)
 
