@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
+import { RAMP } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
@@ -315,6 +316,25 @@ interface RunResult {
    * however long the loop kept calling afterwards.
    */
   readonly diedAtMs: number | undefined;
+  /**
+   * The deepest the window ever got. Design §7 has carried a max-queue column
+   * since Phase 4 and no sweep ever read it back — which is how the queue came
+   * to be stuck at one for six sittings with every assertion green (see the
+   * plan's seventh sitting). Measured now, so it cannot go quiet again.
+   */
+  readonly peakQueue: number;
+  /**
+   * The most sugar the strand ever carried. Segments rather than `snakeLength`,
+   * which counts the head: what is being measured is how much of a ladder got
+   * built, and the maker is not a rung of it.
+   *
+   * This is the direct read on whether a lever aimed at the *cost* of a ladder
+   * actually bought one — `ladders` says a batch held more than one color, and
+   * says nothing about how tall it was.
+   */
+  readonly peakSegments: number;
+  /** The same, averaged over the ticks the maker was alive. */
+  readonly meanSegments: number;
 }
 
 const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResult => {
@@ -328,6 +348,10 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
   let staled = 0;
   let ladders = 0;
   let broken = 0;
+  let peakQueue = 0;
+  let peakSegments = 0;
+  let segmentSum = 0;
+  let liveTicks = 0;
 
   for (let tick = 0; tick < ticks; tick += 1) {
     for (const event of game.step(20, bot)) {
@@ -346,6 +370,18 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
     if (state.served < served) violations.push(`tick ${tick}: serves went backwards`);
     if (state.tutorialIndex < level) violations.push(`tick ${tick}: tutorial rewound`);
     ({ score, served, tutorialIndex: level } = state);
+
+    // Sampled over the ticks the maker was alive rather than over the sweep: a
+    // run that ended at four minutes would otherwise be read as having spent
+    // the next three carrying nothing. It is the mean that needs saying so —
+    // `step` returns before it touches anything once the run is over, so a
+    // finished game's state never moves and neither peak could shift anyway.
+    if (!state.over) {
+      peakQueue = Math.max(peakQueue, state.customers.length);
+      peakSegments = Math.max(peakSegments, state.snake.body.length);
+      segmentSum += state.snake.body.length;
+      liveTicks += 1;
+    }
   }
 
   return {
@@ -356,6 +392,9 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
     ladders,
     broken,
     diedAtMs: game.state.over ? game.state.elapsedMs : undefined,
+    peakQueue,
+    peakSegments,
+    meanSegments: segmentSum / liveTicks,
   };
 };
 
@@ -457,6 +496,14 @@ const TARGET_TICKS = 30_000;
  * reading as a curve that stopped biting.
  */
 const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
+
+/**
+ * The deepest window the ramp ever opens, off the table rather than written
+ * down again — the last row's, since the cap only climbs and then holds past
+ * the end of the table (`difficulty.test.ts` pins both). A retune that widens
+ * the window should not read here as a run that failed to fill it.
+ */
+const PEAK_QUEUE = RAMP[RAMP.length - 1]!.maxQueue;
 
 /**
  * Where the balance stands *after* the ramp went in, measured rather than
@@ -586,6 +633,40 @@ describe('the reference players, after the ramp went in', () => {
       // Neither bot ever steers into itself, so none of the gap below is a
       // longer strand being clumsier — it is all what the candy is worth.
       expect(batcher.broken).toBe(0);
+    });
+  });
+
+  it('fills the window the seventh sitting opened', () => {
+    // See `peakQueue` for why occupancy is read back at all. Measured: every
+    // slot the ramp opens is reached on every seed of the draw, both bots.
+    for (const goalOf of [batcherGoal, grinderGoal]) {
+      target(goalOf, SWEEP).forEach((run, index) => {
+        expect(run.peakQueue, `seed ${SWEEP[index]}`).toBe(PEAK_QUEUE);
+      });
+    }
+  });
+
+  it('never builds the long strand the open finding is about', () => {
+    // What this harness can and cannot answer, pinned rather than left to be
+    // rediscovered. `batcherGoal` sizes its batch from `bestLadder` — the
+    // primaries of one waiting order, plus the raw under them — so the tallest
+    // thing any order can ask for is a secondary's two dyes over a raw, and the
+    // bot never asks for a fourth segment. A fourth is one it was handed: once
+    // the batch is full the goal is the bench, and it stops steering around
+    // sugar rather than avoiding it. It spends most of its life carrying one
+    // segment: measured mean 1.20, peak 4.
+    //
+    // So a green sweep here is evidence about a maker who batches *three*, and
+    // about nothing longer. The temporal half of the open finding — that a
+    // ladder costs more trip time than a customer's patience affords — is a
+    // claim about strands this harness never builds, which is why four arms of
+    // a sugar-supply change moved this number by 0.1 (see the plan, under the
+    // sugar-supply pass). Lifting this ceiling comes before measuring any lever
+    // aimed at it.
+    target(batcherGoal, SWEEP).forEach((batcher, index) => {
+      const seed = `seed ${SWEEP[index]}`;
+      expect(batcher.peakSegments, seed).toBeLessThanOrEqual(4);
+      expect(batcher.meanSegments, seed).toBeLessThan(2);
     });
   });
 
