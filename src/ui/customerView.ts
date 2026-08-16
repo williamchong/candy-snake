@@ -46,17 +46,22 @@ const FACES: Record<Mood, TextureKey> = {
  * Bigger than the board's 2×, because a face is the whole point of this sprite
  * and the queue is what the player glances at rather than steers by.
  */
-const SCALE = 3;
-const HEIGHT = TEXTURE_SIZE * SCALE;
+export const CHILD_SCALE = 3;
+/** How tall a child is drawn — what anything standing one on the line needs. */
+export const CHILD_HEIGHT = TEXTURE_SIZE * CHILD_SCALE;
 
 /** A customer, in ink diluted toward the chrome: shop, not candy (design §4). */
-const SKIN_TINT = 0xa08fb4;
+export const CHILD_TINT = 0xa08fb4;
 /** The bubble is a panel like any other, and reads against the same ground. */
 const BUBBLE_TINT = PANEL_FILL;
 
-/** Rows above the standing line, in screen pixels. */
-const BODY_Y = -HEIGHT / 2;
-const BUBBLE_Y = -HEIGHT - 18;
+/**
+ * Rows above the standing line, in screen pixels. `BODY_Y` is exported because
+ * the doorway crowd stands on the same line and must not drift off it
+ * (`ui/rushDoor.ts`) — they are the same children, one room back.
+ */
+export const BODY_Y = -CHILD_HEIGHT / 2;
+const BUBBLE_Y = -CHILD_HEIGHT - 18;
 /** The bubble's tail eats its bottom rows, so its hollow sits above centre. */
 const CANDY_Y = BUBBLE_Y - 5;
 const BAR_Y = 12;
@@ -153,7 +158,7 @@ export class CustomerView {
       key: TextureKey,
       tint: number,
       depth: number,
-    ): Phaser.GameObjects.Image => makeSprite(scene, key, tint, depth, off, SCALE);
+    ): Phaser.GameObjects.Image => makeSprite(scene, key, tint, depth, off, CHILD_SCALE);
 
     this.bubble = sprite(TextureKey.Bubble, BUBBLE_TINT, HudDepth.Slot);
     this.want = makeDrawn(
@@ -161,10 +166,10 @@ export class CustomerView {
       { key: TextureKey.Candy, depth: HudDepth.Icon, glyphDepth: HudDepth.Glyph },
       off,
     );
-    this.body = sprite(TextureKey.Customer, SKIN_TINT, HudDepth.Icon);
+    this.body = sprite(TextureKey.Customer, CHILD_TINT, HudDepth.Icon);
     // Tinted like the skin it sits on: the features are drawn in the detail
     // gray, so the same tint lands them a step darker than the face.
-    this.face = sprite(FACES[Mood.Waiting], SKIN_TINT, HudDepth.Glyph);
+    this.face = sprite(FACES[Mood.Waiting], CHILD_TINT, HudDepth.Glyph);
 
     this.barTrack = scene.add
       .rectangle(off.x, footY + BAR_Y, BAR_WIDTH, BAR_HEIGHT, BORDER)
@@ -357,7 +362,7 @@ export class CustomerView {
       if (!this.breathing) return;
 
       this.breathing = false;
-      this.bubble.setScale(SCALE);
+      this.bubble.setScale(CHILD_SCALE);
       return;
     }
 
@@ -366,7 +371,7 @@ export class CustomerView {
     // reads as receding, which is the opposite of what it is for.
     const phase = 1 - Math.cos((this.scene.time.now / BREATH_MS) * Math.PI * 2);
     this.breathing = true;
-    this.bubble.setScale(SCALE * (1 + (BREATH_AMOUNT * phase) / 2));
+    this.bubble.setScale(CHILD_SCALE * (1 + (BREATH_AMOUNT * phase) / 2));
   }
 
   private hide(): void {

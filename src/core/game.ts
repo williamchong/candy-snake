@@ -1,7 +1,7 @@
 import { COLS, ROWS, isChopBlock } from './board';
 import { BROWN, PRIMARIES, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
-import { SETTLED_MS, stageAt } from './difficulty';
+import { SETTLED_MS, rushAt, stageAt } from './difficulty';
 import { rollOrder, type StageConfig } from './orders';
 import {
   NO_PITY,
@@ -138,8 +138,35 @@ export class Game {
   get stage(): StageConfig {
     if (this.config.stage !== undefined) return this.config.stage;
 
-    const served = Math.max(0, this.state.served - this.tutorial.length);
-    return stageAt(this.endlessMs, served);
+    return stageAt(this.endlessMs, this.endlessServed);
+  }
+
+  /**
+   * How hard the rush is running right now, 0…1 — the tide `core/difficulty.ts`
+   * puts past the mark where the table stops introducing things (design §7).
+   *
+   * Nothing in the rules reads it: the tide's whole effect is already inside
+   * `stage.arrivalIntervalMs`. It is here so the HUD can draw the door filling
+   * up *before* the children reach the window, which is the half that makes a
+   * rush something to play against rather than something to survive. A swell is
+   * continuous, so it is drawn from state every frame the way the patience bars
+   * are, rather than announced as a one-shot (architecture §7).
+   *
+   * A pinned stage has no tide, for the same reason it has no ramp.
+   */
+  get rush(): number {
+    if (this.config.stage !== undefined) return 0;
+
+    return rushAt(this.endlessMs, this.endlessServed);
+  }
+
+  /**
+   * Serves that count toward the ramp. The three opening levels are taught
+   * rather than earned, and crediting them would start the endless game a fifth
+   * of the way up the curve — see `stage`.
+   */
+  private get endlessServed(): number {
+    return Math.max(0, this.state.served - this.tutorial.length);
   }
 
   /**

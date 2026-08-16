@@ -10,6 +10,7 @@ import { CheatSheet } from '../ui/cheatSheet';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
 import { onFrame } from '../ui/responsive';
+import { RushDoor } from '../ui/rushDoor';
 import { ShelfStrip } from '../ui/shelfStrip';
 import { textStyle } from '../ui/text';
 import { SceneKey } from './keys';
@@ -41,6 +42,7 @@ export class UIScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private lives: Phaser.GameObjects.Image[] = [];
   private queue!: CustomerQueue;
+  private door!: RushDoor;
   private shelf!: ShelfStrip;
   private sheet!: CheatSheet;
   /**
@@ -72,6 +74,9 @@ export class UIScene extends Phaser.Scene {
 
     this.shelf = new ShelfStrip(this);
     this.queue = new CustomerQueue(this);
+    // Built before the queue's own children in the display list but drawn
+    // behind them all the same — `HudDepth.Doorway` decides that, not order.
+    this.door = new RushDoor(this);
     // Built fresh here rather than held at the field, for the same reason the
     // hearts are reset above: the scene instance outlives the run. Whether the
     // player wants the sheet is remembered by `cheatSheet.ts` itself, which is
@@ -97,6 +102,7 @@ export class UIScene extends Phaser.Scene {
 
       this.shelf.applyFrame(frame);
       this.queue.applyFrame(frame);
+      this.door.applyFrame(frame);
       this.sheet.applyFrame(frame);
     });
   }
@@ -115,6 +121,7 @@ export class UIScene extends Phaser.Scene {
     // Real elapsed time, not the core's fixed slice: the children walk on the
     // display's clock, the way every other tween in the HUD does.
     this.queue.render(state.customers, delta);
+    this.door.render(this.core.rush);
     this.sheet.render(delta);
 
     if (state.lives !== this.shownLives) {

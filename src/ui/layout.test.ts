@@ -4,6 +4,9 @@ import { CHOP_BLOCK_HEIGHT, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
 import { CELL_SIZE } from '../render/textures';
+// Loads under Node because its Phaser import is type-only and so erased —
+// the exception CLAUDE.md carves out for the engine-free rule.
+import { CHILD_HEIGHT } from './customerView';
 import {
   CHILD_HEADROOM,
   CHILD_UNDERFOOT,
@@ -241,6 +244,24 @@ describe('layout', () => {
     expect(hud.queue.front.y).toBeLessThan(view.height);
     expect(hud.queue.front.x).toBeGreaterThan(0);
     expect(hud.queue.front.x).toBeLessThan(view.width);
+  });
+
+  it.each(VIEWPORTS)('cuts the doorway crowd on the frame edge on %s', (_name, view) => {
+    const { queue } = layout(view).hud;
+
+    // Between the line and off-stage, on the door's own side. A doorway wholly
+    // on screen would read as another queue; wholly off it would tell the
+    // player nothing (design §7's telegraph).
+    const downLine = Math.sign(queue.pitch);
+    expect(Math.sign(queue.door - queue.front.x)).toBe(downLine);
+    expect(Math.sign(queue.offstage - queue.door)).toBe(downLine);
+
+    // And close enough to the edge to be actually cut by it: the door is a
+    // child's centre, so anything within half a child of the boundary has the
+    // frame running through them. Off the view's own constant, so a child drawn
+    // at a different scale moves this with it.
+    const edge = downLine > 0 ? view.width : 0;
+    expect(Math.abs(queue.door - edge)).toBeLessThan(CHILD_HEIGHT / 2);
   });
 
   it('hangs the cheat sheet off the far corner in landscape', () => {

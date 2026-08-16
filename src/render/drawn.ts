@@ -45,6 +45,14 @@ export const PANEL_FILL = 0xe7dcf0;
  * deeper table — the two scenes never share a display list.
  */
 export const HudDepth = {
+  /**
+   * The crowd gathering in the doorway before a rush (design §7). Behind
+   * everything, because they are a room back and through a wall — and because
+   * on the narrowest landscape frame the standing line already reaches the
+   * frame edge, so a full window and a filling doorway can overlap. Behind, that
+   * reads as a packed shop; level with the line it would read as a bug.
+   */
+  Doorway: -1,
   /** The frame a candy sits in: a shelf slot, a customer's bubble. */
   Slot: 0,
   Icon: 1,

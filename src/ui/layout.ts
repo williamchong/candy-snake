@@ -69,11 +69,18 @@ export interface HudFrame {
    * a child waits before they arrive and after they go. `pitch` is signed: the
    * line runs away from the window, which is rightward in landscape and
    * leftward in portrait, and `offstage` is past the frame edge on that side.
+   *
+   * `door` is the same end of the line brought back just *inside* the frame:
+   * where the crowd gathering before a rush stands (design §7's telegraph). It
+   * is the only thing in the queue deliberately drawn half off the edge —
+   * a doorway is a thing you see part of — so it is a measurement rather than
+   * an inset the widget picks, and it is swept per viewport like the rest.
    */
   readonly queue: {
     readonly front: Vec2;
     readonly pitch: number;
     readonly offstage: number;
+    readonly door: number;
   };
   /**
    * The cheat sheet: where its tab sits, the box the wheel fills when it is
@@ -201,6 +208,18 @@ const shelfRun = (span: number): { pitch: number; slot: number } => {
 
 /** Far enough past the edge that nobody is seen to pop into existence. */
 const OFFSTAGE_MARGIN = 60;
+
+/**
+ * How far *inside* the frame edge the nearest of the doorway crowd stands, so
+ * that they are cut by it rather than standing clear of it: a crowd wholly on
+ * screen is another queue, and one wholly off it says nothing. Measured from
+ * the edge and not back from `offstage`, which is a walk-on distance and has no
+ * business moving a doorway (design §7).
+ *
+ * A child is drawn 48 px across — 24 either side of the centre this positions —
+ * so 6 leaves about two thirds of the nearest one showing.
+ */
+const DOOR_INSET = 6;
 
 /**
  * The cheat-sheet tab, at design §10's touch floor. One size at every viewport:
@@ -398,6 +417,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
         front: { x: columnX + QUEUE_INSET, y: footY },
         pitch: QUEUE_PITCH,
         offstage: view.width + OFFSTAGE_MARGIN,
+        door: view.width - DOOR_INSET,
       },
       sheet: {
         tab: { x: Math.round(sheetRight - TAB_SIZE / 2), y: tabY },
@@ -493,6 +513,7 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
         // left and the door is off that edge.
         pitch: -queuePitch,
         offstage: -OFFSTAGE_MARGIN,
+        door: DOOR_INSET,
       },
       sheet: {
         tab: {
