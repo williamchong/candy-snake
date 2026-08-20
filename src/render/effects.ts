@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 
 import type { Vec2 } from '../core/types';
+import type { Flinger } from './burst';
 import { adopt, makeSprite } from './drawn';
 import { PIXEL_SCALE, type TextureKey } from './textures';
 
@@ -15,6 +16,14 @@ import { PIXEL_SCALE, type TextureKey } from './textures';
  * and the HUD's beside the HUD's (architecture §7).
  */
 
+/** How a burst throws, or left out for one that stays where it fell. */
+export interface Thrown {
+  readonly pieces: number;
+  /** How far each piece travels, in the host container's own pixels. */
+  readonly distance: number;
+  readonly fling: Flinger;
+}
+
 export interface BurstConfig {
   readonly key: TextureKey;
   readonly depth: number;
@@ -27,6 +36,7 @@ export interface BurstConfig {
    */
   readonly scale?: number;
   readonly ease?: string;
+  readonly thrown?: Thrown;
 }
 
 /** How a piece eases out unless its config asks for something else. */
@@ -39,6 +49,8 @@ const DISSIPATES = 'Quad.easeOut';
  */
 export class Burst {
   private readonly sprites: Phaser.GameObjects.Image[] = [];
+  /** How many bursts have been fired, which is what turns each one. */
+  private fired = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -47,6 +59,23 @@ export class Burst {
   ) {}
 
   fire(at: Vec2, tint: number): void {
+    const { thrown } = this.config;
+    if (thrown === undefined) {
+      this.piece(at, at, tint);
+      return;
+    }
+
+    for (const fling of thrown.fling(thrown.pieces, this.fired)) {
+      const to = {
+        x: at.x + fling.x * thrown.distance,
+        y: at.y + fling.y * thrown.distance,
+      };
+      this.piece(at, to, tint);
+    }
+    this.fired += 1;
+  }
+
+  private piece(from: Vec2, to: Vec2, tint: number): void {
     const { key, depth, durationMs, growth, ease } = this.config;
     const scale = this.config.scale ?? PIXEL_SCALE;
 
@@ -56,13 +85,13 @@ export class Burst {
     // therefore settles at the peak number of overlapping bursts.
     let sprite = this.sprites.find((candidate) => !candidate.visible);
     if (sprite === undefined) {
-      sprite = makeSprite(this.scene, key, tint, depth, at, scale);
+      sprite = makeSprite(this.scene, key, tint, depth, from, scale);
       adopt(this.root, sprite);
       this.sprites.push(sprite);
     }
 
     sprite
-      .setPosition(at.x, at.y)
+      .setPosition(from.x, from.y)
       .setTint(tint)
       .setAlpha(1)
       .setScale(scale)
@@ -70,6 +99,8 @@ export class Burst {
 
     this.scene.tweens.add({
       targets: sprite,
+      x: to.x,
+      y: to.y,
       alpha: 0,
       scale: scale * growth,
       duration: durationMs,

@@ -37,6 +37,7 @@ export const TextureKey = {
   FaceWorried: 'face-worried',
   FaceHappy: 'face-happy',
   FaceCross: 'face-cross',
+  Pip: 'pip',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 
@@ -221,6 +222,27 @@ const SEGMENT = [
   'A999999A',
   'A999999A',
   '.AAAAAA.',
+];
+
+/**
+ * A crumb: what a burst throws. Two source pixels across, so a handful of them
+ * reads as sugar coming off a thing rather than as more of the thing — a crumb
+ * the size of the candy it left is just a second candy.
+ *
+ * The only sprite here with no soft edge, and it cannot have one: at this size
+ * a rim of `RIM_WIDTH` is the whole crumb. It still draws at the same scale as
+ * everything else, so its pixels are the game's pixels and it reads as part of
+ * the same art rather than as a smaller style.
+ */
+const PIP = [
+  '........',
+  '........',
+  '........',
+  '...AA...',
+  '...AA...',
+  '........',
+  '........',
+  '........',
 ];
 
 /** The candy maker: the same lozenge, two dots for eyes, nothing more. */
@@ -472,6 +494,7 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.StrandCorner]: CORNER,
   [TextureKey.StrandTail]: TAIL,
   [TextureKey.Segment]: upscale(SEGMENT),
+  [TextureKey.Pip]: upscale(PIP),
   [TextureKey.Head]: upscale(HEAD),
   [TextureKey.Sugar]: upscale(SUGAR),
   [TextureKey.Dye]: upscale(DYE),

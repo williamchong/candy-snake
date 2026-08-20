@@ -113,10 +113,7 @@ export class GameScene extends Phaser.Scene {
         return;
 
       case 'candy-chopped':
-        // Placeholder pop: the same one-cell puff a crumbling block makes,
-        // in the candy's color. The juice pass (Phase 7) gives chopping its
-        // own effect.
-        this.view.splash(event.pos, event.color);
+        this.view.pop(event.pos, event.color);
         return;
 
       case 'dye-opened':

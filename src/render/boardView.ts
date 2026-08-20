@@ -24,6 +24,7 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
+import { ring } from './burst';
 import { Burst, type BurstConfig } from './effects';
 import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
@@ -259,6 +260,40 @@ const PUFF: BurstConfig = {
 };
 
 /**
+ * How far a crumb is thrown. Far enough to clear the candy it came off — a
+ * crumb still sitting on it reads as one blob rather than as something coming
+ * apart — and no further than the cell's own edge, because design §2 asks for
+ * local and soft and a pop that reaches the next cell reads as something
+ * happening there too.
+ */
+const CRUMB_THROW = (CELL_SIZE * 5) / 8;
+
+/**
+ * A candy leaving the block. Shorter than a puff and it swells less: the candy
+ * is not being lost, it is being made, so this is a hand-off rather than a
+ * thing coming apart.
+ */
+const CHOP_POP: BurstConfig = {
+  key: TextureKey.Candy,
+  depth: Depth.Shard,
+  durationMs: 180,
+  growth: 1.4,
+};
+
+/**
+ * The sugar that does not make it into the candy. Crumbs *shrink* as they fly —
+ * they are dust settling, not something arriving — which is also what keeps
+ * five of them from reading as five more candies.
+ */
+const CHOP_CRUMBS: BurstConfig = {
+  key: TextureKey.Pip,
+  depth: Depth.Shard,
+  durationMs: 240,
+  growth: 0.7,
+  thrown: { pieces: 5, distance: CRUMB_THROW, fling: ring },
+};
+
+/**
  * The two fates draw differently — spilled sugar fades, a waiting batch does
  * not — so one pass sorts the cut pieces into the pool each belongs to.
  */
@@ -313,6 +348,8 @@ export class BoardView {
   private readonly debris: SpritePool;
   private readonly batch: SpritePool;
   private readonly puff: Burst;
+  private readonly chopPop: Burst;
+  private readonly chopCrumbs: Burst;
   private previousPickups: readonly Pickup[] | undefined;
   /** The head's dye flash, held so a second jar can cut the first one short. */
   private headFlash: Phaser.Tweens.Tween | undefined;
@@ -370,6 +407,8 @@ export class BoardView {
       slides: true,
     });
     this.puff = new Burst(scene, this.root, PUFF);
+    this.chopPop = new Burst(scene, this.root, CHOP_POP);
+    this.chopCrumbs = new Burst(scene, this.root, CHOP_CRUMBS);
   }
 
   /** Call when the core has moved the snake to a new set of cells. */
@@ -412,6 +451,24 @@ export class BoardView {
    */
   splash(pos: Vec2, color: ColorMask): void {
     this.puff.fire(cellToPixel(pos), colorInfo(color).hex);
+  }
+
+  /**
+   * A candy leaving the block for the rack: it blooms off the bench and takes a
+   * few crumbs of sugar with it. Fired on the move it happens — the batch is
+   * drawn straight from state and never slides, so the candy the player was
+   * looking at goes at the same sync this does, with none of the one-move lag
+   * the strand has (see `syncToState`).
+   *
+   * One candy leaves per move per severed piece, and each from its own cell, so
+   * two pops can never land on the same spot in the same frame and superimpose.
+   */
+  pop(pos: Vec2, color: ColorMask): void {
+    const at = cellToPixel(pos);
+    const tint = colorInfo(color).hex;
+
+    this.chopPop.fire(at, tint);
+    this.chopCrumbs.fire(at, tint);
   }
 
   /**
