@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 
 import { blend, PRIMARIES } from '../core/colors';
+import { settings, updateSettings } from '../persist/storage';
 import {
   BORDER,
   CHROME_WIDTH,
@@ -41,20 +42,16 @@ import { TAB_SIZE, wheelSeats, WHEEL_PAIRS, type Frame, type WheelSeats } from '
  */
 
 /**
- * Whether the player wants the sheet open, remembered for as long as the page
- * is loaded. Module state rather than scene state so it survives
- * menu → game → game over → game: a player who put the wheel away must not find
- * it back in the corner of every run after it.
- *
- * Phase 8's `persist/storage.ts` replaces these two bodies with the settings
- * blob and nothing else about the sheet changes.
+ * Whether the player wants the sheet open. It lives in the settings blob
+ * (`persist/storage.ts`), which is what carries it across
+ * menu → game → game over → game and now across the reload as well: a player
+ * who put the wheel away must not find it back in the corner of every run
+ * after it (design §5).
  */
-let remembered: boolean | undefined;
-
-const readOpen = (): boolean => remembered ?? true;
+const readOpen = (): boolean => settings().cheatSheetOpen;
 
 const rememberOpen = (open: boolean): void => {
-  remembered = open;
+  updateSettings({ cheatSheetOpen: open });
 };
 
 /** Enough of the kitchen still reads through that the drawer never blinds it. */
