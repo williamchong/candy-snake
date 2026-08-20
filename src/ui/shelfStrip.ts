@@ -79,10 +79,10 @@ interface Slot {
 }
 
 /**
- * A pooled candy for the toss, and whether it is spoken for. Claimed by this
- * flag rather than by visibility (which is how `ShardBurst` claims a puff): one
- * waiting out its stagger is deliberately not on screen yet, and would otherwise
- * be taken out from under itself by the next loss.
+ * A pooled candy for the toss, and whether it is spoken for. Claimed by the
+ * flag rather than by whether it is on screen: one waiting out its stagger is
+ * deliberately not shown yet, and would otherwise be taken out from under
+ * itself by the next loss. `render/effects.ts` claims the same way.
  */
 interface Toss {
   readonly candy: Drawn;
@@ -96,8 +96,11 @@ export class ShelfStrip {
   private drawn: readonly Candy[] | undefined;
   /**
    * Candies in mid-air, on their way off the rack. Pooled for the same reason
-   * `ShardBurst` pools its puffs: several can be lost off one move, so they
-   * overlap, and a game object per loss is the churn a pool exists to avoid.
+   * `render/effects.ts` pools its bursts: several can be lost off one move, so
+   * they overlap, and a game object per loss is the churn a pool exists to
+   * avoid. Not a `Burst` itself — a tossed candy carries its glyph, and the
+   * two halves take different base scales and a stagger that `Burst` has no
+   * notion of.
    */
   private readonly tossed: Toss[] = [];
   /** How far the rack is currently shrunk, so a tossed candy matches it. */

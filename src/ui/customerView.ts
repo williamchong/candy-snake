@@ -117,6 +117,8 @@ export class CustomerView {
   private readonly want: Drawn;
   private readonly barTrack: Phaser.GameObjects.Rectangle;
   private readonly barFill: Phaser.GameObjects.Rectangle;
+  /** The queue's send-off pool, shared by every child it ever builds. */
+  private readonly cheers: Burst;
 
   /** The standing line: every child in the queue has their feet on it. */
   private footY: number;
@@ -155,13 +157,9 @@ export class CustomerView {
   /** What they asked for, kept so the send-off can be thrown in that color. */
   private wanted: ColorMask = RAW;
 
-  constructor(
-    scene: Phaser.Scene,
-    footY: number,
-    offstage: number,
-    private readonly cheers: Burst,
-  ) {
+  constructor(scene: Phaser.Scene, footY: number, offstage: number, cheers: Burst) {
     this.scene = scene;
+    this.cheers = cheers;
     this.footY = footY;
     this.offstage = offstage;
     this.x = offstage;

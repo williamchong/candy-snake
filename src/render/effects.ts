@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import type { Vec2 } from '../core/types';
 import { knockIntensity, type Flinger } from './burst';
-import { adopt, makeSprite } from './drawn';
+import { NO_TINT, adopt, makeSprite } from './drawn';
 import { PIXEL_SCALE, type TextureKey } from './textures';
 
 /**
@@ -16,7 +16,6 @@ import { PIXEL_SCALE, type TextureKey } from './textures';
  * and the HUD's beside the HUD's (architecture §7).
  */
 
-/** How a burst throws, or left out for one that stays where it fell. */
 export interface Thrown {
   readonly pieces: number;
   /** How far each piece travels, in the host container's own pixels. */
@@ -35,12 +34,15 @@ export interface BurstConfig {
    * at. Defaults to what everything standing on a board cell uses.
    */
   readonly scale?: number;
-  readonly ease?: string;
+  /** How this burst throws, or left out for one that stays where it fell. */
   readonly thrown?: Thrown;
 }
 
-/** How a piece eases out unless its config asks for something else. */
+/** How every piece eases out: dissipating, never arriving. */
 const DISSIPATES = 'Quad.easeOut';
+
+/** Where a piece is parked before its first firing puts it somewhere real. */
+const ORIGIN = { x: 0, y: 0 };
 
 /**
  * Knocks the scene's own camera, and nothing else's. `UIScene` runs in parallel
@@ -82,6 +84,7 @@ interface Piece {
  */
 export class Burst {
   private readonly pieces: Piece[] = [];
+  private readonly scale: number;
   /** How many bursts have been fired, which is what turns each one. */
   private fired = 0;
 
@@ -89,7 +92,9 @@ export class Burst {
     private readonly scene: Phaser.Scene,
     private readonly config: BurstConfig,
     private readonly root?: Phaser.GameObjects.Container,
-  ) {}
+  ) {
+    this.scale = config.scale ?? PIXEL_SCALE;
+  }
 
   fire(at: Vec2, tint: number): void {
     const { thrown } = this.config;
@@ -124,9 +129,9 @@ export class Burst {
   }
 
   private piece(from: Vec2, to: Vec2, tint: number): void {
-    const { durationMs, growth, ease } = this.config;
-    const scale = this.config.scale ?? PIXEL_SCALE;
-    const piece = this.claim(from, tint);
+    const { durationMs, growth } = this.config;
+    const scale = this.scale;
+    const piece = this.claim();
 
     piece.busy = true;
     piece.image
@@ -143,7 +148,7 @@ export class Burst {
       alpha: 0,
       scale: scale * growth,
       duration: durationMs,
-      ease: ease ?? DISSIPATES,
+      ease: DISSIPATES,
       onComplete: () => {
         piece.image.setVisible(false);
         piece.busy = false;
@@ -156,19 +161,12 @@ export class Burst {
    * Claiming one still fading would cut that piece short, and a piece outlives
    * a move — so the pool settles at the peak number of overlapping bursts.
    */
-  private claim(at: Vec2, tint: number): Piece {
+  private claim(): Piece {
     const free = this.pieces.find((candidate) => !candidate.busy);
     if (free !== undefined) return free;
 
     const { key, depth } = this.config;
-    const image = makeSprite(
-      this.scene,
-      key,
-      tint,
-      depth,
-      at,
-      this.config.scale ?? PIXEL_SCALE,
-    );
+    const image = makeSprite(this.scene, key, NO_TINT, depth, ORIGIN, this.scale);
     if (this.root !== undefined) adopt(this.root, image);
 
     const piece = { image, busy: false };

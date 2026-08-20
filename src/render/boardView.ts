@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 
-import { CHOP_BLOCK_CELLS, COLS, ROWS } from '../core/board';
+import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from '../core/board';
 import { colorInfo, type Primary } from '../core/colors';
 import {
   RAW,
@@ -274,7 +274,9 @@ class SpritePool {
         entry.from.x + (entry.to.x - entry.from.x) * progress,
         entry.from.y + (entry.to.y - entry.from.y) * progress,
       );
-      if (entry.pull !== undefined) this.deform(entry, index, progress, now);
+      if (entry.pull !== undefined) {
+        this.deform(entry, entry.pull, index, progress, now);
+      }
     }
   }
 
@@ -285,12 +287,22 @@ class SpritePool {
    * segment that may well be mid-slide, and neither has to know about the other
    * for the two to compose.
    *
+   * `fromHead` is the pool's own loop index, which means distance from the
+   * maker for the strand and nothing at all for any other pool — those are
+   * spared by carrying no pull shape rather than by knowing that.
+   *
    * The write is on `entry.image` and never through `place` or `scaleDrawn`:
    * the glyph riding on it must not deform, for exactly the reason `retarget`
    * above already gives for rotation — a symbol the player has to read must
    * stay readable (design §4).
    */
-  private deform(entry: Sliding, fromHead: number, progress: number, now: number): void {
+  private deform(
+    entry: Sliding,
+    shape: PullShape,
+    fromHead: number,
+    progress: number,
+    now: number,
+  ): void {
     const pull = pullAmount(progress, fromHead);
     const swallow = swallowAmount(entry.swallowUntil - now);
 
@@ -304,21 +316,23 @@ class SpritePool {
 
     entry.deformed = true;
     entry.image.setScale(
-      PIXEL_SCALE * deformX(entry.pull ?? PullShape.Lengthwise, pull, swallow),
+      PIXEL_SCALE * deformX(shape, pull, swallow),
       PIXEL_SCALE * deformY(pull, swallow),
     );
   }
 
   /**
-   * Marks whatever is standing on `at` as having just taken a cube in. Matched
-   * by the cell it is bound for rather than by index, because the index of the
-   * new tail is not something the caller should have to know.
+   * Marks whatever is standing on `cell` as having just taken a cube in.
+   * Matched by the cell it is bound for rather than by index, because which
+   * index the new tail landed on is not something the caller should know.
    */
-  swallow(at: Vec2, now: number): void {
+  swallow(cell: Vec2): void {
+    const at = cellToPixel(cell);
+
     for (let index = 0; index < this.active; index += 1) {
       const entry = this.entries[index];
-      if (entry?.to.x === at.x && entry.to.y === at.y) {
-        entry.swallowUntil = now + SWALLOW_MS;
+      if (entry !== undefined && eq(entry.to, at)) {
+        entry.swallowUntil = this.scene.time.now + SWALLOW_MS;
         return;
       }
     }
@@ -569,10 +583,8 @@ export class BoardView {
     // After the retarget above, never before it: `retarget` clears the mark on
     // every entry, which is what stops a sprite that becomes a different
     // segment next move from inheriting a swallow that was not its own.
-    for (const pos of this.swallowing) {
-      this.segments.swallow(cellToPixel(pos), this.scene.time.now);
-    }
-    this.swallowing.length = 0;
+    for (const pos of this.swallowing) this.segments.swallow(pos);
+    this.swallowing = [];
 
     const { crumble, chop } = splitByFate(state.severed);
     this.debris.retarget(crumble);
@@ -637,6 +649,14 @@ export class BoardView {
    * One candy leaves per move per severed piece, and each from its own cell, so
    * two pops can never land on the same spot in the same frame and superimpose.
    */
+  pop(pos: Vec2, color: ColorMask): void {
+    const at = cellToPixel(pos);
+    const tint = colorInfo(color).hex;
+
+    this.chopPop.fire(at, tint);
+    this.chopCrumbs.fire(at, tint);
+  }
+
   /**
    * The strand ran into itself. Takes the whole severed piece but bursts only
    * at `severed[0]` — the impact end, which is where the event promises to put
@@ -646,6 +666,11 @@ export class BoardView {
    *
    * Held a move before it plays, unlike everything else here: see `held`.
    */
+  shatter(severed: readonly Segment[]): void {
+    const impact = severed[0];
+    if (impact !== undefined) this.breaking.push(impact);
+  }
+
   /**
    * A cube has been pulled into the strand as the new tail, and the strand
    * swells where it went in.
@@ -659,19 +684,6 @@ export class BoardView {
    */
   swallow(pos: Vec2): void {
     this.swallowing.push(pos);
-  }
-
-  shatter(severed: readonly Segment[]): void {
-    const impact = severed[0];
-    if (impact !== undefined) this.breaking.push(impact);
-  }
-
-  pop(pos: Vec2, color: ColorMask): void {
-    const at = cellToPixel(pos);
-    const tint = colorInfo(color).hex;
-
-    this.chopPop.fire(at, tint);
-    this.chopCrumbs.fire(at, tint);
   }
 
   /**
