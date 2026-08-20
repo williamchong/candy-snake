@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 
 import { colorInfo } from '../core/colors';
 import { RAW, type ColorMask } from '../core/types';
+import type { CornerTints } from './melt';
 import {
   PIXEL_SCALE,
   glyphTextureKey,
@@ -180,10 +181,26 @@ export const scaleDrawn = (entry: Drawn, ratio: number): void => {
   entry.glyph?.setScale(GLYPH_SCALE * ratio);
 };
 
-/** Colorless items keep whatever tint they were built with. */
-export const paint = (entry: Drawn, color: ColorMask | undefined): void => {
+/**
+ * Colorless items keep whatever tint they were built with.
+ *
+ * `corners` paints the sprite as a gradient between its four vertices instead
+ * of one flat color, for the strand's melted seams. The glyph is stamped from
+ * `color` either way: the symbol is what the player reads a segment's color
+ * *by* (design §4), so it must name the true color however the pixels are
+ * shaded. Corner gradients need WebGL — but so does tinting at all: the canvas
+ * fallback renderer ignores tint outright and draws every sprite in its baked
+ * color, so a gradient costs nothing there that a flat tint was not already
+ * costing.
+ */
+export const paint = (
+  entry: Drawn,
+  color: ColorMask | undefined,
+  corners?: CornerTints,
+): void => {
   if (color === undefined) return;
 
-  entry.image.setTint(colorInfo(color).hex);
+  if (corners === undefined) entry.image.setTint(colorInfo(color).hex);
+  else entry.image.setTint(...corners);
   entry.glyph?.setTexture(glyphTextureKey(color));
 };

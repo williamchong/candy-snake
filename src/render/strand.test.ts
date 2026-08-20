@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { Dir } from '../core/types';
 import { StrandPiece, strandSpriteAt } from './strand';
 
 const at = (x: number, y: number) => ({ x, y });
@@ -9,10 +10,16 @@ describe('strandSpriteAt', () => {
     expect(strandSpriteAt(at(5, 5), at(6, 5), at(4, 5))).toEqual({
       piece: StrandPiece.Straight,
       angle: 0,
+      headArm: Dir.Right,
+      tailArm: Dir.Left,
     });
+    // Authored east–west and turned a quarter, so the arm pointing north on the
+    // board is the one drawn to the west.
     expect(strandSpriteAt(at(5, 5), at(5, 4), at(5, 6))).toEqual({
       piece: StrandPiece.Straight,
       angle: 90,
+      headArm: Dir.Left,
+      tailArm: Dir.Right,
     });
   });
 
@@ -25,16 +32,21 @@ describe('strandSpriteAt', () => {
     ];
 
     for (const { head, tail, angle } of elbows) {
+      // Every one of these turns clockwise from head to tail, which is how the
+      // piece is authored — so each lands on the drawn arms unrotated.
       expect(strandSpriteAt(at(5, 5), head, tail)).toEqual({
         piece: StrandPiece.Corner,
         angle,
+        headArm: Dir.Right,
+        tailArm: Dir.Down,
       });
     }
   });
 
   it('draws the same elbow whichever side the head is on', () => {
     // Which neighbour leads and which trails changes nothing about the shape
-    // the rope makes through the cell.
+    // the rope makes through the cell — only about which of its two arms is
+    // the head end, which is why the arms swap where the angle does not.
     for (const elbow of [
       [at(6, 5), at(5, 6)],
       [at(5, 6), at(4, 5)],
@@ -42,9 +54,13 @@ describe('strandSpriteAt', () => {
       [at(5, 4), at(6, 5)],
     ] as const) {
       const [first, second] = elbow;
-      expect(strandSpriteAt(at(5, 5), first, second)).toEqual(
-        strandSpriteAt(at(5, 5), second, first),
-      );
+      const led = strandSpriteAt(at(5, 5), first, second);
+      const trailed = strandSpriteAt(at(5, 5), second, first);
+
+      expect(trailed.piece).toBe(led.piece);
+      expect(trailed.angle).toBe(led.angle);
+      expect(trailed.headArm).toBe(led.tailArm);
+      expect(trailed.tailArm).toBe(led.headArm);
     }
   });
 
@@ -57,37 +73,38 @@ describe('strandSpriteAt', () => {
     ];
 
     for (const { head, angle } of caps) {
+      // The cap is authored with its rope leaving east and rotated onto the
+      // heading, so its one arm is always the drawn piece's east one.
       expect(strandSpriteAt(at(5, 5), head, undefined)).toEqual({
         piece: StrandPiece.Tail,
         angle,
+        headArm: Dir.Right,
+        tailArm: undefined,
       });
     }
   });
 
   it('reads cells either side of a service door as neighbours', () => {
     // The board wraps (design §6), so the strand stays unbroken across it.
-    expect(strandSpriteAt(at(15, 5), at(0, 5), undefined)).toEqual({
+    const cap = (angle: number) => ({
       piece: StrandPiece.Tail,
-      angle: 0,
+      angle,
+      headArm: Dir.Right,
+      tailArm: undefined,
     });
-    expect(strandSpriteAt(at(0, 5), at(15, 5), undefined)).toEqual({
-      piece: StrandPiece.Tail,
-      angle: 180,
-    });
-    expect(strandSpriteAt(at(5, 0), at(5, 15), undefined)).toEqual({
-      piece: StrandPiece.Tail,
-      angle: 270,
-    });
-    expect(strandSpriteAt(at(5, 15), at(5, 0), undefined)).toEqual({
-      piece: StrandPiece.Tail,
-      angle: 90,
-    });
+
+    expect(strandSpriteAt(at(15, 5), at(0, 5), undefined)).toEqual(cap(0));
+    expect(strandSpriteAt(at(0, 5), at(15, 5), undefined)).toEqual(cap(180));
+    expect(strandSpriteAt(at(5, 0), at(5, 15), undefined)).toEqual(cap(270));
+    expect(strandSpriteAt(at(5, 15), at(5, 0), undefined)).toEqual(cap(90));
   });
 
   it('runs a wrapped strand straight through rather than kinking it', () => {
     expect(strandSpriteAt(at(15, 5), at(0, 5), at(14, 5))).toEqual({
       piece: StrandPiece.Straight,
       angle: 0,
+      headArm: Dir.Right,
+      tailArm: Dir.Left,
     });
   });
 
@@ -97,10 +114,14 @@ describe('strandSpriteAt', () => {
     expect(strandSpriteAt(at(5, 5), at(9, 9), at(4, 5))).toEqual({
       piece: StrandPiece.Straight,
       angle: 0,
+      headArm: Dir.Right,
+      tailArm: Dir.Left,
     });
     expect(strandSpriteAt(at(5, 5), at(5, 4), at(9, 9))).toEqual({
       piece: StrandPiece.Straight,
       angle: 90,
+      headArm: Dir.Left,
+      tailArm: Dir.Right,
     });
   });
 });

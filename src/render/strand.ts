@@ -33,6 +33,18 @@ export interface StrandSprite {
    * stays exact and the rope never picks up resampling fuzz.
    */
   readonly angle: number;
+  /**
+   * Which edge of the *authored* piece the rope leaves by on its way to the
+   * head, and on its way to the tail — the second undefined for the loose end,
+   * which has a cap there instead of rope.
+   *
+   * Named in the piece's own frame rather than the board's because that is the
+   * frame a renderer paints in: a sprite's corners turn with it, so a caller
+   * that wants one end of the rope to melt into the color beyond it needs to
+   * know which corners that end owns *after* `angle` has been applied.
+   */
+  readonly headArm: Dir;
+  readonly tailArm: Dir | undefined;
 }
 
 /**
@@ -46,6 +58,43 @@ const DIR_ANGLES: Record<Dir, number> = {
   [Dir.Left]: 180,
   [Dir.Up]: 270,
 };
+
+const FULL_TURN = 360;
+
+const DIRS = Object.values(Dir);
+
+/**
+ * A board heading read in the frame of a piece turned by `angle` — the inverse
+ * of the rotation the renderer is about to apply. Every piece is authored in
+ * one orientation, so this is what turns "the head is north of me" into "the
+ * rope leaves by the edge that was drawn as east".
+ *
+ * Searched out of `DIR_ANGLES` rather than read from a second table written the
+ * other way round, so the two can never drift apart. Every angle passed in is a
+ * multiple of a right angle, so the search always lands; the fallback is there
+ * for the type-checker, not for a case that happens.
+ */
+const localSide = (heading: Dir, angle: number): Dir => {
+  const turned = (DIR_ANGLES[heading] - angle + FULL_TURN) % FULL_TURN;
+
+  return DIRS.find((dir) => DIR_ANGLES[dir] === turned) ?? Dir.Right;
+};
+
+/**
+ * Every piece is built the same way once its rotation is known: the arms are
+ * whatever the two headings become in the frame that rotation puts them in.
+ */
+const spriteFor = (
+  piece: StrandPiece,
+  angle: number,
+  toHead: Dir,
+  toTail: Dir | undefined,
+): StrandSprite => ({
+  piece,
+  angle,
+  headArm: localSide(toHead, angle),
+  tailArm: toTail === undefined ? undefined : localSide(toTail, angle),
+});
 
 /**
  * The next heading clockwise. The corner piece is authored connecting east and
@@ -61,8 +110,6 @@ const CLOCKWISE: Record<Dir, Dir> = {
 
 const HALF_TURN = 180;
 
-const DIRS = Object.values(Dir);
-
 /**
  * Which way `to` lies from `from`, or undefined when they are not adjacent.
  * Asking the board to take the step keeps the wrap rule in one place, so two
@@ -72,10 +119,13 @@ const headingTo = (from: Vec2, to: Vec2): Dir | undefined =>
   DIRS.find((dir) => eq(stepCell(from, dir), to));
 
 /** A straight piece is authored east–west, so only its axis matters. */
-const straightAlong = (heading: Dir): StrandSprite => ({
-  piece: StrandPiece.Straight,
-  angle: DIR_ANGLES[heading] % HALF_TURN,
-});
+const straightAlong = (heading: Dir): StrandSprite =>
+  spriteFor(
+    StrandPiece.Straight,
+    DIR_ANGLES[heading] % HALF_TURN,
+    heading,
+    OPPOSITE[heading],
+  );
 
 /**
  * Picks the piece for one body segment from the cells on either side of it:
@@ -96,7 +146,7 @@ export const strandSpriteAt = (
   // The cap is authored with its rope leaving east, so the heading it points
   // is exactly the rotation it needs.
   if (towardTail === undefined) {
-    return { piece: StrandPiece.Tail, angle: DIR_ANGLES[toHead] };
+    return spriteFor(StrandPiece.Tail, DIR_ANGLES[toHead], toHead, undefined);
   }
 
   const toTail = headingTo(pos, towardTail);
@@ -105,5 +155,5 @@ export const strandSpriteAt = (
   // Of the turn's two headings, the authored piece belongs on whichever one the
   // other follows clockwise.
   const outer = CLOCKWISE[toHead] === toTail ? toHead : toTail;
-  return { piece: StrandPiece.Corner, angle: DIR_ANGLES[outer] };
+  return spriteFor(StrandPiece.Corner, DIR_ANGLES[outer], toHead, toTail);
 };

@@ -23,6 +23,7 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
+import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
 import { CELL_SIZE, PIXEL_SCALE, STRAND_TEXTURES, TextureKey } from './textures';
 
@@ -135,6 +136,8 @@ interface Placed {
   readonly key?: TextureKey;
   /** Rotation in degrees, for pieces authored in one orientation and turned. */
   readonly angle?: number;
+  /** Per-corner tints, for sprites drawn as a gradient rather than flat. */
+  readonly melt?: CornerTints;
 }
 
 /** A sprite mid-slide between the cell it left and the cell it is entering. */
@@ -168,19 +171,6 @@ const isOneCellApart = (a: Vec2, b: Vec2): boolean => {
   const dx = Math.abs(a.x - b.x);
   const dy = Math.abs(a.y - b.y);
   return (dx === CELL_SIZE && dy === 0) || (dx === 0 && dy === CELL_SIZE);
-};
-
-/**
- * Blends two packed 0xRRGGBB tints channel by channel: `t` of 0 gives `from`,
- * 1 gives `to`. Hand-rolled rather than taken from `Phaser.Display.Color`
- * because this module imports Phaser for types only, and one lerp is not worth
- * pulling the runtime in for.
- */
-const mixTint = (from: number, to: number, t: number): number => {
-  const channel = (shift: number): number =>
-    Math.round(((from >> shift) & 0xff) * (1 - t) + ((to >> shift) & 0xff) * t) << shift;
-
-  return channel(16) | channel(8) | channel(0);
 };
 
 /**
@@ -225,7 +215,7 @@ class SpritePool {
         entry.to = to;
       }
 
-      paint(entry, item.color);
+      paint(entry, item.color, item.melt);
       entry.image.setTexture(item.key ?? this.config.key);
       // Only the sprite turns. The glyph riding on it stays upright, because a
       // symbol the player has to read must not rotate with the rope (design §4).
@@ -351,14 +341,16 @@ const strandPieces = ({ head, body }: SnakeState): Placed[] =>
   body.map((segment, index) => {
     // At index 0 there is no `body[-1]`, so this already falls back to the
     // head — which is exactly the segment ahead of the first one.
-    const ahead = body[index - 1]?.pos ?? head;
-    const sprite = strandSpriteAt(segment.pos, ahead, body[index + 1]?.pos);
+    const ahead = body[index - 1];
+    const behind = body[index + 1];
+    const sprite = strandSpriteAt(segment.pos, ahead?.pos ?? head, behind?.pos);
 
     return {
       pos: segment.pos,
       color: segment.color,
       key: STRAND_TEXTURES[sprite.piece],
       angle: sprite.angle,
+      melt: meltedTints(segment.color, sprite, ahead?.color, behind?.color),
     };
   });
 
