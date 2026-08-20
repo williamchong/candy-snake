@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, cellKey, eq, stepCell } from './board';
-import { BLUE, BROWN, PRIMARIES, RED, YELLOW, type Primary } from './colors';
+import { BLUE, BROWN, PRIMARIES, RED, YELLOW, noServes, type Primary } from './colors';
 import { createCustomer } from './customers';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { MIXING_STAGE, type StageConfig } from './orders';
@@ -751,6 +751,28 @@ describe('Game serving window', () => {
     expect(game.state.shelf).toHaveLength(1);
   });
 
+  it('counts a serve under the tier of the color it took to make', () => {
+    const game = withCustomers(RAW, RED, RED | BLUE, BROWN);
+
+    chop(game, [RAW, RED, RED | BLUE, BROWN]);
+
+    expect(game.state.served).toBe(4);
+    expect(game.state.servedByTier).toEqual({ 1: 1, 2: 1, 3: 1, mistake: 1 });
+  });
+
+  it('remembers the longest streak past the walkout that ends it', () => {
+    // The run the score screen has to describe is over by the time it is asked,
+    // and `streak` is 0 by then — losing a child is what zeroes it.
+    const game = withCustomers(RED, RED);
+    chop(game, [RED, RED]);
+    game.state.customers = [createCustomer(9, RED, 100)];
+
+    game.step(100, NO_TURNS);
+
+    expect(game.state.streak).toBe(0);
+    expect(game.state.bestStreak).toBe(2);
+  });
+
   it('costs a life and the streak when patience runs out', () => {
     const game = newGame();
     game.state.customers = [createCustomer(1, RED, 500)];
@@ -776,6 +798,8 @@ describe('Game serving window', () => {
       type: 'game-over',
       score: 0,
       served: 0,
+      servedByTier: noServes(),
+      bestStreak: 0,
       elapsedMs: 100,
     });
     expect(game.state.over).toBe(true);

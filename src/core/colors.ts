@@ -45,6 +45,22 @@ export const mixCount = (color: ColorMask): number =>
  */
 export type ColorTier = 1 | 2 | 3 | 'mistake';
 
+/**
+ * The tiers in the order design §9's table lists them, and an empty tally of
+ * them. Written once because four places now key off this set — the run's own
+ * count, the score screen's wording, the points table and the tests — and a
+ * fifth tier added to a set spelled five times is a tier added to four of them.
+ * The `Record` is what makes the compiler say so.
+ */
+export const TIERS: readonly ColorTier[] = [1, 2, 3, 'mistake'];
+
+export const noServes = (): Record<ColorTier, number> => ({
+  1: 0,
+  2: 0,
+  3: 0,
+  mistake: 0,
+});
+
 export interface ColorInfo {
   /** Plain number: core stays engine-free, `render/` does the tinting. */
   readonly hex: number;

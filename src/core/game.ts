@@ -1,5 +1,5 @@
 import { COLS, ROWS, isChopBlock } from './board';
-import { BROWN, PRIMARIES, type Primary } from './colors';
+import { BROWN, PRIMARIES, colorInfo, noServes, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
 import { SETTLED_MS, rampMs, rushAt, stageAt } from './difficulty';
 import { rollOrder, type StageConfig } from './orders';
@@ -112,6 +112,8 @@ export class Game {
       lives: STARTING_LIVES,
       streak: 0,
       served: 0,
+      bestStreak: 0,
+      servedByTier: noServes(),
       over: false,
       tutorialIndex: 0,
       tick: 0,
@@ -514,6 +516,8 @@ export class Game {
       type: 'game-over',
       score: this.state.score,
       served: this.state.served,
+      servedByTier: { ...this.state.servedByTier },
+      bestStreak: this.state.bestStreak,
       elapsedMs: this.state.elapsedMs,
     });
   }
@@ -649,6 +653,8 @@ export class Game {
     this.state.score += points;
     this.state.streak += 1;
     this.state.served += 1;
+    this.state.bestStreak = Math.max(this.state.bestStreak, this.state.streak);
+    this.state.servedByTier[colorInfo(customer.want).tier] += 1;
     // While the tutorial runs the queue holds nothing but its own child, so a
     // serve is exactly what finishes a level.
     if (this.openingLevel !== undefined) this.finishOpeningLevel();

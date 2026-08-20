@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CELL_COUNT, cellKey, eq, isChopBlock, keyToCell, stepCell } from './board';
-import { BLUE, PRIMARIES, RED, YELLOW, type Primary } from './colors';
+import { BLUE, PRIMARIES, RED, YELLOW, noServes, type Primary } from './colors';
 import { createRng } from './rng';
 import { createDye, createSugar, ensurePickups, pickupIndexAt } from './spawner';
 import { Dir, RAW, type GameState, type Pickup, type Vec2 } from './types';
@@ -42,6 +42,9 @@ const stateWith = (
   lives: 3,
   streak: 0,
   served: 0,
+  // Nothing has been served, and nothing about the spawner reads these.
+  bestStreak: 0,
+  servedByTier: noServes(),
   over: false,
   tutorialIndex: 0,
   tick: 0,

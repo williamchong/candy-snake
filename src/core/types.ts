@@ -5,7 +5,7 @@
 
 // Type-only, so the colors.ts ↔ types.ts and orders.ts ↔ types.ts pairings are
 // erased at compile time and never become runtime import cycles.
-import type { Primary } from './colors';
+import type { ColorTier, Primary } from './colors';
 import type { StageConfig } from './orders';
 
 /** A board cell coordinate (integer cell indices, never pixels). */
@@ -132,6 +132,19 @@ export interface GameState {
   /** Consecutive serves with nobody lost — the scoring multiplier (design §9). */
   streak: number;
   served: number;
+  /**
+   * The longest run of serves the game has managed, which `streak` cannot be
+   * asked for: it is zeroed by the walkout that ends the run, so by the time
+   * anybody wants to know how well it went, it reads 0.
+   */
+  bestStreak: number;
+  /**
+   * The serves split by how hard the color was to make (design §9's table) —
+   * what the run *did*, as opposed to what it was paid. Kept as counts rather
+   * than points because the points were rounded once, at the end, and do not
+   * come apart again.
+   */
+  servedByTier: Record<ColorTier, number>;
   over: boolean;
   /**
    * How many of the three opening levels are done (design §7) — and so which
@@ -226,10 +239,18 @@ export type GameEvent =
   /** Patience ran out; the child leaves angry (design §5). */
   | { readonly type: 'customer-left'; readonly customer: Customer }
   | { readonly type: 'life-lost'; readonly lives: number }
+  /**
+   * The run, as the score screen has to tell it. Everything here is also on
+   * `GameState`, and is copied onto the event on purpose: the screen that reads
+   * it is started as this fires, and a scene handed a live state object would be
+   * reading a game that is over rather than the run that just ended.
+   */
   | {
       readonly type: 'game-over';
       readonly score: number;
       readonly served: number;
+      readonly servedByTier: Record<ColorTier, number>;
+      readonly bestStreak: number;
       readonly elapsedMs: number;
     };
 
