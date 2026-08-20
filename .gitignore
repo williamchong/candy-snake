@@ -3,3 +3,4 @@ dist/
 *.log
 .DS_Store
 .claude/skills/run-candy-snake/screenshot.png
+audition/
