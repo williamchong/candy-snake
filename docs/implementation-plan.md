@@ -1319,6 +1319,14 @@ the pool: `killTweensOf` does not run `onComplete`, so a piece left claimed is
 one the pool can never hand out again — silently, with no console error for the
 smoke driver to catch.
 
+**The streak row reports the count, not the multiplier it earned.** The first
+cut printed `best streak ×1.8`, which was wrong twice over. `scoreServe` is paid
+at the streak standing *before* each serve, so a run of N serves tops out at
+`streakMultiplier(N - 1)` and the row was a step high; and `STREAK_CAP` is ×2,
+so every run of eight serves or more printed the same `×2.0` — flattening the
+distinction on the one screen whose whole job is to tell two runs apart. The
+count has neither problem and is the thing the player was counting anyway.
+
 **Still a chair question.** The stretch is a feel item and the knock is a
 comfort item, and neither is settled by a screenshot. If the rope's soft edge is
 seen to crawl, the peak comes down before anything else is touched: on a roomy
@@ -1342,6 +1350,101 @@ and that is where an uneven texel row would show first.
   desktop and phone, not standing it up.)
 
 **Done when:** the public URL serves the finished game; scores survive reload.
+
+### What Phase 8 settled — the blob is one file, and the screens had to learn to flow
+
+The wire-up was as small as the bullet promised: two function bodies in
+`ui/cheatSheet.ts`, and the `let remembered` above them deleted. Everything that
+took thought was somewhere else.
+
+**The pure half and the browser half live in one file, not two.** Vitest runs in
+Node and `localStorage` does not exist there, so the parsing and the ranking had
+to be testable without a DOM. The instinct is to split the module in two;
+architecture §3 says otherwise, because the finished file tree names exactly
+`persist/storage.ts` and a file on disk with no entry in it means one of the two
+is wrong. `ui/safeArea.ts` had already answered this: touch the browser only
+*inside* a function body, guard it on `typeof`, and the module imports cleanly
+under Node with its arithmetic exposed. One file, and the handful of functions
+that reach for storage left to the smoke driver. The date pair moved in with it
+for the same reason: `today` writes the format and `asDay` reads it, this file
+is the one that declares what `at` is, and a format with its two ends in two
+scenes that do not import each other is a format nothing holds to.
+
+**A tie must not take the place it matched.** `insertScore` appends the new run
+and sorts; `Array.prototype.sort` has been stable since ES2019, so an incumbent
+on the same score stays ahead of it. The rank then comes from `indexOf` on the
+entry itself — identity, not value — which is the only lookup that stays exact
+when two runs are worth the same. A `findIndex` on the score would have handed
+the newcomer the place its equal already held.
+
+**Reading a field at a time is what makes the blob survive its own future.**
+`Settings` holds one setting because one setting has a feature behind it. The
+other three design names — mute, the D-pad, high-contrast symbols — will be
+added to a blob that is already on players' machines, and the parse takes the
+default for anything it does not recognise rather than rejecting the whole save.
+The same pass sorts the table on the way in: it is displayed in stored order, so
+"in order" has to be true of whatever was on disk, not just of what we wrote.
+
+**Both screens had to stop placing rows at fixed offsets, for opposite reasons.**
+`TextStack` scales a line that is too wide for the frame and knows nothing at all
+about height, which was fine while every screen was four fixed lines.
+
+- **Game over** is now half conditional — no tier row for a run that served
+  nobody, no streak row, no rank for a run that missed the table — so the rows
+  are stacked by the air between them and the block is centred afterwards. Fixed
+  offsets left a run that scored nothing sitting above a hole where its
+  breakdown would have been.
+- **The menu** grew a list, and a list has a length that depends on the frame:
+  ten entries fit a phone held upright and five fit one held sideways. The
+  arithmetic went to `ui/layout.ts` as `scoreboard`, next to `screenCentre` and
+  for the same reason `wheelSeats` is there — a widget's geometry, exported
+  apart from the per-frame `Frame`, and swept across the eight viewports the
+  layout tests already keep.
+
+**The title is what gives way, not the table.** The first cut of the menu wore
+"Candy Snake" off the top of a 568×320 phone, because a stack that is centred
+vertically has no idea it has overflowed. So the whole screen is now laid out
+*downward from the title*, the title's offset is clamped to what the frame
+allows, and it drops to 40 px on a short frame. Of the two, the word the player
+is already looking at is the one that can afford to shrink.
+
+**A resize must not rebuild a stack of text objects.** `Scale.RESIZE` fires on
+every frame of a window drag. The menu keys its stack on the layout it was built
+for — title size, table top, pitch, count — and re-centres rather than rebuilds
+unless one of those four actually moved, which across a full drag is a handful of
+times rather than a hundred.
+
+**What the smoke driver cannot see, a harness had to.** The driver boots a fresh
+profile, so it only ever sees an empty table and never reaches the score screen
+at all. The Phase 8 checks were a scratchpad harness instead: it seeds a save
+blob before the page loads, shoots the menu at three viewports, and stands
+`GameOverScene` up on its own `Phaser.Game` — imported from the dev server, so it
+is the same module graph the app runs — to look at all four of best / placed /
+missed / nothing without playing three lives away. Both directions of the
+setting are checked separately, which matters: seeding storage on every
+navigation makes a reload look like it remembered when it has simply been told
+again.
+
+**Two Lighthouse findings were fixed and two were left.** `#app` is a `<main>`
+now (accessibility 70 → 77; the canvas is the whole of the page's content and a
+screen reader should be told so). The `user-scalable=no` flag stays — design §10
+needs the play area not to pinch-zoom under a swipe, and architecture §9 already
+names it. `robots.txt` and `llms.txt` are reported missing by a preview server
+that answers every path with the app; on Pages the game is served from a subpath
+where neither file would be the site's anyway.
+
+**The streak row reports the count, not the multiplier it earned.** The first
+cut printed `best streak ×1.8`, which was wrong twice over. `scoreServe` is paid
+at the streak standing *before* each serve, so a run of N serves tops out at
+`streakMultiplier(N - 1)` and the row was a step high; and `STREAK_CAP` is ×2,
+so every run of eight serves or more printed the same `×2.0` — flattening the
+distinction on the one screen whose whole job is to tell two runs apart. The
+count has neither problem and is the thing the player was counting anyway.
+
+**Still a chair question.** Nothing here was tuned against a phone in a hand.
+The table's floor of five entries on the smallest landscape frame is a guess
+about how much of a menu is worth reading, and it shares its trip with the swipe
+threshold the risk table has been holding open since Phase 6.
 
 ## Milestone summary
 

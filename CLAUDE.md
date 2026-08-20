@@ -36,8 +36,10 @@ The one structural rule that matters (architecture.md §2):
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —
 `input/directionQueue.ts`, `input/swipe.ts`, `render/strand.ts`,
-`render/melt.ts`, `render/deform.ts`, `render/burst.ts` and
-`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free).
+`render/melt.ts`, `render/deform.ts`, `render/burst.ts`,
+`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free) and
+the pure half of `persist/storage.ts` (parsing and ranking; the functions that
+reach for `localStorage` are guarded and left to the smoke driver).
 A type-only `import type Phaser` does not count against that: it is erased
 before the tests run, so such a module can hold its own scene binding (as
 `input/keyboard.ts`, `input/swipe.ts` and `ui/cheatSheet.ts` do) and still

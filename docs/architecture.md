@@ -52,7 +52,7 @@ candy-snake/
 ├── index.html
 ├── package.json / tsconfig.json / vite.config.ts
 ├── docs/                      # these documents
-├── public/                    # (later) audio; the favicon is inline in index.html
+├── public/                    # social-card.png; the favicon is inline in index.html
 └── src/
     ├── main.ts                # Phaser.Game config + scene registration
     ├── core/                  # ENGINE-FREE game logic (unit tested)
@@ -132,6 +132,8 @@ interface GameState {
   snake: SnakeState; pickups: Pickup[]; severed: Severed[]; shelf: Candy[];
   customers: Customer[]; score: number; lives: number;
   streak: number; elapsedMs: number; served: number; over: boolean;
+  bestStreak: number;      // the longest run — `streak` is 0 by the time anyone asks
+  servedByTier: Record<ColorTier, number>;   // what the run did, for the score screen
   tutorialIndex: number;   // opening levels done; gates spawn stock and the next order
   tick: number;            // grid moves elapsed — a sim clock independent of moveIntervalMs
 }
@@ -279,11 +281,29 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
 `persist/storage.ts` — typed, versioned wrapper:
 
 ```ts
-interface SaveData { version: 1; highScores: ScoreEntry[]; settings: Settings }
+interface ScoreEntry { score: number; at: string }        // `at` is a local ISO date
+interface Settings   { cheatSheetOpen: boolean }
+interface SaveData   { version: 1; highScores: ScoreEntry[]; settings: Settings }
 ```
 
 Single JSON blob under one key (`candy-snake:v1`). Corrupt/missing data falls
 back to defaults silently. No PII, no backend.
+
+The module is split the way `ui/safeArea.ts` is: `parseSave` and `insertScore`
+are pure and unit tested, while the four functions that reach for
+`localStorage` are guarded on `typeof localStorage` and covered by the smoke
+driver. Nothing touches the browser at import time, so the module loads under
+Node — which is why the table's rules can be tested at all without a DOM.
+
+Every field is read one at a time rather than the blob being trusted wholesale,
+so a save written before a setting existed keeps the rest of itself and takes
+the default for that one. `Settings` holds only what has a feature behind it:
+mute, the D-pad and high-contrast symbols (design §10, §11) join it when they
+are built.
+
+A score's `at` is stamped from the scene layer, never from `core/` — the core's
+clocks are simulation clocks (§2), and a date on a score is a wall clock by
+definition.
 
 ## 11. Testing strategy
 
@@ -295,8 +315,11 @@ back to defaults silently. No PII, no backend.
   covers the pure modules the Phaser layer leans on — `input/directionQueue.ts`
   and `render/strand.ts` (rope pieces, rotations, wrapped neighbours),
   `render/melt.ts`, `render/deform.ts` (the pull never shortens a piece; an
-  elbow's shortfall is covered by its neighbour's overhang) and
-  `render/burst.ts` (a knock never exceeds its pixel budget on any viewport).
+  elbow's shortfall is covered by its neighbour's overhang),
+  `render/burst.ts` (a knock never exceeds its pixel budget on any viewport)
+  and `persist/storage.ts`'s pure half (a blob that is missing, corrupt,
+  hand-edited or from another version opens on defaults; a tied score does not
+  take the place it matched).
 - **Simulation tests:** `core/simulation.test.ts` plays whole runs with a bot
   that grows a segment, takes it through the jars the order needs and drives it
   into the bench, asserting invariants on every tick (≥1 sugar on map, no
