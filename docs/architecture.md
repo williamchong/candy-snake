@@ -69,9 +69,12 @@ candy-snake/
     │   ├── difficulty.ts      # stage curve (time/serves → knobs)
     │   ├── rng.ts             # small seedable PRNG (mulberry32)
     │   └── game.ts            # Game: owns state, step(), emits GameEvents
+    ├── audio/
+    │   ├── tones.ts           # cue table, sample synthesis, event→cue (pure)
+    │   └── kitchen.ts         # bakes cues at boot; plays them off the events
     ├── scenes/
     │   ├── keys.ts            # scene keys as constants — never raw strings
-    │   ├── BootScene.ts       # generate textures, load settings
+    │   ├── BootScene.ts       # generate textures and cues, load settings
     │   ├── MenuScene.ts
     │   ├── GameScene.ts       # renders board+snake, owns the Game instance
     │   ├── UIScene.ts         # HUD overlay: orders, shelf, score, cheat sheet
@@ -96,6 +99,7 @@ candy-snake/
     │   ├── shelfStrip.ts      # the six candy slots, under the window
     │   ├── text.ts            # one answer to "what does screen text look like"
     │   ├── cheatSheet.ts      # the mixing wheel, and when it shows itself
+    │   ├── muteTab.ts         # the audio toggle, beside the sheet's own tab
     │   └── layout.ts          # responsive anchoring (portrait/landscape)
     └── persist/
         └── storage.ts         # typed localStorage wrapper (scores, settings)
@@ -189,7 +193,7 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   child just had is not recoverable from a queue they are no longer in.
 - Pause = `scene.pause` on GameScene only; UIScene stays interactive.
 
-## 7. Rendering approach
+## 7. Rendering & audio approach
 
 - **Runtime-generated textures** in BootScene: each sprite is an ASCII pixel
   map in `render/textures.ts`, baked through Phaser's `textures.generate`
@@ -225,6 +229,25 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   never by polling state.
 - Palette lives in one table in `core/colors.ts` (mask → hex, symbol, name,
   tier) so core, HUD, and cheat sheet can never disagree.
+
+### Audio
+
+Cues are generated at boot exactly as textures are (§7): `audio/tones.ts` is a
+table of eleven voices described in milliseconds and Hz plus the arithmetic that
+renders one to samples, and `audio/kitchen.ts` wraps each in an `AudioBuffer`
+and registers it in Phaser's audio cache. There are no audio assets for the same
+reason there are no image assets — and because generating rather than decoding
+works on a *suspended* context, so the cues are ready before the menu draws even
+though Web Audio stays locked until the player's first gesture (design §12).
+
+Which event sounds, at what pitch, and what happens when several land in one
+tick are all decided in `tones.ts`, which imports no Phaser at all; `kitchen.ts`
+only calls `createBuffer` and `play`. Cues hang off the same `GameEvent` stream
+the effects do and are fed from the same loop in `GameScene`, so nothing polls
+state to make a sound (§7). Phaser's own sound manager supplies the parts that
+would otherwise be ours: it installs the gesture listeners that resume the
+context, suspends it on blur, and gates everything behind one global `mute`,
+which is what the `muted` setting (§10) is applied to.
 
 ## 8. Input
 
@@ -299,8 +322,8 @@ why the table's rules can be tested at all without a DOM.
 Every field is read one at a time rather than the blob being trusted wholesale,
 so a save written before a setting existed keeps the rest of itself and takes
 the default for that one. `Settings` holds only what has a feature behind it:
-mute, the D-pad and high-contrast symbols (design §4, §10) join it when they
-are built.
+the D-pad and high-contrast symbols (design §4, §10) join `cheatSheetOpen` and
+`muted` when they are built.
 
 A score's `at` is stamped from the scene layer, never from `core/` — the core's
 clocks are simulation clocks (§2), and a date on a score is a wall clock by
@@ -317,7 +340,11 @@ definition.
   and `render/strand.ts` (rope pieces, rotations, wrapped neighbours),
   `render/melt.ts`, `render/deform.ts` (the pull never shortens a piece; an
   elbow's shortfall is covered by its neighbour's overhang),
-  `render/burst.ts` (a knock never exceeds its pixel budget on any viewport)
+  `render/burst.ts` (a knock never exceeds its pixel budget on any viewport),
+  `audio/tones.ts` (no cue clips, none starts or ends part-way up a waveform,
+  the serve chime stops climbing where the streak bonus does),
+  `audio/kitchen.ts` (a cue keeps sounding once the last one has finished — the
+  one audio fault an ear reports and nothing else would),
   and `persist/storage.ts`'s pure half (a blob that is missing, corrupt,
   hand-edited or from another version opens on defaults; a tied score does not
   take the place it matched).

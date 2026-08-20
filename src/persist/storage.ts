@@ -32,13 +32,15 @@ export interface ScoreEntry {
 }
 
 /**
- * Player preferences. Exactly one of the four design names has a feature behind
- * it today; mute, the D-pad and high-contrast symbols join it here when they
- * land, and `parseSave` already reads a blob written before they existed.
+ * Player preferences. Two of the four design names have a feature behind them
+ * today; the D-pad and high-contrast symbols join them here when they land, and
+ * `parseSave` already reads a blob written before they existed.
  */
 export interface Settings {
   /** Design §5: the sheet is up unless the player has put it away. */
   readonly cheatSheetOpen: boolean;
+  /** Design §12: all audio behind one toggle, and it is remembered. */
+  readonly muted: boolean;
 }
 
 export interface SaveData {
@@ -51,7 +53,7 @@ export interface SaveData {
 export const DEFAULTS: SaveData = {
   version: VERSION,
   highScores: [],
-  settings: { cheatSheetOpen: true },
+  settings: { cheatSheetOpen: true, muted: false },
 };
 
 /**
@@ -145,7 +147,7 @@ export const parseSave = (raw: string | null): SaveData => {
 
   const storedScores = Array.isArray(parsed.highScores) ? parsed.highScores : [];
   const storedSettings = isRecord(parsed.settings) ? parsed.settings : {};
-  const { cheatSheetOpen } = storedSettings;
+  const { cheatSheetOpen, muted } = storedSettings;
 
   return {
     version: VERSION,
@@ -159,6 +161,7 @@ export const parseSave = (raw: string | null): SaveData => {
         typeof cheatSheetOpen === 'boolean'
           ? cheatSheetOpen
           : DEFAULTS.settings.cheatSheetOpen,
+      muted: typeof muted === 'boolean' ? muted : DEFAULTS.settings.muted,
     },
   };
 };

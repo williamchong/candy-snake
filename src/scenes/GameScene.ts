@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { Kitchen } from '../audio/kitchen';
 import { DEFAULT_CONFIG, Game } from '../core/game';
 import type { GameEvent, RunSummary } from '../core/types';
 import { DirectionQueue } from '../input/directionQueue';
@@ -30,6 +31,11 @@ export class GameScene extends Phaser.Scene {
   private core!: Game;
   private turns!: DirectionQueue;
   private view!: BoardView;
+  /**
+   * Named for what it is rather than `sound`, which is Phaser's own name on
+   * every scene for the manager underneath this.
+   */
+  private kitchen!: Kitchen;
   private accumulatorMs = 0;
   /**
    * The last layout, kept only so the swipe knows where the HUD's tab is.
@@ -48,6 +54,7 @@ export class GameScene extends Phaser.Scene {
     this.core = new Game({ ...DEFAULT_CONFIG, seed: Date.now() });
     this.turns = new DirectionQueue(this.core.state.snake.dir);
     this.view = new BoardView(this);
+    this.kitchen = new Kitchen(this);
     this.accumulatorMs = 0;
 
     // Both adapters normalize into the same queue, so nothing downstream of
@@ -80,6 +87,10 @@ export class GameScene extends Phaser.Scene {
       this.accumulatorMs -= TICK_MS;
 
       for (const event of this.core.step(TICK_MS, this.turns)) {
+        // Both halves of design §12 hang off the one event, and the HUD's
+        // share of them is forwarded from here — so audio needs no second
+        // wiring over in UIScene.
+        this.kitchen.play(event);
         this.play(event);
       }
     }

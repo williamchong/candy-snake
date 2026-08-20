@@ -38,7 +38,7 @@ describe('parseSave', () => {
     const saved = {
       version: 1,
       highScores: [run(500), run(200)],
-      settings: { cheatSheetOpen: false },
+      settings: { cheatSheetOpen: false, muted: true },
     };
 
     expect(parseSave(JSON.stringify(saved))).toEqual(saved);
@@ -72,6 +72,18 @@ describe('parseSave', () => {
     });
 
     expect(parseSave(stored).settings.cheatSheetOpen).toBe(true);
+  });
+
+  it('keeps a good setting beside a spoiled one', () => {
+    // Fields are read one at a time, so one setting edited to nonsense must not
+    // take the rest of the blob down with it.
+    const stored = JSON.stringify({
+      version: 1,
+      highScores: [],
+      settings: { cheatSheetOpen: false, muted: 'yes' },
+    });
+
+    expect(parseSave(stored).settings).toEqual({ cheatSheetOpen: false, muted: false });
   });
 
   it('puts a hand-edited table back in order, and keeps only ten of it', () => {

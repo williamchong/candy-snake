@@ -745,7 +745,10 @@ late.
   - **The bubble breathes and the candy inside it does not.** The order is the
     one thing in the queue the player has to actually read off a glance, so the
     motion is put on the frame around it rather than on it.
-- Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted.
+- Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted. **The
+  cue set, the unlock and the mute are built**, which is what finally makes the
+  criterion below true; the ambient loop is the one piece still open, kept back
+  deliberately so it can be judged by ear on its own. See the audio pass below.
 
 **Done when:** a new player understands mixing without leaving the game, and
 every core event has audiovisual feedback.
@@ -1447,6 +1450,89 @@ count has neither problem and is the thing the player was counting anyway.
 The table's floor of five entries on the smallest landscape frame is a guess
 about how much of a menu is worth reading, and it shares its trip with the swipe
 threshold the risk table has been holding open since Phase 6.
+
+### What the audio pass settled — the criterion was never true
+
+Phase 8 shipped and the plan was called done while the game was silent, under a
+"Done when" that reads *every core event has audiovisual feedback*. That is what
+this pass went back for. It also closes the last of the four settings names
+architecture §10 was holding a seat for that had a design behind it.
+
+**Cues are generated, not loaded.** `audio/tones.ts` describes eleven voices in
+the units they are heard in — milliseconds and Hz — and renders one to samples;
+`audio/kitchen.ts` wraps each in an `AudioBuffer` at boot and hands it to
+Phaser's cache. That is `render/textures.ts`'s bargain a second time, and it
+buys the same things: no assets to license or download, and a sound that can be
+re-tuned in a diff. It also buys one thing textures never needed. Web Audio
+stays locked until the player's first gesture (design §12), and `createBuffer`
+works on a suspended context where `decodeAudioData` would have had to wait —
+so the cues are ready before the menu draws rather than after the first tap.
+
+**Almost none of the gesture-gating was ours to write.** Phaser's
+`WebAudioSoundManager` already installs its own `touchstart`/`mousedown`/
+`keydown` listeners and resumes the context on the first one, suspends on blur,
+and gates every sound behind one global `mute`. The whole of design §12's
+"starts only after first user gesture" is therefore a line of documentation
+rather than a line of code, and mute is one assignment rather than a check
+threaded through every cue — which matters because a check is a thing a cue
+added later can forget to make.
+
+**The stagger was the one real risk, and the rack had already found it.** Phase
+7 learned that `candy-staled` fires once per candy pushed off and that a chop
+can overflow a full rack several times inside one tick, so the tosses are spread
+by how many are already in the air, capped. Audio needs that more than the eye
+did: eight copies of one waveform starting together is not eight sounds, it is
+one sound eight times as loud. The ear gets the rack's own numbers — 70 ms
+apiece, capped at three — so the two can never disagree about how many were
+lost. The chop pop takes the same treatment with a whole tone added per copy,
+which turns a batch from a thud into a count.
+
+**Two cues carry information the screen cannot.** The serve chime climbs one
+step per consecutive serve and stops climbing at eight, where design §9's ×2 cap
+lands: the streak is the one number on the HUD a player cannot look at, because
+the queue is read in glances taken from steering (design §11). And the three
+dye jars get three pitches, so a pickup is confirmed without leaving the strand.
+
+**`cueFor` is a third switch over `GameEvent`, closed like the other two.**
+`GameScene.play` and `UIScene.play` both end in `event satisfies never`; the cue
+table does too, so a new event member is a compile error in audio as well rather
+than a silence nobody notices. The silences are deliberately the same ones the
+board keeps, plus `debris-crumbled` — it fires once per block of a severed
+strand and the crack has already said what happened.
+
+**The tests are the interesting half, because they had to be.** The smoke driver
+cannot hear, so what can be checked in Node was made worth checking: no cue
+clips; none begins or ends part-way up a waveform, which clicks — a fault an ear
+finds instantly and a picture of the waveform does not show at all; the noise is
+seeded, so a cue that sounds wrong sounds wrong again tomorrow. `kitchen.ts`
+imports Phaser for its types only, which puts the bookkeeping in reach too, and
+that turned out to be where the real regression lives: cues that never drain
+would silence the game after four pulls, and nothing but an ear would report it.
+
+**And the mute tab had to be drawn twice.** The first pair was a speaker and the
+same speaker with a bar struck through it, which is the universal idiom and
+could not be made to read at this size. Everything on the tab is one flat tint
+(design §4), so a bar laid over the cone is the same value as the cone, and a
+bar cut out of it staircases into a scatter of specks at 8×8. The pair that
+shipped asks the question where the glyph is empty instead — waves, or no waves
+— and is struck as a shape through `shade` rather than drawn by hand, for the
+reason that helper already gives about arcs. Worth knowing before the next HUD
+icon tries to say something by overlay.
+
+**Where it sits was a layout question, not a menu one.** Design §10 gives
+desktop the M key and design §11 gives the menu a settings screen that does not
+exist; a phone has neither, and muting is something decided mid-run when
+somebody walks into the room. So it is a tab beside the cheat sheet's, at the
+same 44 px floor, and its geometry went into `ui/layout.ts` with everything
+else. Landscape stacks the two tabs in the corner rather than setting them side
+by side: the band between the rack and the frame edge is the wheel's whole
+width, and at the wheel's floor that is narrower than two tabs, so the column's
+height gives way instead — which `wheelRun` was already willing to do. Upright
+there is width to spare, so the pair straddles the wheel, one tab on each
+shoulder. `hitsTab` grew to cover both and kept its name and signature: every
+caller wants the same thing of it — *the player was pressing a control, so do
+not steer* — and a version that named the tab is one every future tab has to be
+threaded through.
 
 ### What the review pass settled — two bugs, and geometry left in the scenes
 

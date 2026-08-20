@@ -75,6 +75,20 @@ const sheetRect = (frame: Frame): Rect => {
 /** The tab's touch target, which is the tab whatever the tab is drawn as. */
 const tabRect = (frame: Frame): Rect => around(frame.hud.sheet.tab, TAB_SIZE, TAB_SIZE);
 
+/** The mute tab's, the same size and measured the same way. */
+const muteRect = (frame: Frame): Rect => around(frame.hud.mute, TAB_SIZE, TAB_SIZE);
+
+/** The rack, as the box it actually occupies rather than as a run of slots. */
+const shelfRect = (frame: Frame): Rect => {
+  const { at, slot, axis } = frame.hud.shelf;
+  const start = shelfStart(frame);
+  const end = shelfEnd(frame);
+
+  return axis === 'column'
+    ? { left: at.x - slot / 2, right: at.x + slot / 2, top: start, bottom: end }
+    : { left: start, right: end, top: at.y - slot / 2, bottom: at.y + slot / 2 };
+};
+
 const boardRect = (frame: Frame): Rect => ({
   left: frame.board.x,
   right: frame.board.x + frame.board.width,
@@ -379,6 +393,45 @@ describe('layout', () => {
     expect(hitsTab(frame, frame.board.x + frame.board.width / 2, frame.board.y)).toBe(
       false,
     );
+  });
+
+  it.each(VIEWPORTS)('keeps the mute tab a thumb wide on %s', (_name, view) => {
+    // Design §12's toggle is the game's only way to silence itself on a phone,
+    // where design §10's M key does not exist — so it is held to design §10's
+    // touch floor exactly as the sheet's tab is.
+    const mute = muteRect(layout(view));
+
+    expect(mute.right - mute.left).toBeGreaterThanOrEqual(44);
+    expect(mute.bottom - mute.top).toBeGreaterThanOrEqual(44);
+    expect(onScreen(mute, view)).toBe(true);
+  });
+
+  it.each(VIEWPORTS)('keeps the two tabs off each other on %s', (_name, view) => {
+    // Two 44px targets that overlap are one target and a coin toss: the player
+    // means to mute and puts the wheel away instead.
+    const frame = layout(view);
+
+    expect(overlaps(muteRect(frame), tabRect(frame))).toBe(false);
+  });
+
+  it.each(VIEWPORTS)('keeps the mute tab clear of the kitchen on %s', (_name, view) => {
+    // The same rule the sheet is held to. A control over the grid is a control
+    // the player's thumb finds while steering.
+    const frame = layout(view);
+
+    expect(overlaps(muteRect(frame), boardRect(frame))).toBe(false);
+    expect(overlaps(muteRect(frame), shelfRect(frame))).toBe(false);
+    expect(overlaps(muteRect(frame), sheetRect(frame))).toBe(false);
+  });
+
+  it.each(VIEWPORTS)('knows what landed on the mute tab on %s', (_name, view) => {
+    // The swipe's dead zone covers both tabs through the one predicate, so a
+    // tab added without being taught to it would eat the gesture *and* steer.
+    const frame = layout(view);
+    const { mute } = frame.hud;
+
+    expect(hitsTab(frame, mute.x, mute.y)).toBe(true);
+    expect(hitsTab(frame, mute.x, mute.y - TAB_SIZE / 2)).toBe(true);
   });
 
   it.each(VIEWPORTS)('keeps the cheat-sheet tab a thumb wide on %s', (_name, view) => {

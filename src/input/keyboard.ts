@@ -32,6 +32,7 @@ export const bindKeyboard = (scene: Phaser.Scene, queue: DirectionQueue): void =
  */
 export const HotKey = {
   CheatSheet: 'C',
+  Mute: 'M',
 } as const;
 
 export type HotKey = (typeof HotKey)[keyof typeof HotKey];

@@ -32,11 +32,15 @@ The one structural rule that matters (architecture.md §2):
 - Scene keys are constants in `src/scenes/keys.ts` — never raw string literals.
 - The color palette (mask → hex/symbol/name/tier) lives only in `core/colors.ts`; HUD and rendering look it up there so they can never disagree.
 - Textures are generated at runtime in BootScene: `render/textures.ts` holds ASCII pixel maps baked through `scene.textures.generate` against one fixed palette — there are no image assets in v1.
+- Audio works the same way and for the same reasons: `audio/tones.ts` describes each cue as numbers and renders it to samples, `audio/kitchen.ts` bakes those into `AudioBuffer`s at boot — there are no audio assets either.
 
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —
 `input/directionQueue.ts`, `input/swipe.ts`, `render/strand.ts`,
 `render/melt.ts`, `render/deform.ts`, `render/burst.ts`,
+`audio/tones.ts` and `audio/kitchen.ts` (the cue table, the sample maths and
+the stagger bookkeeping — the smoke driver cannot hear, so anything checkable
+under Node is worth checking),
 `ui/layout.ts` (all screen geometry, which is why it stays Phaser-free) and
 the pure half of `persist/storage.ts` (parsing and ranking; the functions that
 reach for `localStorage` are guarded and left to the smoke driver).

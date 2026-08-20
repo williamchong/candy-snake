@@ -38,6 +38,8 @@ export const TextureKey = {
   FaceHappy: 'face-happy',
   FaceCross: 'face-cross',
   Pip: 'pip',
+  Speaker: 'speaker',
+  SpeakerMuted: 'speaker-muted',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 
@@ -302,6 +304,45 @@ const CANDY = [
 ];
 
 /**
+ * The mute tab's icon, in two states. Chrome rather than candy, so both are
+ * tinted by value like the sheet's jar and the hearts (design §4, palette
+ * constraints), and both are silhouettes rather than letters because design §11
+ * keeps prose out of the HUD entirely.
+ *
+ * The pair differs by whether any sound is leaving the cone, rather than by a
+ * bar struck through it. A slash was tried first and could not be made to read:
+ * everything on this tab is one flat tint, so a bar laid over the cone is the
+ * same value as the cone, and a bar cut out of it staircases into a scatter of
+ * specks at this size. Waves or no waves is the same question asked where the
+ * glyph is empty, and it survives being glanced at — which is the only way the
+ * HUD is ever read.
+ *
+ * Struck as shapes rather than drawn by hand for the reason `shade` gives: an
+ * arc is exactly the outline a hand keeps getting wrong.
+ */
+const SPEAKER_MOUTH = 4;
+
+const speakerCone: Shape = (x, y) =>
+  (within(x, 1, SPEAKER_MOUTH) && Math.abs(y - MID) <= 2.5) ||
+  (within(x, SPEAKER_MOUTH, 8) && Math.abs(y - MID) <= 2.5 + (x - SPEAKER_MOUTH) * 0.9);
+
+/**
+ * One arc of sound leaving the mouth. Struck from the cone's own origin so the
+ * two arcs stay concentric, and held inside a wedge either side of straight
+ * ahead — a full ring would curl back over the cone and read as brackets.
+ */
+const soundWave = (x: number, y: number, radius: number): boolean =>
+  x >= 10 &&
+  Math.abs(y - MID) <= x - SPEAKER_MOUTH &&
+  Math.abs(Math.hypot(x - SPEAKER_MOUTH, y - MID) - radius) <= 0.9;
+
+const SPEAKER = shade(
+  (x, y) => speakerCone(x, y) || soundWave(x, y, 6.8) || soundWave(x, y, 9.4),
+);
+
+const SPEAKER_MUTED = shade(speakerCone);
+
+/**
  * The chopping block: a slab of three planks that fills its cell edge to edge,
  * so a run of them reads as one bench. The planks run *down* the cell, along
  * the bench's own length — grain across the run would read as three separate
@@ -500,6 +541,8 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.Dye]: upscale(DYE),
   [TextureKey.Candy]: upscale(CANDY),
   [TextureKey.Block]: upscale(BLOCK),
+  [TextureKey.Speaker]: SPEAKER,
+  [TextureKey.SpeakerMuted]: SPEAKER_MUTED,
   [TextureKey.Floor]: FLOOR,
   [TextureKey.Customer]: exact(CUSTOMER),
   [TextureKey.CustomerStride]: exact(CUSTOMER_STRIDE),

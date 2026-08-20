@@ -654,7 +654,9 @@ High scores (top 10, with date) persist in `localStorage`.
   small dead zone; a swipe queues a turn just like a key press).
 - Optional **virtual D-pad** (settings toggle) for players who prefer taps;
   bottom corner, mirrored for left-handed mode.
-- Pause / cheat-sheet as HUD buttons (≥44 px touch targets).
+- Pause / cheat-sheet / mute as HUD buttons (≥44 px touch targets). Mute is a
+  button rather than a settings line because a phone has no M key and the
+  decision is made mid-run, when somebody walks into the room.
 - No action buttons are needed at all — every interaction is movement-based,
   which is what makes the game viable on mobile.
 
@@ -679,7 +681,8 @@ High scores (top 10, with date) persist in `localStorage`.
 ## 11. HUD & screens
 
 - **HUD:** score, lives (heart pips), the queue of children with their bubbles
-  and patience bars (§5), shelf contents (6 slots), cheat-sheet tab, pause. The
+  and patience bars (§5), shelf contents (6 slots), cheat-sheet tab, mute tab,
+  pause. The
   hearts are inked in the symbol's own dark value rather than red: a life is
   not a candy, and hue in this game belongs to candies alone (§4, palette
   constraints).

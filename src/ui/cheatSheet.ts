@@ -5,16 +5,18 @@ import { settings, updateSettings } from '../persist/storage';
 import {
   BORDER,
   CHROME_WIDTH,
-  GLYPH_TINT,
   HudDepth,
   makeDrawn,
-  makeSprite,
+  makeTab,
   paint,
+  PANEL_ALPHA,
   PANEL_FILL,
   place,
+  placeTab,
   scaleDrawn,
   show,
   type Drawn,
+  type Tab,
 } from '../render/drawn';
 import { CELL_SIZE, TextureKey } from '../render/textures';
 import { TAB_SIZE, wheelSeats, WHEEL_PAIRS, type Frame, type WheelSeats } from './layout';
@@ -54,8 +56,6 @@ const rememberOpen = (open: boolean): void => {
   updateSettings({ cheatSheetOpen: open });
 };
 
-/** Enough of the kitchen still reads through that the drawer never blinds it. */
-const SHEET_ALPHA = 0.88;
 const SHEET_RADIUS = 8;
 /** The spokes are chrome, and fainter than the frame — they guide, not divide. */
 const SPOKE_ALPHA = 0.5;
@@ -72,8 +72,7 @@ const RESULT_COLORS = WHEEL_PAIRS.map(([left, right]) =>
 
 export class CheatSheet {
   private readonly panel: Phaser.GameObjects.Graphics;
-  private readonly tab: Phaser.GameObjects.Rectangle;
-  private readonly tabIcon: Phaser.GameObjects.Image;
+  private readonly tab: Tab;
   /** Three jars then three candies, seated in `wheelSeats`' own order. */
   private readonly seats: readonly Drawn[];
   private open = readOpen();
@@ -88,22 +87,19 @@ export class CheatSheet {
       ...RESULT_COLORS.map((color) => this.seat(scene, TextureKey.Candy, color)),
     ];
 
-    this.tab = scene.add
-      .rectangle(0, 0, TAB_SIZE, TAB_SIZE)
-      .setStrokeStyle(CHROME_WIDTH, BORDER)
-      .setFillStyle(PANEL_FILL, SHEET_ALPHA)
-      .setDepth(HudDepth.SheetTab)
-      .setInteractive();
-    this.tab.on('pointerdown', () => {
-      this.toggle();
-    });
-
-    // A jar in ink rather than in hue: the tab is chrome, and hue in this
-    // kitchen belongs to candies (design §11, the same reason hearts are inked).
-    this.tabIcon = makeSprite(scene, TextureKey.Dye, GLYPH_TINT, HudDepth.SheetTabIcon, {
-      x: 0,
-      y: 0,
-    });
+    // A jar, for the drawer of jars it opens.
+    this.tab = makeTab(
+      scene,
+      {
+        size: TAB_SIZE,
+        key: TextureKey.Dye,
+        depth: HudDepth.SheetTab,
+        iconDepth: HudDepth.SheetTabIcon,
+      },
+      () => {
+        this.toggle();
+      },
+    );
 
     // Before the first frame, not on it: Phaser objects are born visible, so a
     // player who put the wheel away last run would otherwise see one frame of
@@ -134,8 +130,7 @@ export class CheatSheet {
     // jar is sized against the tab rather than against the wheel. Scaling it
     // with the wheel would leave a shrunken icon rattling around a full-size
     // frame on the one phone where the wheel is at its floor.
-    this.tab.setPosition(tab.x, tab.y);
-    this.tabIcon.setPosition(tab.x, tab.y);
+    placeTab(this.tab, tab);
 
     const wheel = wheelSeats(frame.hud.sheet);
     // Jars then candies, which is the order the seats were built in.
@@ -162,7 +157,7 @@ export class CheatSheet {
     const top = panel.at.y - panel.height / 2;
 
     this.panel.clear();
-    this.panel.fillStyle(PANEL_FILL, SHEET_ALPHA);
+    this.panel.fillStyle(PANEL_FILL, PANEL_ALPHA);
     this.panel.lineStyle(CHROME_WIDTH, BORDER);
     this.panel.fillRoundedRect(left, top, panel.width, panel.height, SHEET_RADIUS);
     this.panel.strokeRoundedRect(left, top, panel.width, panel.height, SHEET_RADIUS);

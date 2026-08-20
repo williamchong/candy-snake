@@ -9,6 +9,7 @@ import { glyphTextureKey } from '../render/textures';
 import { CheatSheet } from '../ui/cheatSheet';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
+import { MuteTab } from '../ui/muteTab';
 import { onFrame } from '../ui/responsive';
 import { RushDoor } from '../ui/rushDoor';
 import { ShelfStrip } from '../ui/shelfStrip';
@@ -45,6 +46,7 @@ export class UIScene extends Phaser.Scene {
   private door!: RushDoor;
   private shelf!: ShelfStrip;
   private sheet!: CheatSheet;
+  private mute!: MuteTab;
   /**
    * Hearts last drawn. Reset in `create`, not at the field: Phaser reuses the
    * scene instance between runs, so a value carried over from the last run
@@ -86,6 +88,14 @@ export class UIScene extends Phaser.Scene {
       this.sheet.toggle();
     });
 
+    // Built fresh with the sheet and for the same reason — the scene instance
+    // outlives the run, and what the player wants is remembered by the settings
+    // blob rather than by the widget.
+    this.mute = new MuteTab(this);
+    bindHotkey(this, HotKey.Mute, () => {
+      this.mute.toggle();
+    });
+
     // Everything above is built at the origin and put somewhere by the layout
     // pass, which runs once here and again whenever the device changes shape.
     //
@@ -104,6 +114,7 @@ export class UIScene extends Phaser.Scene {
       this.queue.applyFrame(frame);
       this.door.applyFrame(frame);
       this.sheet.applyFrame(frame);
+      this.mute.applyFrame(frame);
     });
   }
 

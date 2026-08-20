@@ -92,6 +92,13 @@ export interface HudFrame {
    * `panel.at` is the box's centre. It is *not* the circle the jars stand on —
    * that sits a little lower, for the reason `wheelSeats` gives.
    */
+  /**
+   * Where the mute tab sits (design §12's toggle, at design §10's touch floor —
+   * the same 44 px `TAB_SIZE` the sheet's tab is given, and for the same
+   * reason). Just a centre: unlike the sheet it opens nothing, so there is no
+   * panel to measure beside it.
+   */
+  readonly mute: Vec2;
   readonly sheet: {
     readonly tab: Vec2;
     readonly panel: {
@@ -229,6 +236,13 @@ const DOOR_INSET = 6;
  * here rather than theoretical.
  */
 export const TAB_SIZE = 44;
+
+/**
+ * Air between the two tabs. Enough that a thumb aimed at one does not catch the
+ * other, and little enough that they still read as one strip of controls rather
+ * than as two things that happen to be near each other.
+ */
+const TAB_GAP = 8;
 
 /** A jar in the wheel is a jar on the board, at the size it is authored at. */
 const WHEEL_NODE = CELL_SIZE;
@@ -390,9 +404,16 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   // Its span is measured from the rack's far edge rather than from the board,
   // so clearing the rack and clearing the board are both structural — a wider
   // window moves the rack and the panel follows it.
+  // The two tabs stack in the corner rather than sitting side by side: the band
+  // between the rack and the frame edge is the wheel's whole width, and at the
+  // wheel's floor it is narrower than two tabs. Stacking spends the column's
+  // height instead, which `wheelRun` is already willing to give up — its floor
+  // outranks the band it is handed.
   const sheetRight = insets.left + availW - GUTTER;
+  const tabX = Math.round(sheetRight - TAB_SIZE / 2);
   const tabY = Math.round(frameFloor - TAB_SIZE / 2);
-  const sheetFloor = tabY - TAB_SIZE / 2 - GUTTER / 2;
+  const muteY = Math.round(tabY - TAB_SIZE - TAB_GAP);
+  const sheetFloor = muteY - TAB_SIZE / 2 - GUTTER / 2;
   const wheel = wheelRun(
     sheetRight - (shelfX + shelf.slot / 2) - GUTTER,
     sheetFloor - childFloor,
@@ -419,8 +440,9 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
         offstage: view.width + OFFSTAGE_MARGIN,
         door: view.width - DOOR_INSET,
       },
+      mute: { x: tabX, y: muteY },
       sheet: {
-        tab: { x: Math.round(sheetRight - TAB_SIZE / 2), y: tabY },
+        tab: { x: tabX, y: tabY },
         panel: {
           at: {
             x: Math.round(sheetRight - wheel.width / 2),
@@ -514,6 +536,14 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
         pitch: -queuePitch,
         offstage: -OFFSTAGE_MARGIN,
         door: DOOR_INSET,
+      },
+      // On the wheel's other shoulder, mirroring the sheet's tab. Upright there
+      // is width to spare where landscape had none, so the pair straddles the
+      // panel instead of stacking — and a tab at either end of the band is two
+      // thumbs' worth of reach rather than one.
+      mute: {
+        x: Math.round(sheetAt.x + wheel.width / 2 + GUTTER / 4 + TAB_SIZE / 2),
+        y: Math.round(insets.top + TAB_SIZE / 2),
       },
       sheet: {
         tab: {
@@ -609,16 +639,20 @@ export const wheelSeats = (sheet: HudFrame['sheet']): WheelSeats => {
   };
 };
 
-/**
- * Whether a pointer landed on the cheat-sheet tab. GameScene's swipe listens
- * scene-wide and cannot see UIScene's objects, so it asks the layout instead —
- * see the dead zone in `input/swipe.ts`.
- */
-export const hitsTab = (frame: Frame, x: number, y: number): boolean => {
-  const { tab } = frame.hud.sheet;
+const hits = (tab: Vec2, x: number, y: number): boolean =>
+  Math.abs(x - tab.x) <= TAB_SIZE / 2 && Math.abs(y - tab.y) <= TAB_SIZE / 2;
 
-  return Math.abs(x - tab.x) <= TAB_SIZE / 2 && Math.abs(y - tab.y) <= TAB_SIZE / 2;
-};
+/**
+ * Whether a pointer landed on either of the HUD's tabs. GameScene's swipe
+ * listens scene-wide and cannot see UIScene's objects, so it asks the layout
+ * instead — see the dead zone in `input/swipe.ts`.
+ *
+ * Deliberately not told which tab it was. Every caller wants the same thing of
+ * this — *the player was pressing a control, so do not steer* — and a version
+ * that named the tab would be one every new tab has to be threaded through.
+ */
+export const hitsTab = (frame: Frame, x: number, y: number): boolean =>
+  hits(frame.hud.sheet.tab, x, y) || hits(frame.hud.mute, x, y);
 
 /**
  * The middle of what the player can actually see — what a full-screen message

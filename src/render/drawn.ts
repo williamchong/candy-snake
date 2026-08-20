@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 
 import { colorInfo } from '../core/colors';
-import { RAW, type ColorMask } from '../core/types';
+import { RAW, type ColorMask, type Vec2 } from '../core/types';
 import type { CornerTints } from './melt';
 import {
   PIXEL_SCALE,
@@ -39,6 +39,15 @@ export const CHROME_WIDTH = 2;
  * for.
  */
 export const PANEL_FILL = 0xe7dcf0;
+
+/**
+ * How solid that ground is. Enough of the kitchen still reads through that a
+ * panel never blinds it (design §4) — and it lives here beside the fill rather
+ * than in the one widget that used to own it, because the sheet's tab and the
+ * mute tab sit side by side on the same edge and two chrome alphas that drifted
+ * apart would be visible as a seam.
+ */
+export const PANEL_ALPHA = 0.88;
 
 /**
  * The HUD's layers, named for the same reason the board's are: so a widget
@@ -96,6 +105,14 @@ export const HudDepth = {
    */
   SheetTab: 11,
   SheetTabIcon: 12,
+  /**
+   * The mute tab, which never overlaps the sheet's — they sit beside each other
+   * on the same edge. Listed all the same, and in two layers like the other
+   * one: a frame sharing a depth with the icon inside it is left to
+   * display-list insertion order, which is the accident this table prevents.
+   */
+  MuteTab: 13,
+  MuteTabIcon: 14,
 } as const;
 
 export interface Drawn {
@@ -130,6 +147,63 @@ export const makeSprite = (
   scale = PIXEL_SCALE,
 ): Phaser.GameObjects.Image =>
   scene.add.image(at.x, at.y, key).setScale(scale).setTint(tint).setDepth(depth);
+
+/**
+ * A tab at the edge of the HUD: a chrome square with one inked icon inside it,
+ * built as a pair because the frame and its icon are laid out as one thing and
+ * live at two depths.
+ *
+ * Extracted when the second one landed. What the two tabs *do* is nothing alike
+ * — one opens a drawer of jars, the other silences the game — and that half
+ * stays with each of them. This is only the shell they both build the same way,
+ * down to the call order, and it is where the D-pad (`persist/storage.ts`) would
+ * otherwise write it a third time.
+ *
+ * Sized by its caller rather than from `ui/layout.ts`: a length in pixels is
+ * screen geometry and that file owns all of it, but `render/` is underneath
+ * `ui/` and must not reach up into it.
+ */
+export interface Tab {
+  readonly frame: Phaser.GameObjects.Rectangle;
+  readonly icon: Phaser.GameObjects.Image;
+}
+
+export interface TabConfig {
+  readonly size: number;
+  readonly key: TextureKey;
+  readonly depth: number;
+  readonly iconDepth: number;
+}
+
+export const makeTab = (
+  scene: Phaser.Scene,
+  config: TabConfig,
+  onTap: () => void,
+): Tab => {
+  const { size, key, depth, iconDepth } = config;
+
+  // Built at the origin like every other HUD widget; `placeTab` is what puts it
+  // anywhere, on the layout pass.
+  const frame = scene.add
+    .rectangle(0, 0, size, size)
+    .setStrokeStyle(CHROME_WIDTH, BORDER)
+    .setFillStyle(PANEL_FILL, PANEL_ALPHA)
+    .setDepth(depth)
+    .setInteractive();
+  frame.on('pointerdown', onTap);
+
+  // Inked rather than tinted in hue: a tab is chrome, and hue in this kitchen
+  // belongs to candies (design §4, palette constraints).
+  return {
+    frame,
+    icon: makeSprite(scene, key, GLYPH_TINT, iconDepth, { x: 0, y: 0 }),
+  };
+};
+
+export const placeTab = ({ frame, icon }: Tab, at: Vec2): void => {
+  frame.setPosition(at.x, at.y);
+  icon.setPosition(at.x, at.y);
+};
 
 /**
  * A sprite plus its symbol glyph, built as a pair so every layer that wants a
