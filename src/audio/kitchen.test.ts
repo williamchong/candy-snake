@@ -168,13 +168,19 @@ describe('the bed', () => {
     expect(beds[0]?.alive).toBe(false);
   });
 
-  it('can open again after a shutdown, and is one bed still', () => {
+  it('opens a fresh bed after a shutdown, rather than reviving the old one', () => {
+    // Asserting only that one bed is alive would pass on a `close` that did
+    // nothing at all: the old bed would still be playing, and the second `open`
+    // would no-op against a handle that had never been cleared. So both halves
+    // are named — the old one is down, and a new one is up.
     const { kitchen, beds, shutDown } = bench();
     kitchen.open();
     shutDown();
     kitchen.open();
 
-    expect(beds.filter((bed) => bed.alive)).toHaveLength(1);
+    expect(beds).toHaveLength(2);
+    expect(beds[0]?.alive).toBe(false);
+    expect(beds[1]?.alive).toBe(true);
   });
 
   it('stays quiet when nothing was baked', () => {

@@ -12,6 +12,7 @@ import {
   peak,
   samples,
   semitones,
+  swell,
 } from './tones';
 
 const RATE = 44100;
@@ -200,13 +201,19 @@ describe('ambience', () => {
   });
 
   it('breathes a whole number of times, so the swell wraps with the noise', () => {
-    // A fractional swell would put a step in the envelope at the loop point
-    // even with the noise itself joining cleanly.
+    // Where the envelope is at the end of the loop has to be where it is at the
+    // start, or the bed steps in volume every four seconds however cleanly the
+    // noise underneath it joins — a fault the seam test cannot see, because it
+    // compares two samples and this is a difference between two averages.
+    //
+    // Asked of the envelope directly. Measuring it off the noise was tried and
+    // is not sensitive enough: a window narrow enough to be local to the seam
+    // is dominated by which sample happened to land loudest in it, and one wide
+    // enough to be stable averages over most of a turn — which is exactly how a
+    // half-turn hides.
     const bed = ambience();
-    const quarter = Math.floor(bed.length / 4);
-    const loudness = (from: number): number => peak(bed.subarray(from, from + quarter));
 
-    expect(loudness(0)).toBeCloseTo(loudness(bed.length - quarter), 1);
+    expect(swell(bed.length, bed.length)).toBeCloseTo(swell(0, bed.length), 10);
   });
 
   it('bakes the same bed every time', () => {

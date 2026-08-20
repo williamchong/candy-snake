@@ -363,6 +363,23 @@ const lowPass = (data: Float32Array, pole: number): void => {
 };
 
 /**
+ * How loud the bed is at one point in its loop — a slow rise and fall over the
+ * noise, so that four seconds of it does not sit as flat as a hum.
+ *
+ * Split out because it carries a condition the arithmetic cannot state: the
+ * turn count must be a whole number, or the envelope arrives back at the loop
+ * point somewhere other than where it left, and that is a step in the bed's
+ * volume however cleanly the noise underneath it joins. A test asks this
+ * function what it is worth at either end rather than measuring the noise for
+ * it — the envelope is exact where a measurement of filtered noise is an
+ * estimate, and the estimate turns out to be too coarse to see a half-turn.
+ */
+export const swell = (index: number, count: number): number =>
+  1 -
+  AMBIENCE_SWELL *
+    (0.5 - 0.5 * Math.cos((2 * Math.PI * AMBIENCE_SWELLS * index) / count));
+
+/**
  * The bed, rendered once at boot. Noise rather than tone: a kitchen is a room
  * before it is an instrument, and anything with a pitch in it would sit in the
  * same ear the cues are trying to reach.
@@ -381,10 +398,7 @@ export const ambience = (): Float32Array => {
   const scale = loudest > 0 ? AMBIENCE_GAIN / loudest : 0;
 
   for (let i = 0; i < count; i += 1) {
-    // A whole number of swells per loop, so the breathing comes round with the
-    // noise rather than against it.
-    const turn = (2 * Math.PI * AMBIENCE_SWELLS * i) / count;
-    out[i] = (out[i] ?? 0) * scale * (1 - AMBIENCE_SWELL * (0.5 - 0.5 * Math.cos(turn)));
+    out[i] = (out[i] ?? 0) * scale * swell(i, count);
   }
 
   return out;
