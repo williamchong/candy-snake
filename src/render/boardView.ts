@@ -25,10 +25,11 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
+import { deformX, deformY, pullAmount, pullShapeOf, PullShape } from './deform';
 import { Burst, knock, type BurstConfig } from './effects';
 import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
-import { CELL_SIZE, STRAND_TEXTURES, TextureKey } from './textures';
+import { CELL_SIZE, PIXEL_SCALE, STRAND_TEXTURES, TextureKey } from './textures';
 
 /**
  * The board draws itself in its own coordinates — origin at its top-left corner,
@@ -120,12 +121,27 @@ interface Placed {
   readonly angle?: number;
   /** Per-corner tints, for sprites drawn as a gradient rather than flat. */
   readonly melt?: CornerTints;
+  /**
+   * Which way this piece may be drawn out as it travels, or absent for anything
+   * that must not deform at all. The head leaves it out: it is the maker rather
+   * than sugar — the thing doing the pulling is not the thing being pulled —
+   * and scaling it unevenly would smear the two dots it has for eyes.
+   */
+  readonly pull?: PullShape;
 }
 
 /** A sprite mid-slide between the cell it left and the cell it is entering. */
 interface Sliding extends Drawn {
   from: Vec2;
   to: Vec2;
+  pull: PullShape | undefined;
+  /**
+   * Whether the sprite is off its resting size. The strand is at rest for most
+   * of most frames, so this is what makes settling a single write rather than
+   * one per sprite per frame — the same latch `CustomerView` keeps for its
+   * breathing bubble, for the same reason.
+   */
+  deformed: boolean;
 }
 
 interface PoolConfig extends DrawnConfig {
@@ -202,6 +218,12 @@ class SpritePool {
       // Only the sprite turns. The glyph riding on it stays upright, because a
       // symbol the player has to read must not rotate with the rope (design §4).
       entry.image.setAngle(item.angle ?? 0);
+      // Only `draw` ever writes scale, and only for a sprite carrying a pull
+      // shape — so this is what stops one handed back to the pool as a
+      // different segment from inheriting the stretch the last one was wearing.
+      entry.image.setScale(PIXEL_SCALE);
+      entry.pull = item.pull;
+      entry.deformed = false;
       show(entry, true);
       place(entry, entry.from.x, entry.from.y);
     });
@@ -236,14 +258,41 @@ class SpritePool {
         entry.from.x + (entry.to.x - entry.from.x) * progress,
         entry.from.y + (entry.to.y - entry.from.y) * progress,
       );
+      if (entry.pull !== undefined) this.stretch(entry, index, progress);
     }
+  }
+
+  /**
+   * Draws one piece out along itself as the maker hauls on the strand.
+   *
+   * The write is on `entry.image` and never through `place` or `scaleDrawn`:
+   * the glyph riding on it must not stretch, for exactly the reason `retarget`
+   * above already gives for rotation — a symbol the player has to read must not
+   * deform with the rope (design §4).
+   */
+  private stretch(entry: Sliding, fromHead: number, progress: number): void {
+    const pull = pullAmount(progress, fromHead);
+
+    if (pull === 0) {
+      // One write on the frame the pull dies, and none on the frames after it.
+      if (!entry.deformed) return;
+      entry.deformed = false;
+      entry.image.setScale(PIXEL_SCALE);
+      return;
+    }
+
+    entry.deformed = true;
+    entry.image.setScale(
+      PIXEL_SCALE * deformX(entry.pull ?? PullShape.Lengthwise, pull),
+      PIXEL_SCALE * deformY(pull),
+    );
   }
 
   private spawn(at: Vec2): Sliding {
     const drawn = makeDrawn(this.scene, this.config, at);
     adopt(this.root, drawn.image, drawn.glyph);
 
-    return { ...drawn, from: at, to: at };
+    return { ...drawn, from: at, to: at, pull: undefined, deformed: false };
   }
 }
 
@@ -366,6 +415,7 @@ const strandPieces = ({ head, body }: SnakeState): Placed[] =>
       key: STRAND_TEXTURES[sprite.piece],
       angle: sprite.angle,
       melt: meltedTints(segment.color, sprite, ahead?.color, behind?.color),
+      pull: pullShapeOf(sprite),
     };
   });
 
