@@ -70,21 +70,52 @@ export const pullAmount = (progress: number, fromHead: number): number => {
 };
 
 /**
- * The scale a piece takes along the sprite's own x, as a multiple of resting.
- *
- * **It never goes below 1.** A rope piece drawn shorter than its cell opens a
- * gap at the joint with its neighbour, and a strand with gaps in it is the row
- * of beads the continuous rope exists to replace. An elbow cannot lengthen —
- * it has no single direction to lengthen in — so it takes the across factor on
- * both axes instead, and the shortfall that leaves at the bend is covered by
- * the overhang of the straight piece beside it.
+ * How long the strand shows a cube being taken into it. Under the fastest move
+ * the ramp ever reaches — 125 ms/cell (design §7) — so it is over before the
+ * segment it is playing on can become a different one, the same deadline the
+ * head's dye flash is held to.
  */
-export const deformX = (shape: PullShape, pull: number): number =>
-  shape === PullShape.Elbow ? deformY(pull) : 1 + pull;
+export const SWALLOW_MS = 120;
 
 /**
- * The scale across the rope, which is the same for both shapes — and that is
- * what keeps the silhouette from stepping at a bend, since an elbow and the
- * straight beside it end up exactly as wide as each other.
+ * How far the strand swells where a cube went in. Across the rope only, and
+ * that is a rule rather than a taste: the classic squash is fat *and short*,
+ * but a rope piece drawn shorter than its cell opens a gap at the joint with
+ * the segment ahead of it — see `deformX`. Extra sugar making the strand
+ * momentarily fatter is the truer reading anyway. It is also the exact
+ * complement of the pull, which is the same material going thin.
  */
-export const deformY = (pull: number): number => 1 - pull * PULL_NARROW;
+const SWALLOW_BULGE = 0.2;
+
+/**
+ * The swallow, full the moment the cube lands and gone once it has settled.
+ * Squared, so the strand takes the cube in with a snap and lets go slowly
+ * rather than easing symmetrically in and out of it.
+ */
+export const swallowAmount = (remainingMs: number): number => {
+  if (remainingMs <= 0) return 0;
+
+  const left = Math.min(remainingMs / SWALLOW_MS, 1);
+  return left * left;
+};
+
+/**
+ * The scale a piece takes along the sprite's own x, as a multiple of resting.
+ *
+ * **It never goes below 1**, whatever is being done to the piece. A rope piece
+ * drawn shorter than its cell opens a gap at the joint with its neighbour, and
+ * a strand with gaps in it is the row of beads the continuous rope exists to
+ * replace. An elbow cannot lengthen — it has no single direction to lengthen
+ * in — so it takes the across factor on both axes instead, and the shortfall
+ * that leaves at the bend is covered by the overhang of the straight beside it.
+ */
+export const deformX = (shape: PullShape, pull: number, swallow: number): number =>
+  shape === PullShape.Elbow ? deformY(pull, swallow) : 1 + pull;
+
+/**
+ * The scale across the rope, which takes no shape: every piece is exactly as
+ * wide as the one it meets, which is what keeps the silhouette from stepping
+ * where the rope bends.
+ */
+export const deformY = (pull: number, swallow: number): number =>
+  (1 - pull * PULL_NARROW) * (1 + SWALLOW_BULGE * swallow);

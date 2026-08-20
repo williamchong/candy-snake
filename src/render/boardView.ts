@@ -25,7 +25,15 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
-import { deformX, deformY, pullAmount, pullShapeOf, PullShape } from './deform';
+import {
+  deformX,
+  deformY,
+  pullAmount,
+  pullShapeOf,
+  swallowAmount,
+  PullShape,
+  SWALLOW_MS,
+} from './deform';
 import { Burst, knock, type BurstConfig } from './effects';
 import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
@@ -136,6 +144,12 @@ interface Sliding extends Drawn {
   to: Vec2;
   pull: PullShape | undefined;
   /**
+   * Scene time the swallow ends at, or 0 for a sprite that is not swallowing.
+   * A deadline rather than a tween: `draw` already writes this sprite's scale
+   * every frame, and a tween on the same property would be fighting it.
+   */
+  swallowUntil: number;
+  /**
    * Whether the sprite is off its resting size. The strand is at rest for most
    * of most frames, so this is what makes settling a single write rather than
    * one per sprite per frame — the same latch `CustomerView` keeps for its
@@ -223,6 +237,7 @@ class SpritePool {
       // different segment from inheriting the stretch the last one was wearing.
       entry.image.setScale(PIXEL_SCALE);
       entry.pull = item.pull;
+      entry.swallowUntil = 0;
       entry.deformed = false;
       show(entry, true);
       place(entry, entry.from.x, entry.from.y);
@@ -249,6 +264,7 @@ class SpritePool {
   draw(progress: number): void {
     if (!this.config.slides) return;
 
+    const now = this.scene.time.now;
     for (let index = 0; index < this.active; index += 1) {
       const entry = this.entries[index];
       if (entry === undefined) continue;
@@ -258,23 +274,28 @@ class SpritePool {
         entry.from.x + (entry.to.x - entry.from.x) * progress,
         entry.from.y + (entry.to.y - entry.from.y) * progress,
       );
-      if (entry.pull !== undefined) this.stretch(entry, index, progress);
+      if (entry.pull !== undefined) this.deform(entry, index, progress, now);
     }
   }
 
   /**
-   * Draws one piece out along itself as the maker hauls on the strand.
+   * Draws one piece out along itself as the maker hauls on the strand, and
+   * swells it where a cube has just gone in. Both at once, multiplied together
+   * rather than one taking the sprite from the other — a swallow lands on a
+   * segment that may well be mid-slide, and neither has to know about the other
+   * for the two to compose.
    *
    * The write is on `entry.image` and never through `place` or `scaleDrawn`:
-   * the glyph riding on it must not stretch, for exactly the reason `retarget`
-   * above already gives for rotation — a symbol the player has to read must not
-   * deform with the rope (design §4).
+   * the glyph riding on it must not deform, for exactly the reason `retarget`
+   * above already gives for rotation — a symbol the player has to read must
+   * stay readable (design §4).
    */
-  private stretch(entry: Sliding, fromHead: number, progress: number): void {
+  private deform(entry: Sliding, fromHead: number, progress: number, now: number): void {
     const pull = pullAmount(progress, fromHead);
+    const swallow = swallowAmount(entry.swallowUntil - now);
 
-    if (pull === 0) {
-      // One write on the frame the pull dies, and none on the frames after it.
+    if (pull === 0 && swallow === 0) {
+      // One write on the frame it settles, and none on the frames after it.
       if (!entry.deformed) return;
       entry.deformed = false;
       entry.image.setScale(PIXEL_SCALE);
@@ -283,16 +304,38 @@ class SpritePool {
 
     entry.deformed = true;
     entry.image.setScale(
-      PIXEL_SCALE * deformX(entry.pull ?? PullShape.Lengthwise, pull),
-      PIXEL_SCALE * deformY(pull),
+      PIXEL_SCALE * deformX(entry.pull ?? PullShape.Lengthwise, pull, swallow),
+      PIXEL_SCALE * deformY(pull, swallow),
     );
+  }
+
+  /**
+   * Marks whatever is standing on `at` as having just taken a cube in. Matched
+   * by the cell it is bound for rather than by index, because the index of the
+   * new tail is not something the caller should have to know.
+   */
+  swallow(at: Vec2, now: number): void {
+    for (let index = 0; index < this.active; index += 1) {
+      const entry = this.entries[index];
+      if (entry?.to.x === at.x && entry.to.y === at.y) {
+        entry.swallowUntil = now + SWALLOW_MS;
+        return;
+      }
+    }
   }
 
   private spawn(at: Vec2): Sliding {
     const drawn = makeDrawn(this.scene, this.config, at);
     adopt(this.root, drawn.image, drawn.glyph);
 
-    return { ...drawn, from: at, to: at, pull: undefined, deformed: false };
+    return {
+      ...drawn,
+      from: at,
+      to: at,
+      pull: undefined,
+      swallowUntil: 0,
+      deformed: false,
+    };
   }
 }
 
@@ -450,6 +493,12 @@ export class BoardView {
    */
   private held: Segment[] = [];
   private breaking: Segment[] = [];
+  /**
+   * Cubes taken in this move, waiting for the strand to be retargeted around
+   * them: the segment the swallow plays on does not exist until `syncToState`
+   * has run, because it *is* the cube.
+   */
+  private swallowing: Vec2[] = [];
   private previousPickups: readonly Pickup[] | undefined;
   /** The head's dye flash, held so a second jar can cut the first one short. */
   private headFlash: Phaser.Tweens.Tween | undefined;
@@ -516,6 +565,14 @@ export class BoardView {
   syncToState(state: GameState): void {
     this.head.retarget([{ pos: state.snake.head }]);
     this.segments.retarget(strandPieces(state.snake));
+
+    // After the retarget above, never before it: `retarget` clears the mark on
+    // every entry, which is what stops a sprite that becomes a different
+    // segment next move from inheriting a swallow that was not its own.
+    for (const pos of this.swallowing) {
+      this.segments.swallow(cellToPixel(pos), this.scene.time.now);
+    }
+    this.swallowing.length = 0;
 
     const { crumble, chop } = splitByFate(state.severed);
     this.debris.retarget(crumble);
@@ -589,6 +646,21 @@ export class BoardView {
    *
    * Held a move before it plays, unlike everything else here: see `held`.
    */
+  /**
+   * A cube has been pulled into the strand as the new tail, and the strand
+   * swells where it went in.
+   *
+   * This is the one effect the view's one-move lag lets through untouched, and
+   * it is worth knowing why. The cube is not spent when the *head* reaches it —
+   * it is spent when the **tail vacates its cell**, which is what lets it
+   * appear to become the tail rather than vanish (`Game.spendClearedPickups`).
+   * The strand is drawn a move behind, so the cell the cube stood on is exactly
+   * where the strand is being drawn right now. Nothing to compensate for.
+   */
+  swallow(pos: Vec2): void {
+    this.swallowing.push(pos);
+  }
+
   shatter(severed: readonly Segment[]): void {
     const impact = severed[0];
     if (impact !== undefined) this.breaking.push(impact);

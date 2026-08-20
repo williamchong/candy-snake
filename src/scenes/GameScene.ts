@@ -159,10 +159,19 @@ export class GameScene extends Phaser.Scene {
         this.view.shatter(event.severed);
         return;
 
-      // Nothing to play yet; the juice pass (Phase 7) fills these in.
+      case 'sugar-pulled':
+        this.view.swallow(event.pos);
+        return;
+
+      // Deliberately silent, rather than still owed. The block already speaks
+      // for a cut, one candy per move, and it is the candies the player is
+      // making — the strand leaving is not a second event. A knead recolors the
+      // segment it happened to, in front of the player, and a pickup appearing
+      // is a thing appearing. Design §12 asks for five effects and these are
+      // not among them; adding motion here would be spending the player's
+      // attention on what the board has already said.
       case 'strand-cut':
       case 'dye-kneaded':
-      case 'sugar-pulled':
       case 'sugar-spawned':
       case 'dye-spawned':
         return;

@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Vec2 } from '../core/types';
-import { PullShape, deformX, deformY, pullAmount, pullShapeOf } from './deform';
+import {
+  PullShape,
+  SWALLOW_MS,
+  deformX,
+  deformY,
+  pullAmount,
+  pullShapeOf,
+  swallowAmount,
+} from './deform';
 import { strandSpriteAt } from './strand';
 
 const at = (x: number, y: number): Vec2 => ({ x, y });
@@ -69,43 +77,79 @@ describe('pullAmount', () => {
   });
 });
 
+describe('swallowAmount', () => {
+  it('is full the moment the cube lands and gone once it has settled', () => {
+    expect(swallowAmount(SWALLOW_MS)).toBe(1);
+    expect(swallowAmount(0)).toBe(0);
+    expect(swallowAmount(-50)).toBe(0);
+  });
+
+  it('lets go slowly rather than easing out of it symmetrically', () => {
+    // The strand takes a cube in with a snap; it is the settling that reads.
+    expect(swallowAmount(SWALLOW_MS / 2)).toBeLessThan(0.5);
+  });
+
+  it('is over inside the fastest move the ramp ever reaches', () => {
+    // Otherwise it would still be running when the sprite it is playing on has
+    // become a different segment — the deadline the dye flash is held to too.
+    expect(SWALLOW_MS).toBeLessThanOrEqual(125);
+  });
+});
+
 describe('deformX / deformY', () => {
   it('only ever lengthens a piece along the rope, never shortens it', () => {
     // A rope piece drawn shorter than its cell opens a gap at the joint, and a
     // strand with gaps in it is the row of beads the rope exists to replace.
+    // True under a swallow as well, which is why the swell is across only.
     for (const pull of EVERY_PULL) {
-      expect(deformX(PullShape.Lengthwise, pull)).toBeGreaterThanOrEqual(1);
+      for (const swallow of [0, 0.5, 1]) {
+        expect(deformX(PullShape.Lengthwise, pull, swallow)).toBeGreaterThanOrEqual(1);
+      }
     }
   });
 
   it('narrows a piece across the rope as it lengthens', () => {
-    expect(deformY(HARDEST)).toBeLessThan(1);
-    expect(deformY(HARDEST)).toBeLessThan(deformY(pullAmount(0.1, 0)));
+    expect(deformY(HARDEST, 0)).toBeLessThan(1);
+    expect(deformY(HARDEST, 0)).toBeLessThan(deformY(pullAmount(0.1, 0), 0));
   });
 
   it('never thins a piece away to nothing', () => {
-    for (const pull of EVERY_PULL) expect(deformY(pull)).toBeGreaterThan(0.5);
+    for (const pull of EVERY_PULL) expect(deformY(pull, 0)).toBeGreaterThan(0.5);
   });
 
   it('takes the same off an elbow both ways, so it has no length of its own', () => {
     // Which also leaves it exactly as wide as the straight piece it meets, so
     // the silhouette does not step where the rope bends.
-    expect(deformX(PullShape.Elbow, HARDEST)).toBe(deformY(HARDEST));
+    expect(deformX(PullShape.Elbow, HARDEST, 0)).toBe(deformY(HARDEST, 0));
   });
 
   it("covers an elbow's shortfall with the overhang of the piece beside it", () => {
     // The straight grows past the cell boundary by more than the elbow's arm
     // retreats from it, so no gap can open at a bend however hard the pull.
     for (const pull of EVERY_PULL) {
-      const overhang = (deformX(PullShape.Lengthwise, pull) - 1) / 2;
-      const shortfall = (1 - deformX(PullShape.Elbow, pull)) / 2;
+      const overhang = (deformX(PullShape.Lengthwise, pull, 0) - 1) / 2;
+      const shortfall = (1 - deformX(PullShape.Elbow, pull, 0)) / 2;
       expect(overhang).toBeGreaterThanOrEqual(shortfall);
     }
   });
 
-  it('leaves a sprite at its resting size when nothing is pulling it', () => {
-    expect(deformX(PullShape.Lengthwise, 0)).toBe(1);
-    expect(deformX(PullShape.Elbow, 0)).toBe(1);
-    expect(deformY(0)).toBe(1);
+  it('swells the strand across where a cube went into it', () => {
+    expect(deformY(0, 1)).toBeGreaterThan(1);
+    expect(deformX(PullShape.Lengthwise, 0, 1)).toBe(1);
+  });
+
+  it('lets a piece be pulled and swallow at once', () => {
+    // A cube lands on a segment that may well be mid-slide, so the two have to
+    // compose rather than one taking the sprite from the other.
+    const both = deformY(HARDEST, 1);
+
+    expect(both).toBeLessThan(deformY(0, 1));
+    expect(both).toBeGreaterThan(deformY(HARDEST, 0));
+  });
+
+  it('leaves a sprite at its resting size when nothing is happening to it', () => {
+    expect(deformX(PullShape.Lengthwise, 0, 0)).toBe(1);
+    expect(deformX(PullShape.Elbow, 0, 0)).toBe(1);
+    expect(deformY(0, 0)).toBe(1);
   });
 });
