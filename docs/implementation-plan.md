@@ -6,9 +6,11 @@ Sizes are relative (S < M < L), not calendar promises.
 
 References: [game-design.md](./game-design.md), [architecture.md](./architecture.md).
 
-> **Status: Phase 7 is the current phase**; 0–6 are done and marked ✅ below,
-> with Phase 6's real-device pass called out there as outstanding — it has now
-> had its first report, which is not the same as having been run.
+> **Status: all nine phases are done** and marked ✅ below, and the game is
+> served from <https://williamchong.github.io/candy-snake/>. What is still open
+> is not a phase but a risk: the swipe threshold has had one device report and
+> one fix since, and neither of those is the same as a phone having confirmed
+> it — see the risk register at the foot of this file.
 > This plan is where phase status is tracked — anything else that mentions it
 > (the README) links here rather than restating it.
 
@@ -670,7 +672,7 @@ is a shorter window for the same gesture. Recorded in both places, because the
 two would be worked by different phases and neither should discover the other
 late.
 
-## Phase 7 — Cheat sheet, hints & UX polish (M) ◀ current
+## Phase 7 — Cheat sheet, hints & UX polish (M) ✅
 
 - Collapsible mixing cheat sheet (edge tab, persisted state) — the
   non-obstructive requirement from design §4, drawn as the wordless mixing
@@ -1333,7 +1335,7 @@ seen to crawl, the peak comes down before anything else is touched: on a roomy
 desktop the board's container scale is exactly 1, so the sprites are sampled 1:1
 and that is where an uneven texel row would show first.
 
-## Phase 8 — Persistence, high scores & release (S)
+## Phase 8 — Persistence, high scores & release (S) ✅
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings
   (wire-up — earlier phases used in-memory defaults). No seen-hints: the
@@ -1445,6 +1447,72 @@ count has neither problem and is the thing the player was counting anyway.
 The table's floor of five entries on the smallest landscape frame is a guess
 about how much of a menu is worth reading, and it shares its trip with the swipe
 threshold the risk table has been holding open since Phase 6.
+
+### What the review pass settled — two bugs, and geometry left in the scenes
+
+Phase 8 shipped without the `/simplify` pass every other phase ended on. Running
+it late found the two things a screenshot could not.
+
+**The table dropped an entry it had room for, and the test said otherwise.**
+`scoreboard` rounded its pitch. Rounding *up* pushes the pitch past the share
+each entry actually has, `Math.floor(available / pitch)` then comes back under
+the count, and a row is cut while the pitch is still well clear of its 18 px
+floor — the one thing the paragraph above the function promises never happens.
+It bites on 40 of the 81 frame heights in the band, a 550 px-tall window among
+them. The existing test missed it because `scoreboard(200, 10)` divides exactly,
+so both roundings agree there; the new one sweeps the whole band instead.
+Flooring restores the invariant, since `pitch <= available / count` is what
+makes the room big enough for the entries it was measured against.
+
+**A run worth nothing was being called a new best.** `recordScore` was
+unconditional, so the first death of a first install — which happens during the
+teaching levels, at a score of 0 — went into an empty table, came back ranked
+first, and printed "a new best" under a screen already reading `0` and `0
+candies served`. The rule went into `insertScore` rather than the scene: it is a
+rule about what the table will hold, it belongs with the ranking it qualifies,
+and there it is unit-testable, which in the browser half it would not have been.
+The same edit stopped the write for a run that missed the ten — that table is
+byte-for-byte the one already on disk, and a `setItem` for it is a blocking
+write bought for nothing, on most game-overs once a player has ten runs banked.
+
+**Both screens' geometry had stayed in the scenes.** `ui/layout.ts` opens by
+calling itself "the only file that holds any", and Phase 8 honoured that for
+`scoreboard` and then wrote the rest of the same two screens' arithmetic inside
+`MenuScene` and `GameOverScene`, where no test can reach it. The title clamp is
+the sharp end of that: it is the arithmetic that wore the title off a 568×320
+phone during the phase, and it had no test. `menuPlan` and `centredColumn` moved
+across, and the eight viewports `layout.test.ts` already sweeps now cover both —
+the title-clamp test fails on exactly the 568×320 frame when the clamp is taken
+out, and nowhere else. `MARGIN` went with them, from `ui/text.ts` to
+`TEXT_MARGIN` in `layout.ts`: it was exported into a scene during Phase 8, and a
+length in pixels was never text's to own.
+
+**The one reuse finding taken only in part.** The review wanted the two screens
+on a single flow helper, on the evidence that both stack rows and both had
+independently arrived at 46 px of air above their exit line. The gap became
+`EXIT_GAP`, which is one piece of design and belongs in one place. The helper
+did not: the menu is laid out *downward from a clamped title* and the score
+screen is *stacked by its gaps and then centred*, and the docs for each explain
+why it has to be that one. Forcing the menu through a gap chain turns a legible
+`top - 30` into `size * 0.2 + TITLE_TO_TABLE - 30`. Two strategies that differ
+for stated reasons are not duplication, so only the genuinely shared primitive
+moved.
+
+**The run summary was spelled out three times** — the `game-over` event, the
+scene's `RunSummary`, and a field-by-field copy between them. This phase grew it
+from three fields to five and had to edit all three, which is the demonstration.
+It is declared once in `core/types.ts` now, and `GameScene` forwards the event
+whole: the event already *is* the summary, carrying only the tag that got the
+switch into that branch.
+
+**And a comment that described call sites that did not exist.** `TIERS` claimed
+four places keyed off it; exactly one did. The other three key off the
+`ColorTier` type through a `Record` and are exhaustive because of that, not
+because of the array — which, annotated `readonly ColorTier[]`, was precisely
+the declaration a fifth tier would slip past in silence. It is `TIER_ORDER` now
+(the name no longer collides with a different `TIERS` in `orders.ts`),
+`satisfies` catches a value that is not a tier, and a test walks `noServes` to
+catch a tier that was never listed.
 
 ## Milestone summary
 
