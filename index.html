@@ -7,6 +7,27 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <title>Candy Snake</title>
+    <meta
+      name="description"
+      content="An arcade game where the snake is a pulled sugar strand: grow it, knead red, yellow and blue dye into it, and chop it into candies for the children at the window."
+    />
+    <!--
+      The card. Absolute URLs on purpose: Vite builds with a relative base so the
+      game can be served from a subpath, but a crawler resolves these against
+      nothing and needs the whole address.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Candy Snake" />
+    <meta
+      property="og:description"
+      content="Pull sugar · knead dye · chop candy. A snake made of candy, in the browser."
+    />
+    <meta property="og:url" content="https://williamchong.github.io/candy-snake/" />
+    <meta
+      property="og:image"
+      content="https://williamchong.github.io/candy-snake/social-card.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
     <link
       rel="icon"
       href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍬</text></svg>"
@@ -34,7 +55,10 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
+    <!-- `main` rather than `div`: the canvas is the whole of the page's
+         content, so a screen reader landing here should be told so. Phaser
+         parents by id and does not care which element it is. -->
+    <main id="app"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
