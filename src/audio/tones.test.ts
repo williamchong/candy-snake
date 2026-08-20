@@ -21,6 +21,22 @@ const CUE_KEYS = Object.values(CueKey);
 
 const at = { x: 3, y: 4 };
 
+/**
+ * How much of `data` sits at one frequency. A single bin of a naive transform,
+ * which is all a check on which way round a filter is wired needs — and the
+ * only way to ask that question in Node, since the alternative is an ear.
+ */
+const energyAt = (data: Float32Array, hz: number, rate: number): number => {
+  let real = 0;
+  let imaginary = 0;
+  for (let index = 0; index < data.length; index += 1) {
+    const angle = (2 * Math.PI * hz * index) / rate;
+    real += (data[index] ?? 0) * Math.cos(angle);
+    imaginary += (data[index] ?? 0) * Math.sin(angle);
+  }
+  return Math.hypot(real, imaginary) / data.length;
+};
+
 const child = (id: number): Customer => ({ id, want: RAW, patience: undefined });
 
 /** A serve of the given streak — the only field the cue reads. */
@@ -80,6 +96,56 @@ describe('samples', () => {
     expect(samples(CUES[CueKey.Pop], 48000).length).toBeGreaterThan(
       samples(CUES[CueKey.Pop], RATE).length,
     );
+  });
+
+  it('leaves a partial on its harmonic when no ratio is given for it', () => {
+    // The defaults have to be exactly the old arithmetic and not merely close
+    // to it, because that is what made the eleven cues safe to re-voice one at
+    // a time: anything that changed after the fields went in changed because
+    // somebody wrote a number, not because the renderer moved underneath.
+    const plain = { ...CUES[CueKey.Arrive], ratios: undefined };
+    const spelled = { ...plain, ratios: [1, 2, 3, 4] };
+
+    expect([...samples(spelled, RATE)]).toStrictEqual([...samples(plain, RATE)]);
+  });
+
+  it('puts the noise where the band says and not where it does not', () => {
+    // The one fault here an ear finds in a second and no other test can see: a
+    // filter wired the wrong way round still renders, still fits in the buffer,
+    // and still starts and ends at silence. Asked of two specs that differ in
+    // nothing but the band, so it cannot be satisfied by a coincidence of the
+    // table.
+    const voice = { ...CUES[CueKey.Crack], partials: [], ratios: undefined, noise: 1 };
+    const high = samples({ ...voice, band: [4000, 9000] }, RATE);
+    const low = samples({ ...voice, band: [100, 400] }, RATE);
+
+    expect(energyAt(high, 6000, RATE)).toBeGreaterThan(energyAt(low, 6000, RATE));
+    expect(energyAt(low, 250, RATE)).toBeGreaterThan(energyAt(high, 250, RATE));
+  });
+
+  it('tells the crack and the slap apart by register, not by loudness', () => {
+    // Design §2's fantasy, as far as it can be pinned: sugar shattering is a
+    // thin bright thing and dye going nowhere is a wet low one. They are within
+    // a hair of each other in `gain`, so if this ever inverts the two events
+    // have swapped character while every other test stays green.
+    const crack = samples(CUES[CueKey.Crack], RATE);
+    const waste = samples(CUES[CueKey.Waste], RATE);
+
+    expect(energyAt(crack, 5000, RATE)).toBeGreaterThan(energyAt(waste, 5000, RATE));
+    expect(energyAt(waste, 200, RATE)).toBeGreaterThan(energyAt(crack, 200, RATE));
+  });
+
+  it.each(CUE_KEYS)('writes %s a band and a ratio the renderer can honour', (key) => {
+    // Two authoring mistakes the renderer takes in silence. Corners the wrong
+    // way round leave a residue that `noiseFor` then normalises back up to full
+    // scale — a loud arbitrary bed, no error anywhere. And a ratio past the last
+    // partial is simply dropped, so a cue would sound a voice short of what the
+    // table says it has. Both are cheaper to assert over the table once than to
+    // guard against on every cue at boot.
+    const { band, ratios, partials } = CUES[key];
+
+    if (band !== undefined) expect(band[0]).toBeLessThan(band[1]);
+    if (ratios !== undefined) expect(ratios).toHaveLength(partials.length);
   });
 });
 

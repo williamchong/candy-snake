@@ -21,6 +21,7 @@ Check the plan for the current phase before adding anything; features listed in 
 - `npx vitest run src/core/foo.test.ts` — single test file; add `-t 'name'` for one test
 - `npm run typecheck` / `npm run lint` / `npm run format:check` — gates; all must pass before committing
 - `npm run build` — typecheck + production build to `dist/`
+- `npx vite-node tools/audition.ts` — writes every cue and the ambient bed to `audition/*.wav`; the only way to judge a cue, since neither Vitest nor the smoke driver can hear
 - `node .claude/skills/run-candy-snake/driver.mjs` — headless smoke run: boots the game in Chromium, fails on console errors or missing canvas, saves a screenshot (see the run-candy-snake skill)
 
 ## Architecture: engine-free core
@@ -32,7 +33,7 @@ The one structural rule that matters (architecture.md §2):
 - Scene keys are constants in `src/scenes/keys.ts` — never raw string literals.
 - The color palette (mask → hex/symbol/name/tier) lives only in `core/colors.ts`; HUD and rendering look it up there so they can never disagree.
 - Textures are generated at runtime in BootScene: `render/textures.ts` holds ASCII pixel maps baked through `scene.textures.generate` against one fixed palette — there are no image assets in v1.
-- Audio works the same way and for the same reasons: `audio/tones.ts` describes each cue as numbers and renders it to samples, `audio/kitchen.ts` bakes those into `AudioBuffer`s at boot — there are no audio assets either.
+- Audio works the same way and for the same reasons: `audio/tones.ts` describes each cue as numbers and renders it to samples, `audio/kitchen.ts` bakes those into `AudioBuffer`s at boot — there are no audio assets either. A cue's character is `ratios` (partials placed off the harmonic series, which is what a brittle thing struck does) and `band` (the Hz its noise is kept between); both default to plain harmonics and white noise, and the filter runs over the noise, never over a finished cue.
 
 Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —

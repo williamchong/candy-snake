@@ -80,10 +80,33 @@ export interface CueSpec {
    * siren.
    */
   readonly bend: number;
-  /** Amplitude of the fundamental and each harmonic above it. */
+  /** Amplitude of the fundamental and each partial above it. */
   readonly partials: readonly number[];
+  /**
+   * Where each partial sits, as a multiple of `hz`, index-aligned with
+   * `partials`. Left out they fall on the **harmonic** series — one whole
+   * number apiece, which is the physics of a string or a tube and so of
+   * everything that can be plucked, blown or bowed.
+   *
+   * Brittle things *struck* — glass, ceramic, a slab of hard sugar — ring at
+   * ratios that are not whole numbers at all, and that inharmonicity is the
+   * whole of what the ear uses to tell "shattered" from "plucked". No tuning of
+   * the numbers above reaches it, which is the reason this field exists: the
+   * candy cues were unreachable from the table alone.
+   */
+  readonly ratios?: readonly number[];
   /** How much of the voice is noise rather than tone, 0..1. */
   readonly noise: number;
+  /**
+   * The corners, in Hz, the cue's noise is kept between. Left out it stays
+   * white — flat, and so neither bright nor dull.
+   *
+   * It is the noise rather than the tone that decides what an impact is made
+   * of, because it is the noise that carries the impact: a sugar crack lives at
+   * the top of the range and a wet slap at the bottom, on otherwise similar
+   * numbers.
+   */
+  readonly band?: readonly [number, number];
   /** Time to full volume, as a fraction of the duration. */
   readonly attack: number;
   /** Peak amplitude — how loud this cue sits against the others. */
@@ -110,124 +133,179 @@ const ONE_SHOT: RepeatSpec = { stepMs: 40, maxSteps: 2, semitones: 0, voices: 4 
  */
 export const CUES: Record<CueKey, CueSpec> = {
   // Short and soft: this is the most frequent sound in the game by a wide
-  // margin, and anything with a tail would smear into the next pull.
+  // margin, and anything with a tail would smear into the next pull. Sugar
+  // being drawn is the one candy sound here that is not a strike, so it keeps
+  // the harmonic series and takes the slowest attack in the table — a stretch
+  // rather than a knock.
   [CueKey.Pull]: {
-    durationMs: 90,
-    hz: 520,
-    bend: 1.18,
-    partials: [1, 0.25],
-    noise: 0,
-    attack: 0.06,
+    durationMs: 95,
+    hz: 500,
+    bend: 1.16,
+    partials: [1, 0.22],
+    noise: 0.12,
+    band: [400, 2600],
+    attack: 0.08,
     gain: 0.3,
     repeat: ONE_SHOT,
   },
+  // A glass jar tapped: partials near the 1 : 2.8 : 5.4 a struck tumbler rings
+  // at, over a hiss of a strike banded up where the tap is and nowhere else.
   [CueKey.Plink]: {
-    durationMs: 120,
-    hz: 660,
+    durationMs: 140,
+    hz: 880,
     bend: 1,
-    partials: [1, 0.4, 0.15],
-    noise: 0.02,
-    attack: 0.02,
+    partials: [1, 0.45, 0.2],
+    ratios: [1, 2.8, 5.4],
+    noise: 0.08,
+    band: [2500, 9000],
+    attack: 0.004,
     gain: 0.34,
     repeat: ONE_SHOT,
   },
   // Low, dull and falling — the one dye sound that is not a bell, because it is
-  // the one that reports a mistake.
+  // the one that reports a mistake. Dye going nowhere is a wet slap: mostly
+  // noise, banded low so there is no ring on it at all.
   [CueKey.Waste]: {
-    durationMs: 160,
-    hz: 150,
-    bend: 0.7,
-    partials: [1, 0.2],
-    noise: 0.25,
-    attack: 0.02,
+    durationMs: 150,
+    hz: 145,
+    bend: 0.68,
+    partials: [0.5, 0.1],
+    noise: 0.6,
+    band: [90, 800],
+    attack: 0.01,
     gain: 0.38,
     repeat: ONE_SHOT,
   },
   // One chop cuts a whole batch, so this is the cue that stacks hardest. It
   // climbs a whole tone per candy: the batch is *counted* rather than smeared.
+  // Shorter and drier than it was — a snip and a tick of hard sugar landing,
+  // where a rising blip was a synthesiser doing an impression of one.
   [CueKey.Pop]: {
-    durationMs: 110,
-    hz: 420,
-    bend: 1.6,
-    partials: [1, 0.3],
-    noise: 0.12,
-    attack: 0.01,
+    durationMs: 70,
+    hz: 700,
+    bend: 1.15,
+    partials: [0.6, 0.2],
+    ratios: [1, 3.2],
+    noise: 0.5,
+    band: [900, 6000],
+    attack: 0.002,
     gain: 0.36,
     repeat: { stepMs: 45, maxSteps: 5, semitones: 2, voices: 6 },
   },
+  // A candy going over the end of the rack and clattering into whatever is
+  // under it: the same falling shape as before, with the ring taken off it.
   [CueKey.Stale]: {
-    durationMs: 170,
-    hz: 300,
+    durationMs: 150,
+    hz: 280,
     bend: 0.6,
-    partials: [1, 0.35],
-    noise: 0.1,
-    attack: 0.02,
+    partials: [0.6, 0.25],
+    ratios: [1, 2.4],
+    noise: 0.5,
+    band: [220, 1600],
+    attack: 0.015,
     gain: 0.3,
     // The rack's own numbers (`ui/shelfStrip.ts`): what the eye was given for
     // this exact event, so the ear is given the same and the two stay in step.
     repeat: { stepMs: 70, maxSteps: 3, semitones: -1, voices: 4 },
   },
+  // Hard sugar shattering, and the cue this whole pass was asked for. Noise
+  // banded where a fracture actually lives, over partials at the
+  // 1 : 2.76 : 5.4 : 8.9 of a struck brittle plate. It was a 200 Hz thud, which
+  // is a heavy thing breaking; this is a thin thing breaking, and the whole
+  // difference between them is up here rather than in the loudness.
+  //
+  // The partials are written small on purpose, here and on the three cues above
+  // that are also impacts. `samples` divides by the sum of everything mixed in,
+  // so shrinking them is how the **noise** is made the thing that carries the
+  // sound — which is what a fracture is. Left at the amplitudes a bell wants,
+  // the noise sits at under a third of the voice and the crack pings.
   [CueKey.Crack]: {
-    durationMs: 260,
-    hz: 200,
-    bend: 0.45,
-    partials: [1, 0.6, 0.3],
-    noise: 0.7,
-    attack: 0.005,
+    durationMs: 130,
+    hz: 1100,
+    bend: 0.95,
+    partials: [0.5, 0.3, 0.2, 0.12],
+    ratios: [1, 2.76, 5.4, 8.9],
+    noise: 0.9,
+    band: [1600, 9000],
+    attack: 0.002,
     gain: 0.5,
     repeat: ONE_SHOT,
   },
   // Longer than the crack and quieter, so it is heard *under* it rather than
-  // as a second impact: one thing happened, and it cost something.
+  // as a second impact: one thing happened, and it cost something. Banded below
+  // where the crack sits for the same reason — the two share a moment and must
+  // not share a register.
   [CueKey.Life]: {
-    durationMs: 520,
-    hz: 180,
+    durationMs: 540,
+    hz: 175,
     bend: 0.5,
-    partials: [1, 0.5],
-    noise: 0.05,
-    attack: 0.04,
+    partials: [1, 0.5, 0.22],
+    ratios: [1, 2.05, 3.1],
+    noise: 0.06,
+    band: [60, 900],
+    attack: 0.05,
     gain: 0.34,
     repeat: ONE_SHOT,
   },
+  // The copper bell over a shop door. A small bell is close to harmonic with
+  // the upper partials pulled slightly sharp, which is what keeps it from
+  // reading as an organ — and a clapper leaves a bright tick, which is what the
+  // narrow band up top is.
   [CueKey.Arrive]: {
-    durationMs: 220,
-    hz: 780,
+    durationMs: 300,
+    hz: 740,
     bend: 1,
-    partials: [1, 0.5, 0.25],
-    noise: 0,
-    attack: 0.01,
+    partials: [1, 0.5, 0.3, 0.14],
+    ratios: [1, 2.02, 3.01, 4.25],
+    noise: 0.05,
+    band: [3000, 10000],
+    attack: 0.004,
     gain: 0.3,
     repeat: ONE_SHOT,
   },
+  // Glass rather than bell, and deliberately the most consonant thing in the
+  // table: it is the one cue that is a reward, it sounds up to sixteen
+  // semitones higher on a streak, and partials far off the harmonic series
+  // would turn that climb sour exactly as the player is doing well.
   [CueKey.Serve]: {
-    durationMs: 300,
+    durationMs: 320,
     hz: 660,
     bend: 1,
-    partials: [1, 0.6, 0.3, 0.12],
-    noise: 0,
-    attack: 0.008,
+    partials: [1, 0.5, 0.28, 0.12],
+    ratios: [1, 2.02, 3.05, 4.12],
+    noise: 0.04,
+    band: [2500, 9000],
+    attack: 0.006,
     gain: 0.42,
     repeat: ONE_SHOT,
   },
   [CueKey.Walkout]: {
-    durationMs: 620,
-    hz: 210,
+    durationMs: 640,
+    hz: 205,
     // Down a major third, slowly, with the harmonics left in: as close to a
-    // trombone as three sine partials get.
+    // trombone as four sine partials get. The ratios stay whole numbers because
+    // a trombone genuinely is harmonic — it is a tube — and the band is what
+    // supplies design §12's *muffled*, which until now was only implied by
+    // picking a low fundamental.
     bend: 0.79,
     partials: [1, 0.7, 0.5, 0.3],
-    noise: 0.03,
-    attack: 0.08,
+    noise: 0.05,
+    band: [70, 1100],
+    attack: 0.09,
     gain: 0.4,
     repeat: ONE_SHOT,
   },
+  // The shop closing: the walkout's shape, lower and longer, with the partials
+  // pulled a hair sharp so it is warm rather than square.
   [CueKey.Over]: {
-    durationMs: 900,
-    hz: 330,
+    durationMs: 950,
+    hz: 320,
     bend: 0.5,
-    partials: [1, 0.5, 0.25],
-    noise: 0.04,
-    attack: 0.03,
+    partials: [1, 0.55, 0.28, 0.12],
+    ratios: [1, 2.01, 3.02, 4.05],
+    noise: 0.05,
+    band: [60, 1500],
+    attack: 0.035,
     gain: 0.45,
     repeat: ONE_SHOT,
   },
@@ -259,10 +337,103 @@ const envelope = (at: number, attack: number): number => {
 };
 
 /** The loudest the buffer ever gets, which is what a normalise divides by. */
-export const peak = (data: Float32Array): number => {
+export const peak = (data: Float32Array | Float64Array): number => {
   let loudest = 0;
   for (const sample of data) loudest = Math.max(loudest, Math.abs(sample));
   return loudest;
+};
+
+/**
+ * One pole of low-pass, a sample at a time: the held value moved a fraction of
+ * the way toward the new one. Shared by the cues' band and the bed's bloom
+ * because it is the same filter — what differs between them is only what the
+ * held value is primed with (`lowPass`).
+ */
+const toward = (held: number, sample: number, pole: number): number =>
+  held + (1 - pole) * (sample - held);
+
+/**
+ * The pole that puts a one-pole corner at `hz`. This way round so that a band
+ * is written in the units it is heard in, like everything else in this file: a
+ * bare coefficient is a number nobody can read a frequency off, which is why
+ * the bed's own 0.9 needs a sentence explaining where it sits.
+ */
+const poleFor = (hz: number, rate: number): number =>
+  Math.exp((-2 * Math.PI * hz) / rate);
+
+/**
+ * Keeps noise between two corners: one pole of low-pass at the top, less the
+ * same again at the bottom, which is a high-pass. Six dB a side — the gentle
+ * slope the bed already uses, and enough to carry a burst from bright to dull,
+ * which is all the ear is being asked for here.
+ *
+ * `low` below `high`, which the type cannot say: given them the other way round
+ * the two poles cancel to a residue, and `noiseFor` then normalises that residue
+ * back up to full scale — a loud, arbitrary bed rather than an error. The cue
+ * table is asserted against that in `tones.test.ts` rather than guarded here,
+ * where the check would run on every cue at boot to catch a typo made once.
+ *
+ * Run over the noise alone and **never** over a finished cue. `envelope` is
+ * what makes every buffer start and end at exactly zero, and a filter
+ * downstream of it would leave a small non-zero tail — which is a click, the
+ * one flaw an ear finds instantly and a picture of the waveform does not show
+ * at all.
+ */
+const bandLimit = (
+  data: Float64Array,
+  rate: number,
+  [low, high]: readonly [number, number],
+): void => {
+  const top = poleFor(high, rate);
+  const bottom = poleFor(low, rate);
+
+  let above = 0;
+  let below = 0;
+  for (let index = 0; index < data.length; index += 1) {
+    above = toward(above, data[index] ?? 0, top);
+    below = toward(below, above, bottom);
+    data[index] = above - below;
+  }
+};
+
+/**
+ * The noise a cue is mixed with, rendered ahead of the voice rather than inside
+ * it: colouring it means filtering it, and a filter needs the sample before the
+ * one it is on, which the loop below does not keep.
+ *
+ * Normalised back to full scale once the band is taken out, and that is
+ * load-bearing rather than tidiness. `samples` divides by the total weight of
+ * everything summed into the voice, which is what makes clipping impossible,
+ * and that sum takes the noise term at ±1. A narrow band throws most of the
+ * energy away — so without this a banded cue would simply come out quiet, and
+ * quiet in a way that moved with the corners rather than with `gain`.
+ */
+const noiseFor = (
+  band: readonly [number, number] | undefined,
+  count: number,
+  rate: number,
+): Float64Array => {
+  // Doubles, where the cue it feeds is floats: this is scratch rather than
+  // output, and rounding it to the buffer's precision before the filter has run
+  // would put a rounding step *inside* the arithmetic rather than at the end of
+  // it. It is also what keeps an unbanded cue bit-for-bit what it was before
+  // there was a band to put it through — the property the whole re-voicing was
+  // measured against.
+  const out = new Float64Array(count);
+  const rng = createRng(NOISE_SEED);
+
+  for (let index = 0; index < count; index += 1) out[index] = rng.next() * 2 - 1;
+  if (band === undefined) return out;
+
+  bandLimit(out, rate, band);
+
+  const loudest = peak(out);
+  if (loudest > 0) {
+    for (let index = 0; index < count; index += 1)
+      out[index] = (out[index] ?? 0) / loudest;
+  }
+
+  return out;
 };
 
 /**
@@ -276,8 +447,25 @@ export const peak = (data: Float32Array): number => {
 export const samples = (spec: CueSpec, rate: number): Float32Array => {
   const count = Math.max(2, Math.round((spec.durationMs / 1000) * rate));
   const out = new Float32Array(count);
-  const rng = createRng(NOISE_SEED);
   const weight = spec.partials.reduce((sum, amp) => sum + Math.abs(amp), 0) + spec.noise;
+  const noise = noiseFor(spec.band, count, rate);
+
+  // The voice resolved once, per cue rather than per sample: `ratios` carries
+  // the harmonic default for any partial the table did not place.
+  //
+  // Typed arrays rather than `map`, and that is measured rather than reflex. A
+  // plain array comes out holding small integers for a cue that takes the
+  // default and doubles for one that does not, which makes the load in the
+  // inner loop polymorphic across the eleven bakes; typing them is about six
+  // percent of the whole boot-time bake, the same order as the `forEach` that
+  // loop is already written to avoid.
+  const voices = spec.partials.length;
+  const ratios = new Float64Array(voices);
+  const amplitudes = new Float64Array(voices);
+  for (let harmonic = 0; harmonic < voices; harmonic += 1) {
+    ratios[harmonic] = spec.ratios?.[harmonic] ?? harmonic + 1;
+    amplitudes[harmonic] = spec.partials[harmonic] ?? 0;
+  }
 
   let phase = 0;
   for (let index = 0; index < count; index += 1) {
@@ -290,9 +478,9 @@ export const samples = (spec: CueSpec, rate: number): Float32Array => {
     // Indexed rather than `forEach`: the callback would be a fresh closure per
     // sample, which across the eleven cues is a hundred and fifty thousand of
     // them, and it costs about a quarter of the whole boot-time bake.
-    let voice = spec.noise * (rng.next() * 2 - 1);
-    for (let harmonic = 0; harmonic < spec.partials.length; harmonic += 1) {
-      voice += (spec.partials[harmonic] ?? 0) * Math.sin(phase * (harmonic + 1));
+    let voice = spec.noise * (noise[index] ?? 0);
+    for (let harmonic = 0; harmonic < voices; harmonic += 1) {
+      voice += (amplitudes[harmonic] ?? 0) * Math.sin(phase * (ratios[harmonic] ?? 1));
     }
 
     out[index] = (voice / weight) * spec.gain * envelope(at, spec.attack);
@@ -317,11 +505,16 @@ const AMBIENCE_SECONDS = 4;
 const AMBIENCE_SEED = 0x0ddba11;
 
 /**
- * How much of each new sample the filter lets through. Two passes at this makes
- * a gentle 12 dB slope from somewhere under 200 Hz — hiss taken off until what
- * is left is a room rather than a noise.
+ * Where the bed's hiss is taken off, in the same units a cue's `band` is written
+ * in. Two passes at this makes a gentle 12 dB slope, leaving a room rather than
+ * a noise.
+ *
+ * It was the coefficient 0.9 with a comment saying "somewhere under 200 Hz",
+ * from before there was anything to convert one into the other. That guess was
+ * right to four figures — `poleFor(185, AMBIENCE_RATE)` is 0.8999 — so this
+ * says the frequency now and lets the arithmetic do what the sentence was for.
  */
-const AMBIENCE_POLE = 0.9;
+const AMBIENCE_CORNER_HZ = 185;
 
 /**
  * Long enough for the filter to forget where it started. Its memory is a few
@@ -348,16 +541,13 @@ const AMBIENCE_GAIN = 0.16;
  * second time. Which it is.
  */
 const lowPass = (data: Float32Array, pole: number): void => {
-  const step = (held: number, sample: number): number =>
-    held + (1 - pole) * (sample - held);
-
   let held = 0;
   for (let i = Math.max(0, data.length - AMBIENCE_WARMUP); i < data.length; i += 1) {
-    held = step(held, data[i] ?? 0);
+    held = toward(held, data[i] ?? 0, pole);
   }
 
   for (let i = 0; i < data.length; i += 1) {
-    held = step(held, data[i] ?? 0);
+    held = toward(held, data[i] ?? 0, pole);
     data[i] = held;
   }
 };
@@ -391,8 +581,9 @@ export const ambience = (): Float32Array => {
 
   for (let i = 0; i < count; i += 1) out[i] = rng.next() * 2 - 1;
 
-  lowPass(out, AMBIENCE_POLE);
-  lowPass(out, AMBIENCE_POLE);
+  const pole = poleFor(AMBIENCE_CORNER_HZ, AMBIENCE_RATE);
+  lowPass(out, pole);
+  lowPass(out, pole);
 
   const loudest = peak(out);
   const scale = loudest > 0 ? AMBIENCE_GAIN / loudest : 0;

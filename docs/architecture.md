@@ -246,6 +246,16 @@ only calls `createBuffer` and `play`. Cues hang off the same `GameEvent` stream
 the effects do and are fed from the same loop in `GameScene`, so nothing polls
 state to make a sound (§7).
 
+A cue's **timbre** is two optional fields on the same table. `ratios` puts each
+partial somewhere other than its harmonic — brittle things struck ring at
+fractions, and that inharmonicity is what separates a shatter from a pluck — and
+`band` states, in Hz, the corners the cue's noise is kept between, which is what
+makes one impact bright and another dull. Both default to what the eleven voices
+did before they existed, so the renderer was proved byte-for-byte unchanged
+before a single cue was re-voiced. The filter runs over the *noise* and never
+over a finished cue: `envelope` is what makes every buffer start and end at
+exactly zero, and anything downstream of it would leave the tail that clicks.
+
 The ambient bed is the exception that proves the shape: it is not an event, so
 the run opens it and the scene's `shutdown` closes it — sounds are global and
 outlive the scene that made them, so a bed left playing would stack with the
@@ -351,8 +361,10 @@ definition.
   elbow's shortfall is covered by its neighbour's overhang),
   `render/burst.ts` (a knock never exceeds its pixel budget on any viewport),
   `audio/tones.ts` (no cue clips, none starts or ends part-way up a waveform,
-  the serve chime stops climbing where the streak bonus does, and the bed's loop
-  point is a smaller step than any step inside it),
+  the serve chime stops climbing where the streak bonus does, the bed's loop
+  point is a smaller step than any step inside it, and a cue's noise lands in
+  the band it was given — which is the one way a filter can be wrong that still
+  renders, still fits, and still ends in silence),
   `audio/kitchen.ts` (a cue keeps sounding once the last one has finished — the
   one audio fault an ear reports and nothing else would — and the bed goes with
   the scene that owned it),
@@ -364,6 +376,14 @@ definition.
   into the bench, asserting invariants on every tick (≥1 sugar on map, no
   pickup on snake, lives in range, shelf ≤ 6, queue within cap, no child
   waiting beside a candy they ordered, no clock on an opening-level customer).
+- **Audition (`tools/audition.ts`):** `npx vite-node tools/audition.ts` writes
+  every cue and the bed to `.wav`. The audio counterpart of the smoke driver
+  below, and it exists for the mirror-image reason: that harness is there
+  because the tests cannot see, this one because they cannot hear. Whether a cue
+  clips is a property; whether it sounds like breaking candy is a judgement, and
+  a judgement needs an ear and twelve files rather than a run of the game and
+  the patience to provoke a self-hit. `vite-node` comes with Vitest, so it costs
+  no dependency.
 - **Smoke (Playwright):** `.claude/skills/run-candy-snake/driver.mjs` boots
   Vite in-process, loads the page headless, fails on any console error or a
   missing canvas, and saves a screenshot. Not a nice-to-have: nothing that

@@ -705,6 +705,27 @@ High scores (top 10, with date) persist in `localStorage`.
 - Light looping kitchen ambience; all audio behind a mute toggle (and starts
   only after first user gesture, per mobile autoplay rules).
 
+### The cues are the kitchen, not an arcade (revised after the audio pass)
+
+§2 maps every verb onto a step of real candy making, and the cues are held to
+that as much as the art is. What each one is *of*: sugar stretching, a glass jar
+tapped, dye slapping onto nothing, a snip at the block, a candy clattering off
+the rack, **hard sugar shattering** at a self-hit, a copper bell over the shop
+door, a glass chime at a serve, and something muffled and low at each of the
+three ways a run gets worse.
+
+The one that carries the idea is the crack. Sugar breaking is *thin and bright*:
+a burst of noise well above a kilohertz over partials that are not whole-number
+multiples of anything, because brittle things struck do not ring in a harmonic
+series and that is the whole of how an ear tells "shattered" from "plucked". It
+was a 200 Hz thud, which is a heavy thing breaking — a fair sound, of the wrong
+event.
+
+None of this is licence to make the kitchen loud. Every cue still has to be
+readable *under* the strand the player is steering, the counting and climbing
+that carry information (§9's streak, a batch's size) come first, and a cue that
+sounds like the fiction but hides a number is the wrong trade.
+
 ## 13. Out of scope (v1) / future ideas
 
 - Online leaderboard, accounts, or any backend.
