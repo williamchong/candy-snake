@@ -696,9 +696,9 @@ late.
   serve confetti, patience-bar urgency pulse, and the stale-candy toss off the
   rack (design §5). Now that the strand is drawn as one rope (design §2),
   stretching it along its travel axis as it is pulled belongs here too.
-  - **The urgency pulse and the stale toss are built** — the two items on this
-    list that had a player behind them rather than only a checklist entry. What
-    is left is the five that do not.
+  - **All seven are built.** The urgency pulse and the stale toss went first,
+    being the two with a player behind them rather than only a checklist entry;
+    the other five landed together in the pass recorded below.
   - **The toss taught the list something.** `candy-staled` fires once per candy
     pushed off, and one chop can overflow a full rack several times inside a
     single tick — and every one of those candies leaves the *same* slot. Played
@@ -708,12 +708,15 @@ late.
     two batches coming apart can fill it. Any later effect that plays per-item
     off a single event has the same trap under it: the chop pop is per-cell and
     so is safe, the serve confetti is per-customer and so is too.
-  - **A pooled HUD effect is not a pooled board effect.** `ShardBurst`'s puffs
+  - **A pooled HUD effect is not a pooled board effect.** The board's puffs
     ride inside `BoardView`'s container, so a resize moves them with everything
     else; the rack has no container, so a toss in mid-air is aimed at
     coordinates the next `applyFrame` invalidates — and `Scale.RESIZE` fires
     that on every frame of a window drag. It cuts them instead. Worth knowing
-    before the next effect is hung off the HUD rather than the board.
+    before the next effect is hung off the HUD rather than the board. This is
+    now a constructor argument rather than a footnote: `Burst` takes a
+    container or does not, and a host without one calls `clear` from its own
+    `applyFrame`.
 - **The urgency pulse is the one juice item with a rule attached**, and it has a
   playtest behind it now: the fifth sitting reported no warning at all before a
   child walks out. There is one — `ui/customerView.ts` swaps the face to
@@ -1253,6 +1256,74 @@ delivered.
   streak bonus partly self-limiting, and whether that reads as pressure or as
   punishment is a chair question. If it reads as punishment, the fix is to key
   on base tier points and drop the multipliers, not to abandon score.
+
+### What the juice pass settled — the view is a move behind, and it does not bite evenly
+
+The five items with no player behind them, built together. Two things came out
+of it that the next effect will want, and neither was on the list.
+
+**The one-move lag is a hazard for anything fired off an event at a board cell,
+and it hits the three of them differently.** `syncToState` draws the strand
+*arriving* at the cell it already occupies logically, and holds pickups back a
+move to match — which is why `flashHead` exists at all. So:
+
+- **The chop pop needs no compensation.** The batch is `slides: false` and
+  retargeted straight from state, so the candy the player was looking at leaves
+  on the same sync the pop lands on.
+- **The eat squash needs none either, and the reason is worth keeping.** A cube
+  is not spent when the *head* reaches it — it is spent when the tail vacates
+  its cell, which is what lets it appear to become the tail rather than vanish.
+  The strand being drawn a move behind puts the cube's cell exactly where the
+  strand is being drawn now. The two errors cancel.
+- **The shatter needs a full move of hold.** The break is found after the move,
+  so played on the tick it was reported the shards and the knock land a whole
+  cell before the head is seen to touch anything. Two fields and a swap at the
+  end of `syncToState`, deliberately not a queue with a delay on it: the hold is
+  exactly one move and a general "play this later" is how it becomes two.
+  `state.tick` advances once per grid move and `MAX_CATCHUP_MS` is under the
+  ramp's floor of 125 ms/cell, so `syncToState` runs at most once per move and
+  the swap cannot double up or be skipped.
+
+**`camera.shake` takes a fraction of the viewport, not a distance.** Phaser
+offsets by `intensity × width` and `intensity × height`, so one intensity gives
+a 390×844 phone a 0.8 px knock and a 1600×900 desktop a 3.2 px one. Design §2
+makes comfort a constraint rather than a polish item, and a constraint that
+cannot be stated in pixels is one that cannot be held — so the budget is spent
+in pixels and converted against the longer edge. Two pixels for an eighth of a
+second. This is the first thing in the game to spend the parallel-scene split
+architecture §6 bought precisely for it.
+
+**A rope piece may never be drawn shorter than its cell.** The pull thins the
+strand and the swallow swells it, and both had to be shaped around that: a piece
+inside its own cell opens a gap at the joint with its neighbour, which is the row
+of beads the continuous strand exists to replace. So the pull only ever
+lengthens; an elbow, which has no single direction to lengthen in, takes the
+across factor on both axes and has its shortfall covered by the overhang of the
+straight beside it; and the eat squash swells *across only* rather than the
+classic fat-and-short. It is the truer reading anyway — a cube going in is extra
+sugar — and it is the exact complement of the pull, which is the same material
+going thin. All three are unit tests rather than screenshots.
+
+**What is left silent is now written down as deliberate.** `strand-cut`,
+`dye-kneaded`, `sugar-spawned` and `dye-spawned` play nothing on purpose: the
+block already speaks for a cut one candy per move, a knead recolors the segment
+in front of the player, and a pickup appearing is a thing appearing. Design §12
+asks for five effects and these are not among them.
+
+**Two things a screenshot could not have settled.** The strand's stretch is 6%
+at its peak and every segment sits at *exactly* resting size at both ends of a
+move — sampled across the cycle, because a stretch still part-way applied when
+the move ticks over snaps back at 5 Hz, which design §2 names as painful rather
+than merely ugly. And a resize mid-cheer releases every confetti piece back to
+the pool: `killTweensOf` does not run `onComplete`, so a piece left claimed is
+one the pool can never hand out again — silently, with no console error for the
+smoke driver to catch.
+
+**Still a chair question.** The stretch is a feel item and the knock is a
+comfort item, and neither is settled by a screenshot. If the rope's soft edge is
+seen to crawl, the peak comes down before anything else is touched: on a roomy
+desktop the board's container scale is exactly 1, so the sprites are sampled 1:1
+and that is where an uneven texel row would show first.
 
 ## Phase 8 — Persistence, high scores & release (S)
 

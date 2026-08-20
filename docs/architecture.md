@@ -85,6 +85,9 @@ candy-snake/
     │   ├── textures.ts        # runtime-generated candy/strand/jar textures
     │   ├── drawn.ts           # sprite + symbol glyph pairing, shared with ui/
     │   ├── strand.ts          # segment neighbours → rope piece + rotation (pure)
+    │   ├── melt.ts            # where two colours meet along the rope (pure)
+    │   ├── deform.ts          # the pull, and the swallow: per-frame scale (pure)
+    │   ├── burst.ts           # where a burst throws; the knock's budget (pure)
     │   ├── boardView.ts       # grid → sprites, segment coloring
     │   └── effects.ts         # particles, tweens (chop pop, shatter, confetti)
     ├── ui/
@@ -290,7 +293,10 @@ back to defaults silently. No PII, no backend.
   eviction, pity-spawner guarantees, difficulty curve monotonicity, scoring
   incl. streak caps. Deterministic via seeded `rng.ts`. Beyond `core/`, this
   covers the pure modules the Phaser layer leans on — `input/directionQueue.ts`
-  and `render/strand.ts` (rope pieces, rotations, wrapped neighbours).
+  and `render/strand.ts` (rope pieces, rotations, wrapped neighbours),
+  `render/melt.ts`, `render/deform.ts` (the pull never shortens a piece; an
+  elbow's shortfall is covered by its neighbour's overhang) and
+  `render/burst.ts` (a knock never exceeds its pixel budget on any viewport).
 - **Simulation tests:** `core/simulation.test.ts` plays whole runs with a bot
   that grows a segment, takes it through the jars the order needs and drives it
   into the bench, asserting invariants on every tick (≥1 sugar on map, no

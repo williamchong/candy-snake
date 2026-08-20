@@ -14,8 +14,10 @@ your shop window — before their patience runs out.
 difficulty ramp that will eventually beat you, game over, restart — on desktop
 and, with swipe steering and a layout that follows the screen, on a phone in
 either orientation. The mixing wheel is in, up by default and on a tab that
-puts it away if you would rather it were not. Juice, audio and persistence are
-still ahead; the
+puts it away if you would rather it were not. The juice is in — the strand goes
+thin as you pull it and swells where a cube goes in, candies pop off the bench,
+a self-hit cracks and knocks the kitchen, and a served child gets confetti.
+Audio and persistence are still ahead; the
 [implementation plan](docs/implementation-plan.md) tracks which phase the work
 is on.
 
