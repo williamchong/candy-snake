@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { RAW, type GameEvent } from '../core/types';
 import { Kitchen } from './kitchen';
-import { CUES, CueKey } from './tones';
+import { AMBIENCE_KEY, CUES, CueKey } from './tones';
 
 /**
  * `kitchen.ts` imports Phaser for its types only, so it loads under Node and
@@ -16,6 +16,8 @@ import { CUES, CueKey } from './tones';
  */
 const bench = (baked = true) => {
   const played: Array<{ key: string; delay: number; rate: number }> = [];
+  const beds: Array<{ key: string; loop: boolean; alive: boolean }> = [];
+  const shutdown: Array<() => void> = [];
   let now = 0;
 
   const scene = {
@@ -24,11 +26,28 @@ const bench = (baked = true) => {
         return now;
       },
     },
+    events: {
+      once: (event: string, run: () => void) => {
+        if (event === 'shutdown') shutdown.push(run);
+      },
+    },
     cache: { audio: { exists: () => baked } },
     sound: {
       play: (key: string, config: { delay: number; rate: number }) => {
         played.push({ key, delay: config.delay, rate: config.rate });
         return true;
+      },
+      add: (key: string, config: { loop: boolean }) => {
+        const bed = { key, loop: config.loop, alive: false };
+        beds.push(bed);
+        return {
+          play: () => {
+            bed.alive = true;
+          },
+          destroy: () => {
+            bed.alive = false;
+          },
+        };
       },
     },
   };
@@ -36,6 +55,8 @@ const bench = (baked = true) => {
   return {
     kitchen: new Kitchen(scene as unknown as Phaser.Scene),
     played,
+    beds,
+    shutDown: () => shutdown.forEach((run) => run()),
     wait: (ms: number) => {
       now += ms;
     },
@@ -112,5 +133,54 @@ describe('Kitchen', () => {
     kitchen.play(pull);
 
     expect(played).toHaveLength(0);
+  });
+});
+
+describe('the bed', () => {
+  it('is not playing until the shop opens', () => {
+    // A Kitchen is built to sound events; the room tone is something the run
+    // turns on, so building one must not start it.
+    expect(bench().beds).toHaveLength(0);
+  });
+
+  it('loops, once opened', () => {
+    const { kitchen, beds } = bench();
+    kitchen.open();
+
+    expect(beds).toStrictEqual([{ key: AMBIENCE_KEY, loop: true, alive: true }]);
+  });
+
+  it('opens once however often it is asked', () => {
+    const { kitchen, beds } = bench();
+    kitchen.open();
+    kitchen.open();
+
+    expect(beds).toHaveLength(1);
+  });
+
+  it('goes with the scene that owned it', () => {
+    // A fresh Kitchen is built for every run, so a bed left playing would stack
+    // with the next run's — a little louder on each restart.
+    const { kitchen, beds, shutDown } = bench();
+    kitchen.open();
+    shutDown();
+
+    expect(beds[0]?.alive).toBe(false);
+  });
+
+  it('can open again after a shutdown, and is one bed still', () => {
+    const { kitchen, beds, shutDown } = bench();
+    kitchen.open();
+    shutDown();
+    kitchen.open();
+
+    expect(beds.filter((bed) => bed.alive)).toHaveLength(1);
+  });
+
+  it('stays quiet when nothing was baked', () => {
+    const { kitchen, beds } = bench(false);
+    kitchen.open();
+
+    expect(beds).toHaveLength(0);
   });
 });

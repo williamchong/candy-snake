@@ -1,7 +1,16 @@
 import type Phaser from 'phaser';
 
 import type { GameEvent } from '../core/types';
-import { CUES, cueFor, repeat, samples, type CueKey } from './tones';
+import {
+  AMBIENCE_KEY,
+  AMBIENCE_RATE,
+  ambience,
+  CUES,
+  cueFor,
+  repeat,
+  samples,
+  type CueKey,
+} from './tones';
 
 /**
  * The Phaser half of the audio layer: bakes the cues `audio/tones.ts` describes
@@ -42,13 +51,19 @@ export const generateCues = (scene: Phaser.Scene): void => {
 
   const { context } = sound;
 
-  for (const [key, spec] of Object.entries(CUES)) {
-    const data = samples(spec, context.sampleRate);
-    const buffer = context.createBuffer(1, data.length, context.sampleRate);
+  const bake = (key: string, data: Float32Array, rate: number): void => {
+    const buffer = context.createBuffer(1, data.length, rate);
 
     buffer.getChannelData(0).set(data);
     scene.cache.audio.add(key, buffer);
+  };
+
+  for (const [key, spec] of Object.entries(CUES)) {
+    bake(key, samples(spec, context.sampleRate), context.sampleRate);
   }
+
+  // The bed keeps its own, lower rate; Web Audio resamples it on playback.
+  bake(AMBIENCE_KEY, ambience(), AMBIENCE_RATE);
 };
 
 export class Kitchen {
@@ -62,10 +77,39 @@ export class Kitchen {
   private readonly sounding = new Map<CueKey, number[]>();
   /** Nothing was baked — see `webAudio` above. Checked once, not per event. */
   private readonly silent: boolean;
+  /** The room tone, while a run is going on. */
+  private bed: Phaser.Sound.BaseSound | undefined;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.silent = Object.keys(CUES).some((key) => !scene.cache.audio.exists(key));
+    this.silent = [...Object.keys(CUES), AMBIENCE_KEY].some(
+      (key) => !scene.cache.audio.exists(key),
+    );
+
+    // A fresh Kitchen is built for every run, so the last one's bed has to be
+    // taken down with the scene that owned it — otherwise a restart leaves two
+    // playing, a little louder each time. `shutdown` covers every way out of a
+    // run, the game-over branch included, which is why it is here rather than
+    // hung off that one event.
+    scene.events.once('shutdown', () => {
+      this.close();
+    });
+  }
+
+  /**
+   * Opens the shop. Separate from the constructor because the bed is a thing
+   * the run turns on, not a thing the object needs to exist.
+   */
+  open(): void {
+    if (this.silent || this.bed !== undefined) return;
+
+    this.bed = this.scene.sound.add(AMBIENCE_KEY, { loop: true });
+    this.bed.play();
+  }
+
+  private close(): void {
+    this.bed?.destroy();
+    this.bed = undefined;
   }
 
   /**

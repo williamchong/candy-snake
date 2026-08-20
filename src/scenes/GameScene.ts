@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene {
     this.turns = new DirectionQueue(this.core.state.snake.dir);
     this.view = new BoardView(this);
     this.kitchen = new Kitchen(this);
+    this.kitchen.open();
     this.accumulatorMs = 0;
 
     // Both adapters normalize into the same queue, so nothing downstream of

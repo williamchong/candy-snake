@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import { PRIMARIES, RED } from '../core/colors';
 import { RAW, type Customer, type GameEvent } from '../core/types';
-import { CUES, CueKey, cueFor, repeat, samples, semitones } from './tones';
+import {
+  AMBIENCE_RATE,
+  ambience,
+  CUES,
+  CueKey,
+  cueFor,
+  repeat,
+  peak,
+  samples,
+  semitones,
+} from './tones';
 
 const RATE = 44100;
 
@@ -27,9 +37,6 @@ const cueOf = (event: GameEvent): { key: CueKey; rate: number } => {
   if (cue === undefined) throw new Error(`${event.type} made no sound`);
   return cue;
 };
-
-const peak = (data: Float32Array): number =>
-  data.reduce((loudest, sample) => Math.max(loudest, Math.abs(sample)), 0);
 
 describe('samples', () => {
   it.each(CUE_KEYS)('renders %s to a buffer with something in it', (key) => {
@@ -159,5 +166,57 @@ describe('repeat', () => {
     // `GameScene` catches up as many as five ticks in one frame after a stall,
     // so even a once-a-run cue can be asked for twice with no time in between.
     expect(repeat(key, 1)?.delayMs).toBeGreaterThan(0);
+  });
+});
+
+/** The biggest jump between one sample and the next, anywhere inside the loop. */
+const widestStep = (data: Float32Array): number => {
+  let widest = 0;
+  for (let i = 1; i < data.length; i += 1) {
+    widest = Math.max(widest, Math.abs((data[i] ?? 0) - (data[i - 1] ?? 0)));
+  }
+  return widest;
+};
+
+describe('ambience', () => {
+  it('joins to itself no harder than it joins to itself anywhere else', () => {
+    // The whole reason the bed needs no crossfade, and the one property that
+    // cannot be heard until it has been wrong for a minute: the wrap has to be
+    // an ordinary step, not a step at all out of the ordinary. A filter begun
+    // from silence would fail this — its first samples would not match its
+    // last — which is what the pre-roll in `lowPass` is for.
+    const bed = ambience();
+    const seam = Math.abs((bed[0] ?? 0) - (bed[bed.length - 1] ?? 0));
+
+    expect(seam).toBeLessThan(widestStep(bed));
+  });
+
+  it('stays under the cues it plays beneath', () => {
+    // A bed anybody notices is a bed in the way (design §12: *light*).
+    const loudest = peak(ambience());
+
+    expect(loudest).toBeGreaterThan(0);
+    expect(loudest).toBeLessThan(peak(samples(CUES[CueKey.Pull], RATE)));
+  });
+
+  it('breathes a whole number of times, so the swell wraps with the noise', () => {
+    // A fractional swell would put a step in the envelope at the loop point
+    // even with the noise itself joining cleanly.
+    const bed = ambience();
+    const quarter = Math.floor(bed.length / 4);
+    const loudness = (from: number): number => peak(bed.subarray(from, from + quarter));
+
+    expect(loudness(0)).toBeCloseTo(loudness(bed.length - quarter), 1);
+  });
+
+  it('bakes the same bed every time', () => {
+    expect([...ambience()]).toStrictEqual([...ambience()]);
+  });
+
+  it("is rendered at its own rate, well under the hardware's", () => {
+    // There is nothing above a few hundred Hz in it, so the bandwidth the
+    // device would give it is bandwidth spent on silence.
+    expect(AMBIENCE_RATE).toBeLessThan(RATE);
+    expect(ambience()).toHaveLength(AMBIENCE_RATE * 4);
   });
 });

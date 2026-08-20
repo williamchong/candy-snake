@@ -745,10 +745,10 @@ late.
   - **The bubble breathes and the candy inside it does not.** The order is the
     one thing in the queue the player has to actually read off a glance, so the
     motion is put on the frame around it rather than on it.
-- Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted. **The
-  cue set, the unlock and the mute are built**, which is what finally makes the
-  criterion below true; the ambient loop is the one piece still open, kept back
-  deliberately so it can be judged by ear on its own. See the audio pass below.
+- Audio: SFX set + ambient loop, gesture-gated unlock, mute persisted. **All of
+  it is built**, which is what finally makes the criterion below true. The bed
+  came second and on its own, so it could be judged by ear without unpicking the
+  cues. See the audio pass below.
 
 **Done when:** a new player understands mixing without leaving the game, and
 every core event has audiovisual feedback.
@@ -1518,6 +1518,34 @@ shipped asks the question where the glyph is empty instead — waves, or no wave
 — and is struck as a shape through `shade` rather than drawn by hand, for the
 reason that helper already gives about arcs. Worth knowing before the next HUD
 icon tries to say something by overlay.
+
+**The bed loops without a crossfade, and that is a property of how it is made.**
+A filter begun from silence takes a moment to settle, so its first samples do
+not match its last — and that mismatch is the click a loop makes every time it
+comes round. The bed's low-pass is primed on the tail of the buffer before it
+runs over the front, so the state at sample 0 is already the state sample 0
+*would* have if the buffer were playing for the second time. Which it is. What
+that buys is a test: the seam has to be a smaller step than the biggest step
+occurring naturally inside the loop, and it is, by a factor of five — where
+without the priming it is nearly three times larger, which is audible. That is
+the whole question — *does it tick every four seconds* — asked once, in Node,
+instead of by sitting and listening for a minute.
+
+It is also the one thing here baked at less than the hardware's rate. There is
+nothing above a couple of hundred Hz in it, so the bandwidth the device would
+give it is bandwidth spent on silence; Web Audio resamples it on the way out.
+And it is noise rather than tone on purpose: a kitchen is a room before it is an
+instrument, and anything with a pitch in it would sit in the same ear the cues
+are trying to reach.
+
+**Phaser loops it with two sources, not one.** `WebAudioSound` pre-schedules the
+next repetition at a sample-accurate time and swaps to it, which is why the bed
+has to join to itself cleanly in the buffer — there is no crossfade anywhere to
+hide behind. It is also why a bed left running is a real hazard: sounds are
+global and outlive the scene that made them, so a fresh run would stack a second
+copy on the first, a little louder each restart. The Kitchen takes its bed down
+on the scene's `shutdown`, which covers every way out of a run rather than only
+the game-over branch.
 
 **Where it sits was a layout question, not a menu one.** Design §10 gives
 desktop the M key and design §11 gives the menu a settings screen that does not

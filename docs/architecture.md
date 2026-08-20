@@ -70,8 +70,8 @@ candy-snake/
     │   ├── rng.ts             # small seedable PRNG (mulberry32)
     │   └── game.ts            # Game: owns state, step(), emits GameEvents
     ├── audio/
-    │   ├── tones.ts           # cue table, sample synthesis, event→cue (pure)
-    │   └── kitchen.ts         # bakes cues at boot; plays them off the events
+    │   ├── tones.ts           # cues + ambient bed: tables and synthesis (pure)
+    │   └── kitchen.ts         # bakes at boot; plays cues, holds the room tone
     ├── scenes/
     │   ├── keys.ts            # scene keys as constants — never raw strings
     │   ├── BootScene.ts       # generate textures and cues, load settings
@@ -244,7 +244,16 @@ Which event sounds, at what pitch, and what happens when several land in one
 tick are all decided in `tones.ts`, which imports no Phaser at all; `kitchen.ts`
 only calls `createBuffer` and `play`. Cues hang off the same `GameEvent` stream
 the effects do and are fed from the same loop in `GameScene`, so nothing polls
-state to make a sound (§7). Phaser's own sound manager supplies the parts that
+state to make a sound (§7).
+
+The ambient bed is the exception that proves the shape: it is not an event, so
+the run opens it and the scene's `shutdown` closes it — sounds are global and
+outlive the scene that made them, so a bed left playing would stack with the
+next run's. It loops with no crossfade because its filter is primed on the
+buffer's tail before it runs over the front, which makes the wrap an ordinary
+step rather than a discontinuity, and makes *"does it click every four seconds"*
+a unit test rather than a listening exercise. It alone is baked below the
+hardware's rate — there is nothing high in it, and Web Audio resamples. Phaser's own sound manager supplies the parts that
 would otherwise be ours: it installs the gesture listeners that resume the
 context, suspends it on blur, and gates everything behind one global `mute`,
 which is what the `muted` setting (§10) is applied to.
@@ -342,9 +351,11 @@ definition.
   elbow's shortfall is covered by its neighbour's overhang),
   `render/burst.ts` (a knock never exceeds its pixel budget on any viewport),
   `audio/tones.ts` (no cue clips, none starts or ends part-way up a waveform,
-  the serve chime stops climbing where the streak bonus does),
+  the serve chime stops climbing where the streak bonus does, and the bed's loop
+  point is a smaller step than any step inside it),
   `audio/kitchen.ts` (a cue keeps sounding once the last one has finished — the
-  one audio fault an ear reports and nothing else would),
+  one audio fault an ear reports and nothing else would — and the bed goes with
+  the scene that owned it),
   and `persist/storage.ts`'s pure half (a blob that is missing, corrupt,
   hand-edited or from another version opens on defaults; a tied score does not
   take the place it matched).

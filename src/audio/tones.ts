@@ -258,6 +258,13 @@ const envelope = (at: number, attack: number): number => {
   return (1 - fallen) * Math.exp(-DECAY * fallen);
 };
 
+/** The loudest the buffer ever gets, which is what a normalise divides by. */
+export const peak = (data: Float32Array): number => {
+  let loudest = 0;
+  for (const sample of data) loudest = Math.max(loudest, Math.abs(sample));
+  return loudest;
+};
+
 /**
  * One cue, rendered to mono samples at the rate the hardware is running at.
  *
@@ -289,6 +296,95 @@ export const samples = (spec: CueSpec, rate: number): Float32Array => {
     }
 
     out[index] = (voice / weight) * spec.gain * envelope(at, spec.attack);
+  }
+
+  return out;
+};
+
+/**
+ * The kitchen's own room tone (design §12): a quiet bed under everything, loud
+ * enough to notice when it stops and never enough to listen to.
+ *
+ * Baked at a fraction of the hardware's rate. There is nothing above a few
+ * hundred Hz in it, so the samples the extra bandwidth would buy are samples
+ * spent on silence — and a bed is minutes long in aggregate where a cue is a
+ * tenth of a second, so it is the one thing here whose size is worth minding.
+ * Web Audio resamples it on the way out.
+ */
+export const AMBIENCE_KEY = 'cue-ambience';
+export const AMBIENCE_RATE = 11025;
+const AMBIENCE_SECONDS = 4;
+const AMBIENCE_SEED = 0x0ddba11;
+
+/**
+ * How much of each new sample the filter lets through. Two passes at this makes
+ * a gentle 12 dB slope from somewhere under 200 Hz — hiss taken off until what
+ * is left is a room rather than a noise.
+ */
+const AMBIENCE_POLE = 0.9;
+
+/**
+ * Long enough for the filter to forget where it started. Its memory is a few
+ * samples deep at this pole, so this is generous by two orders of magnitude —
+ * cheap insurance on the one property the whole bed depends on.
+ */
+const AMBIENCE_WARMUP = 512;
+
+/** How far the bed breathes, and how many times per loop. Integer, or it clicks. */
+const AMBIENCE_SWELL = 0.3;
+const AMBIENCE_SWELLS = 3;
+
+/** Peak amplitude. Under every cue, because it is never the thing being said. */
+const AMBIENCE_GAIN = 0.16;
+
+/**
+ * One pole of low-pass, run so that it *starts* in the state it will end in.
+ *
+ * This is the whole trick, and it is why the bed needs no crossfade. A filter
+ * begun from silence takes a moment to settle, so its first samples do not
+ * match its last — and that mismatch is the click a loop makes every time it
+ * comes round. Priming it on the tail first means the state at sample 0 is
+ * already the state sample 0 *would* have if the buffer were playing for the
+ * second time. Which it is.
+ */
+const lowPass = (data: Float32Array, pole: number): void => {
+  const step = (held: number, sample: number): number =>
+    held + (1 - pole) * (sample - held);
+
+  let held = 0;
+  for (let i = Math.max(0, data.length - AMBIENCE_WARMUP); i < data.length; i += 1) {
+    held = step(held, data[i] ?? 0);
+  }
+
+  for (let i = 0; i < data.length; i += 1) {
+    held = step(held, data[i] ?? 0);
+    data[i] = held;
+  }
+};
+
+/**
+ * The bed, rendered once at boot. Noise rather than tone: a kitchen is a room
+ * before it is an instrument, and anything with a pitch in it would sit in the
+ * same ear the cues are trying to reach.
+ */
+export const ambience = (): Float32Array => {
+  const count = AMBIENCE_SECONDS * AMBIENCE_RATE;
+  const out = new Float32Array(count);
+  const rng = createRng(AMBIENCE_SEED);
+
+  for (let i = 0; i < count; i += 1) out[i] = rng.next() * 2 - 1;
+
+  lowPass(out, AMBIENCE_POLE);
+  lowPass(out, AMBIENCE_POLE);
+
+  const loudest = peak(out);
+  const scale = loudest > 0 ? AMBIENCE_GAIN / loudest : 0;
+
+  for (let i = 0; i < count; i += 1) {
+    // A whole number of swells per loop, so the breathing comes round with the
+    // noise rather than against it.
+    const turn = (2 * Math.PI * AMBIENCE_SWELLS * i) / count;
+    out[i] = (out[i] ?? 0) * scale * (1 - AMBIENCE_SWELL * (0.5 - 0.5 * Math.cos(turn)));
   }
 
   return out;
