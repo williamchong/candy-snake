@@ -135,6 +135,8 @@ export class GameScene extends Phaser.Scene {
         this.scene.start(SceneKey.GameOver, {
           score: event.score,
           served: event.served,
+          servedByTier: event.servedByTier,
+          bestStreak: event.bestStreak,
           elapsedMs: event.elapsedMs,
         } satisfies RunSummary);
         return;
