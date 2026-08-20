@@ -75,21 +75,27 @@ export const HudDepth = {
   TossedIcon: 5,
   TossedGlyph: 6,
   /**
+   * The send-off a served child gets, over the queue they are leaving — it is
+   * thrown from the bubble the order was in, and a piece of it behind the next
+   * child in line would read as that child's rather than as theirs.
+   */
+  Cheer: 7,
+  /**
    * The cheat sheet, which is an overlay rather than another widget beside the
    * rest: it veils whatever HUD it opens over, and is meant to (design §4 —
    * semi-transparent, and never over the kitchen). So it sits above the lot.
    */
-  SheetPanel: 7,
-  SheetIcon: 8,
-  SheetGlyph: 9,
+  SheetPanel: 8,
+  SheetIcon: 9,
+  SheetGlyph: 10,
   /**
    * The tab reads as sitting on the drawer it opens, so it is drawn above it.
    * Two layers because the tab is a frame with a jar inside it, and a frame
    * that shares its icon's depth is left to display-list insertion order to
    * separate — the accident this table exists to prevent.
    */
-  SheetTab: 10,
-  SheetTabIcon: 11,
+  SheetTab: 11,
+  SheetTabIcon: 12,
 } as const;
 
 export interface Drawn {

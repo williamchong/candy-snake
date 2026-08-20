@@ -555,10 +555,10 @@ export class BoardView {
       depth: Depth.Head,
       slides: true,
     });
-    this.puff = new Burst(scene, this.root, PUFF);
-    this.chopPop = new Burst(scene, this.root, CHOP_POP);
-    this.chopCrumbs = new Burst(scene, this.root, CHOP_CRUMBS);
-    this.shards = new Burst(scene, this.root, SHATTER);
+    this.puff = new Burst(scene, PUFF, this.root);
+    this.chopPop = new Burst(scene, CHOP_POP, this.root);
+    this.chopCrumbs = new Burst(scene, CHOP_CRUMBS, this.root);
+    this.shards = new Burst(scene, SHATTER, this.root);
   }
 
   /** Call when the core has moved the snake to a new set of cells. */

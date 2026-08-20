@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { knockIntensity, ring, type Fling } from './burst';
+import { fountain, knockIntensity, ring, type Fling } from './burst';
 
 const FULL_TURN = Math.PI * 2;
 
@@ -63,6 +63,39 @@ describe('ring', () => {
 
   it('throws nothing when a burst has no pieces to throw', () => {
     expect(ring(0, 0)).toStrictEqual([]);
+  });
+});
+
+describe('fountain', () => {
+  it('throws everything upward, however the fan is nudged', () => {
+    // Confetti that rained would read as the child coming apart rather than as
+    // a send-off, so no piece may ever be thrown below the horizontal.
+    for (const turn of [0, 1, 2, 3, 7, 40]) {
+      for (const fling of fountain(8, turn)) expect(fling.y).toBeLessThan(0);
+    }
+  });
+
+  it('spreads its pieces to both sides of the child it left', () => {
+    const acrossward = fountain(8, 0).map((fling) => fling.x);
+
+    expect(Math.min(...acrossward)).toBeLessThan(0);
+    expect(Math.max(...acrossward)).toBeGreaterThan(0);
+  });
+
+  it('varies how far they go, so a handful does not read as an arc', () => {
+    const reaches = fountain(6, 0).map((fling) => Math.hypot(fling.x, fling.y));
+
+    expect(new Set(reaches.map((reach) => reach.toFixed(3))).size).toBeGreaterThan(1);
+  });
+
+  it('does not throw the same handful twice running', () => {
+    expect(fountain(8, 1)).not.toStrictEqual(fountain(8, 0));
+  });
+
+  it('throws a single-piece cheer up rather than out to one side', () => {
+    // The nudge is a fraction of the cone, not of the gap between pieces —
+    // with one piece those are the same number and the cheer would fly sideways.
+    expect(first(fountain(1, 3)).y).toBeLessThan(-0.9);
   });
 });
 

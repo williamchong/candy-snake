@@ -60,19 +60,35 @@ export const knock = (scene: Phaser.Scene, pixels: number, durationMs: number): 
 };
 
 /**
- * A pooled puff. Fires in the coordinates of the container it was given, so a
- * host whose layout is a container position and scale — the board — carries its
- * pieces through a resize for free.
+ * One pooled piece and whether it is spoken for. Claimed by this flag rather
+ * than by visibility, which is how a host with no container has to do it:
+ * `clear` needs to know what is in the air without asking the display list, and
+ * a piece it has just hidden must not be handed straight back out.
+ */
+interface Piece {
+  readonly image: Phaser.GameObjects.Image;
+  busy: boolean;
+}
+
+/**
+ * A pooled burst, firing in whatever coordinates its host works in.
+ *
+ * Hand it a container and it lives inside one: the board fits itself to the
+ * device by moving and scaling a single container, so pieces in mid-air are
+ * carried through a resize with everything else. The HUD has no such container
+ * and positions every widget by hand, so a burst there is aimed at coordinates
+ * the next layout pass invalidates — those hosts pass nothing and call `clear`
+ * from their own `applyFrame` instead.
  */
 export class Burst {
-  private readonly sprites: Phaser.GameObjects.Image[] = [];
+  private readonly pieces: Piece[] = [];
   /** How many bursts have been fired, which is what turns each one. */
   private fired = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly root: Phaser.GameObjects.Container,
     private readonly config: BurstConfig,
+    private readonly root?: Phaser.GameObjects.Container,
   ) {}
 
   fire(at: Vec2, tint: number): void {
@@ -92,22 +108,28 @@ export class Burst {
     this.fired += 1;
   }
 
-  private piece(from: Vec2, to: Vec2, tint: number): void {
-    const { key, depth, durationMs, growth, ease } = this.config;
-    const scale = this.config.scale ?? PIXEL_SCALE;
+  /**
+   * Takes every piece out of the air at once, doing by hand what the tweens
+   * would have done on completion — `killTweensOf` does not run `onComplete`,
+   * so a piece left claimed here is one the pool can never hand out again.
+   */
+  clear(): void {
+    for (const piece of this.pieces) {
+      if (!piece.busy) continue;
 
-    // Only a sprite whose tween has finished — it hides itself on complete —
-    // may be reclaimed. Claiming one still fading would cut that piece short,
-    // and a piece outlives a move, so there is always one in flight. The pool
-    // therefore settles at the peak number of overlapping bursts.
-    let sprite = this.sprites.find((candidate) => !candidate.visible);
-    if (sprite === undefined) {
-      sprite = makeSprite(this.scene, key, tint, depth, from, scale);
-      adopt(this.root, sprite);
-      this.sprites.push(sprite);
+      this.scene.tweens.killTweensOf(piece.image);
+      piece.image.setVisible(false);
+      piece.busy = false;
     }
+  }
 
-    sprite
+  private piece(from: Vec2, to: Vec2, tint: number): void {
+    const { durationMs, growth, ease } = this.config;
+    const scale = this.config.scale ?? PIXEL_SCALE;
+    const piece = this.claim(from, tint);
+
+    piece.busy = true;
+    piece.image
       .setPosition(from.x, from.y)
       .setTint(tint)
       .setAlpha(1)
@@ -115,14 +137,42 @@ export class Burst {
       .setVisible(true);
 
     this.scene.tweens.add({
-      targets: sprite,
+      targets: piece.image,
       x: to.x,
       y: to.y,
       alpha: 0,
       scale: scale * growth,
       duration: durationMs,
       ease: ease ?? DISSIPATES,
-      onComplete: () => sprite.setVisible(false),
+      onComplete: () => {
+        piece.image.setVisible(false);
+        piece.busy = false;
+      },
     });
+  }
+
+  /**
+   * A piece nothing else is using, building one if every piece is in the air.
+   * Claiming one still fading would cut that piece short, and a piece outlives
+   * a move — so the pool settles at the peak number of overlapping bursts.
+   */
+  private claim(at: Vec2, tint: number): Piece {
+    const free = this.pieces.find((candidate) => !candidate.busy);
+    if (free !== undefined) return free;
+
+    const { key, depth } = this.config;
+    const image = makeSprite(
+      this.scene,
+      key,
+      tint,
+      depth,
+      at,
+      this.config.scale ?? PIXEL_SCALE,
+    );
+    if (this.root !== undefined) adopt(this.root, image);
+
+    const piece = { image, busy: false };
+    this.pieces.push(piece);
+    return piece;
   }
 }

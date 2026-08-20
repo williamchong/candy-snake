@@ -1,8 +1,33 @@
 import type Phaser from 'phaser';
 
 import type { Customer, Vec2 } from '../core/types';
-import { CustomerView, type Mood } from './customerView';
+import { fountain } from '../render/burst';
+import { HudDepth } from '../render/drawn';
+import { Burst, type BurstConfig } from '../render/effects';
+import { TextureKey } from '../render/textures';
+import { CHILD_SCALE, CustomerView, type Mood } from './customerView';
 import type { Frame } from './layout';
+
+/**
+ * The send-off a served child gets, thrown from the bubble their order was in.
+ *
+ * In the candy's own color, because the confetti *is* the candy they asked for
+ * coming apart: that keeps it teaching rather than decorating, and keeps hue
+ * spent only on candies (design §4). What the serve was *worth* is deliberately
+ * not read — scaling a celebration by the score is a design change, not juice.
+ *
+ * One pool for the whole queue rather than one per child: several children can
+ * be served inside one another's send-off, and a pool each would be a pool each
+ * for every view ever built.
+ */
+const CHEER: BurstConfig = {
+  key: TextureKey.Pip,
+  depth: HudDepth.Cheer,
+  scale: CHILD_SCALE,
+  durationMs: 520,
+  growth: 1,
+  thrown: { pieces: 8, distance: 46, fling: fountain },
+};
 
 /**
  * The line at the serving window: one `CustomerView` per waiting child, kept in
@@ -29,9 +54,14 @@ export class CustomerQueue {
    */
   private pitch = 0;
   private offstage = 0;
+  private readonly cheers: Burst;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    // No container: the HUD positions every widget by hand, so a burst in
+    // mid-air is aimed at coordinates the next layout pass invalidates. See
+    // `applyFrame`, and `Burst` itself.
+    this.cheers = new Burst(scene, CHEER);
   }
 
   /**
@@ -46,6 +76,13 @@ export class CustomerQueue {
     this.pitch = pitch;
     this.offstage = offstage;
     for (const view of this.views) view.relocate(front.y, offstage);
+    // A send-off is thrown at the bubble it left, and that bubble has just
+    // moved. The children slide across to their new places; confetti in the air
+    // has nothing left to slide *from*, so it is cut rather than stranded where
+    // nothing is any more. `Scale.RESIZE` fires this on every frame of a window
+    // drag, so the cheap thing is also the right one — the rack answers the
+    // same problem the same way (`ShelfStrip.applyFrame`).
+    this.cheers.clear();
   }
 
   /**
@@ -111,7 +148,7 @@ export class CustomerQueue {
   }
 
   private build(): CustomerView {
-    const view = new CustomerView(this.scene, this.front.y, this.offstage);
+    const view = new CustomerView(this.scene, this.front.y, this.offstage, this.cheers);
     this.views.push(view);
     return view;
   }

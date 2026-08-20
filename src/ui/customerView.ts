@@ -1,7 +1,8 @@
 import type Phaser from 'phaser';
 
+import { colorInfo } from '../core/colors';
 import { patienceFraction } from '../core/customers';
-import type { Customer } from '../core/types';
+import { RAW, type ColorMask, type Customer } from '../core/types';
 import {
   BORDER,
   GLYPH_TINT,
@@ -14,6 +15,7 @@ import {
   show,
   type Drawn,
 } from '../render/drawn';
+import type { Burst } from '../render/effects';
 import { TEXTURE_SIZE, TextureKey } from '../render/textures';
 
 /**
@@ -143,8 +145,22 @@ export class CustomerView {
   private breathing = false;
   /** Which half of the walk cycle is on screen — see `draw`. */
   private stepping = false;
+  /**
+   * Whether this child's send-off has already been thrown. Reset in `arrive`
+   * along with everything else that outlives one child: views are handed out
+   * again, and a latch left set means the *next* child served by this one gets
+   * no party at all — silently, with nothing to catch it.
+   */
+  private cheered = false;
+  /** What they asked for, kept so the send-off can be thrown in that color. */
+  private wanted: ColorMask = RAW;
 
-  constructor(scene: Phaser.Scene, footY: number, offstage: number) {
+  constructor(
+    scene: Phaser.Scene,
+    footY: number,
+    offstage: number,
+    private readonly cheers: Burst,
+  ) {
     this.scene = scene;
     this.footY = footY;
     this.offstage = offstage;
@@ -219,6 +235,8 @@ export class CustomerView {
     this.targetX = slotX;
     this.shownBarWidth = -1;
     this.alarmed = false;
+    this.cheered = false;
+    this.wanted = customer.want;
     this.body.setDepth(HudDepth.Icon);
     this.face.setDepth(HudDepth.Glyph);
 
@@ -297,6 +315,17 @@ export class CustomerView {
     // the line: by the time the face has been read they are clear of the slot
     // the next child is walking into, and in front of it.
     if (this.pauseMs > 0 && this.x === this.targetX) {
+      // The send-off waits for them to walk up, so the confetti waits with it:
+      // a child served the instant they arrive is still off the frame's edge
+      // on the move the event lands, and a burst thrown there is thrown
+      // off-screen.
+      if (!this.cheered && this.mood === Mood.Served) {
+        this.cheered = true;
+        this.cheers.fire(
+          { x: this.x, y: this.footY + BUBBLE_Y },
+          colorInfo(this.wanted).hex,
+        );
+      }
       this.pauseMs -= dtMs;
       this.lane = LEAVING_LANE * Math.min(1 - this.pauseMs / REACTION_MS, 1);
       if (this.pauseMs <= 0) this.targetX = this.offstage;
