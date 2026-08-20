@@ -1628,6 +1628,81 @@ the declaration a fifth tier would slip past in silence. It is `TIER_ORDER` now
 `satisfies` catches a value that is not a tier, and a test walks `noServes` to
 catch a tier that was never listed.
 
+### What the candy-kitchen pass settled — the timbre was one level below the table
+
+The audio pass shipped eleven correct, tested, well-behaved cues that sounded
+like nothing in particular. Asked from the chair for breaking candy to sound
+like breaking candy, and the interesting part is *why that was not a retune*.
+
+**`samples` could not make the sound the table was being asked for.** Every
+overtone was `Math.sin(phase * (harmonic + 1))` — a strict whole-number series,
+which is the physics of a string or a tube, and so of every instrument that is
+plucked, blown or bowed. Brittle things *struck* ring at ratios that are not
+whole numbers, and that inharmonicity is the whole of what an ear uses to
+separate "shattered" from "plucked". The noise term was flat white, so it could
+not be bright or dull either. Two fields — `ratios` and `band` — is the smallest
+thing that reaches the sound; no arrangement of `hz`, `bend`, `noise` and
+`durationMs` gets there, which is worth knowing before the next cue is argued
+about in the units of the table.
+
+**Both fields default to the old arithmetic, and that was the point of the
+order.** The renderer went in first and was proved to render all eleven voices
+byte-for-byte identically at both common sample rates before a single number in
+the table moved. So everything heard afterwards changed because somebody wrote
+a number, not because the floor shifted. A test pins it.
+
+**The first attempt at that proof failed, and the reason is worth writing
+down.** Staging the noise in a `Float32Array` to filter it rounded every sample
+to the buffer's precision *before* the mix, where the old code carried a double
+all the way into the sum — inaudible, and enough to make eight of the eleven
+cues differ. It is `Float64Array` now: the scratch a filter runs in should not
+be the precision the output happens to be stored at.
+
+**The impact cues needed their partials made smaller, which is the opposite of
+the instinct.** `samples` divides by the total weight of everything mixed in, so
+the way to make noise carry a sound is to write the *tone* down. At the
+amplitudes a bell wants, the crack's noise sat under a third of the voice and
+the cue pinged rather than shattered. Measured, that one change roughly doubled
+the share of the crack's and the snip's energy sitting above 4 kHz, against
+their own fundamentals.
+
+**The band is stated in Hz, and the bed came along with it.** `poleFor(hz, rate)`
+converts a corner into a filter pole, which is what lets a cue's band be written
+in the units it is heard in like everything else in that file. The bed's own
+filter predates it and was a bare `0.9` with a comment guessing "somewhere under
+200 Hz" — and the guess was right to four figures, so the bed says 185 Hz now and
+lets the arithmetic do what the sentence was standing in for. It shifts the baked
+bed by seven parts in a hundred thousand, which is nothing, and it removes a test
+that only ever compared two constants somebody had already reconciled by hand.
+
+**The bake went from 6.8 ms to 11.6 ms, and the surprise is where.** Measured at
+48 kHz over the whole table: the noise pipeline costs ~2.1 ms, the richer voices
+~0.9 ms, and the non-integer ratios **~1.9 ms** — the one optional field is dearer
+than the entire filter. Bigger arguments into `Math.sin` are most of it and it is
+inherent to the sound rather than to how the field was built, so there is nothing
+to fix; it is recorded because "two optional fields" reads cheaper than it is, and
+because this is boot time before the menu draws — roughly 60 ms on a phone where
+it used to be 35. What *was* worth taking back is the container: resolving the
+ratios and amplitudes into `Float64Array`s rather than a plain `map` keeps the
+inner loop's load monomorphic across the eleven bakes and returns about six
+percent of the whole thing, which is the same order as the `forEach` that loop
+was already written to avoid.
+
+**A filter can be wrong in a way nothing else here catches.** Wired backwards it
+still renders, still fits the buffer, still starts and ends in silence, and
+still passes every test the audio pass wrote. A single bin of a naive transform
+in the test file asks the only question that separates them — is the energy
+where the corners said — and it is asked of two specs differing in nothing but
+the band, so the table cannot satisfy it by coincidence.
+
+**And the pass paid for an ear.** `tools/audition.ts` writes every cue and the
+bed to `.wav` under `npx vite-node`, which Vitest already supplies. It is the
+smoke driver's mirror image — that one exists because the tests cannot see, this
+one because they cannot hear — and it is the difference between judging a cue
+and provoking a self-hit in a live run to hear one. Anything about a cue that
+*is* a property is still a property, and stays in `tones.test.ts`; this is for
+the half that is a judgement.
+
 ## Milestone summary
 
 | Phase | Deliverable                              | Risk it retires                 |
