@@ -1,14 +1,13 @@
 import Phaser from 'phaser';
 
 import { DEFAULT_CONFIG, Game } from '../core/game';
-import type { GameEvent } from '../core/types';
+import type { GameEvent, RunSummary } from '../core/types';
 import { DirectionQueue } from '../input/directionQueue';
 import { bindKeyboard } from '../input/keyboard';
 import { bindSwipe } from '../input/swipe';
 import { BoardView } from '../render/boardView';
 import { hitsTab, type Frame } from '../ui/layout';
 import { onFrame } from '../ui/responsive';
-import type { RunSummary } from './GameOverScene';
 import { SceneKey } from './keys';
 import type { UIScene } from './UIScene';
 
@@ -132,13 +131,11 @@ export class GameScene extends Phaser.Scene {
         // The HUD is this scene's to clean up: it was launched here, holds a
         // reference to this run's core, and a fresh run launches a fresh one.
         this.scene.stop(SceneKey.UI);
-        this.scene.start(SceneKey.GameOver, {
-          score: event.score,
-          served: event.served,
-          servedByTier: event.servedByTier,
-          bestStreak: event.bestStreak,
-          elapsedMs: event.elapsedMs,
-        } satisfies RunSummary);
+        // Forwarded whole rather than copied field by field: the event already
+        // *is* the summary, carrying only the extra tag that got us into this
+        // branch, and a hand-copy is five lines that have to be remembered on
+        // the day the run grows a sixth thing worth reporting.
+        this.scene.start(SceneKey.GameOver, event satisfies RunSummary);
         return;
 
       // The serving window is UIScene's: it draws who is waiting from state,

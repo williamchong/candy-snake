@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 
 import type { Vec2 } from '../core/types';
 import { GLYPH_TINT } from '../render/drawn';
+import { TEXT_MARGIN } from './layout';
 
 /**
  * The same ink the accessibility symbols are stamped in, written as CSS — one
@@ -25,9 +26,6 @@ export const textStyle = (
   color: INK,
   ...extra,
 });
-
-/** Air either side of the longest line, so nothing sits against the frame edge. */
-export const MARGIN = 16;
 
 export interface StackRow {
   readonly text: string;
@@ -63,7 +61,7 @@ export class TextStack {
    * size that fits the smallest screen and looks lost on every other one.
    */
   centreOn({ x, y }: Vec2, width: number): void {
-    const room = width - 2 * MARGIN;
+    const room = width - 2 * TEXT_MARGIN;
 
     for (const { line, dy } of this.lines) {
       // Measured unscaled, or a line that was shrunk once keeps shrinking.

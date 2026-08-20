@@ -651,9 +651,95 @@ export interface Scoreboard {
  * list is a smaller loss than truncating it, but only until the lines touch.
  */
 export const scoreboard = (available: number, count: number): Scoreboard => {
-  const pitch = Math.round(
+  // Floored, not rounded: rounding *up* past the share each entry actually has
+  // pushes `available / pitch` below the count and drops an entry while the
+  // pitch is still clear of its floor — which is the one thing the paragraph
+  // above promises never happens. Flooring keeps `pitch <= available / count`,
+  // so the room is always big enough for the entries it was measured against.
+  const pitch = Math.floor(
     clamp(available / Math.max(count, 1), SCORE_PITCH_MIN, SCORE_PITCH_MAX),
   );
 
   return { pitch, shown: clamp(Math.floor(available / pitch), 0, count) };
+};
+
+/** Air between a line of text and the frame edge, on every side of it. */
+export const TEXT_MARGIN = 16;
+
+/**
+ * Air above the line that says how to leave. One number because it is one piece
+ * of the design on both message screens, which arrived at it separately.
+ */
+export const EXIT_GAP = 46;
+
+/**
+ * The menu's title shrinks before its table does. `TextStack` scales a line too
+ * wide for the frame but knows nothing about its height, so a phone held
+ * sideways would wear the title off the top of the screen — and of the two, the
+ * word the player is already looking at is the one that can afford to give way.
+ */
+const TITLE_SIZE = { tall: 56, short: 40 } as const;
+const SHORT_FRAME = 420;
+
+/**
+ * Half a rendered line, as a share of its nominal size — what the top row has to
+ * clear the frame's edge by. Derived rather than tabulated beside `TITLE_SIZE`:
+ * a second table of hand-kept numbers is one a changed size silently invalidates.
+ */
+const HALF_LINE = 0.6;
+
+/** How far the title would like to sit above the middle, given the room. */
+const TITLE_DY = -140;
+/** Below the tagline, above the table's heading. */
+const TITLE_TO_TABLE = 72;
+
+/**
+ * Where the menu's rows fall, given the room. Separated from the rows themselves
+ * because it is also the answer to "has anything actually moved?" —
+ * `Scale.RESIZE` fires on every frame of a window drag, and rebuilding a stack
+ * of text objects thirteen times a second to move them a pixel is work nobody
+ * asked for.
+ */
+export interface MenuPlan {
+  readonly size: number;
+  readonly title: number;
+  readonly top: number;
+  readonly pitch: number;
+  readonly shown: number;
+}
+
+export const menuPlan = (height: number, count: number): MenuPlan => {
+  const size = TITLE_SIZE[height < SHORT_FRAME ? 'short' : 'tall'];
+  // As high as it wants to sit, or as high as the frame lets it, whichever is
+  // lower down. Rounded because it is compared, not just drawn: an offset that
+  // slides a fraction with every pixel of a window drag is one that reports a
+  // new layout on every frame, which is the rebuild the menu's guard prevents.
+  const title = Math.round(
+    Math.max(TITLE_DY, -(height / 2 - TEXT_MARGIN - size * HALF_LINE)),
+  );
+  const top = title + size + TITLE_TO_TABLE;
+
+  return {
+    size,
+    title,
+    top,
+    ...scoreboard(height / 2 - top - EXIT_GAP - TEXT_MARGIN, count),
+  };
+};
+
+/**
+ * Where a column of rows falls when it is stacked by the air above each one and
+ * then centred as a block — what a screen needs when half its rows are
+ * conditional, since a row that is not there takes its air away with it instead
+ * of leaving the hole a fixed offset would.
+ *
+ * Offsets come back relative to the middle of the block, which is the point
+ * `TextStack` centres on.
+ */
+export const centredColumn = (gaps: readonly number[]): readonly number[] => {
+  let dy = 0;
+  const stacked = gaps.map((gap) => (dy += gap));
+  const half = dy / 2;
+
+  return stacked.map((offset) => offset - half);
 };

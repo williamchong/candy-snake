@@ -8,12 +8,16 @@ import { CELL_SIZE } from '../render/textures';
 // the exception CLAUDE.md carves out for the engine-free rule.
 import { CHILD_HEIGHT } from './customerView';
 import {
+  centredColumn,
   CHILD_HEADROOM,
   CHILD_UNDERFOOT,
+  EXIT_GAP,
   hitsTab,
   layout,
   LIVES_CLEARANCE,
+  menuPlan,
   scoreboard,
+  TEXT_MARGIN,
   TAB_SIZE,
   wheelSeats,
   WHEEL_PAIRS,
@@ -469,6 +473,17 @@ describe('scoreboard', () => {
     expect(tight.pitch).toBeLessThan(scoreboard(400, 10).pitch);
   });
 
+  it('keeps every entry at any height the pitch can still absorb', () => {
+    // 200 divides by ten exactly, which is why it caught nothing. Between the
+    // pitch's floor and its ceiling the table is never the thing that gives.
+    for (let available = 180; available <= 260; available += 1) {
+      expect({ available, ...scoreboard(available, 10) }).toMatchObject({
+        available,
+        shown: 10,
+      });
+    }
+  });
+
   it('drops entries rather than closing the pitch past reading', () => {
     const cramped = scoreboard(90, 10);
 
@@ -484,5 +499,48 @@ describe('scoreboard', () => {
     const { shown } = scoreboard(0, 10);
 
     expect(shown).toBe(0);
+  });
+});
+
+describe('menuPlan', () => {
+  /** How much of a rendered line sits above the point it is centred on. */
+  const ASCENT = 0.6;
+
+  it.each(VIEWPORTS)('keeps the title inside the frame on %s', (_name, view) => {
+    const { title, size } = menuPlan(view.height, 10);
+
+    // `title` is an offset from the middle and the line is centred on it, so
+    // this is where its top edge lands. A 568×320 phone wore the title off the
+    // top of the screen before the offset was clamped against the frame.
+    expect(title - size * ASCENT).toBeGreaterThanOrEqual(-view.height / 2 + TEXT_MARGIN);
+  });
+
+  it.each(VIEWPORTS)('leaves room to press any key on %s', (_name, view) => {
+    const { top, pitch, shown } = menuPlan(view.height, 10);
+    const prompt = shown === 0 ? top : top + (shown - 1) * pitch + EXIT_GAP;
+
+    expect(prompt).toBeLessThanOrEqual(view.height / 2);
+  });
+
+  it('drops the title to a smaller size rather than let a short frame clip it', () => {
+    expect(menuPlan(320, 10).size).toBeLessThan(menuPlan(900, 10).size);
+  });
+});
+
+describe('centredColumn', () => {
+  it('centres the block on zero, whatever the gaps', () => {
+    const offsets = centredColumn([0, 40, 20]);
+
+    expect(offsets[0]! + offsets[offsets.length - 1]!).toBe(0);
+  });
+
+  it('lets a row that is not there take its air away with it', () => {
+    // The whole reason the screen stacks rather than places: dropping the
+    // middle row must close the gap, not leave a hole where it was.
+    const full = centredColumn([0, 30, 30, 30]);
+    const short = centredColumn([0, 30, 30]);
+
+    expect(short.length).toBe(full.length - 1);
+    expect(short[short.length - 1]! - short[0]!).toBe(60);
   });
 });

@@ -239,20 +239,27 @@ export type GameEvent =
   /** Patience ran out; the child leaves angry (design §5). */
   | { readonly type: 'customer-left'; readonly customer: Customer }
   | { readonly type: 'life-lost'; readonly lives: number }
-  /**
-   * The run, as the score screen has to tell it. Everything here is also on
-   * `GameState`, and is copied onto the event on purpose: the screen that reads
-   * it is started as this fires, and a scene handed a live state object would be
-   * reading a game that is over rather than the run that just ended.
-   */
-  | {
-      readonly type: 'game-over';
-      readonly score: number;
-      readonly served: number;
-      readonly servedByTier: Record<ColorTier, number>;
-      readonly bestStreak: number;
-      readonly elapsedMs: number;
-    };
+  /** The run, as the score screen has to tell it — see `RunSummary`. */
+  | ({ readonly type: 'game-over' } & RunSummary);
+
+/**
+ * What the run was worth, as the score screen has to tell it. Everything here is
+ * also on `GameState`, and is copied onto the `game-over` event on purpose: the
+ * screen that reads it is started as that event fires, and a scene handed a live
+ * state object would be reading a game that is over rather than the run that
+ * just ended.
+ *
+ * Named rather than written inline because the event is not its only reader:
+ * `GameScene` forwards it and `GameOverScene` takes delivery of it, and a shape
+ * spelled in three places is one that grows a sixth field in two of them.
+ */
+export interface RunSummary {
+  readonly score: number;
+  readonly served: number;
+  readonly servedByTier: Record<ColorTier, number>;
+  readonly bestStreak: number;
+  readonly elapsedMs: number;
+}
 
 /**
  * How the core pulls a buffered turn at the exact moment a move tick fires.

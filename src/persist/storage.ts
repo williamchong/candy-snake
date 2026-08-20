@@ -143,14 +143,16 @@ export const parseSave = (raw: string | null): SaveData => {
 
   if (!isRecord(parsed) || parsed.version !== DEFAULTS.version) return DEFAULTS;
 
-  const stored = Array.isArray(parsed.highScores) ? parsed.highScores : [];
-  const settings = isRecord(parsed.settings) ? parsed.settings : {};
-  const { cheatSheetOpen } = settings;
+  const storedScores = Array.isArray(parsed.highScores) ? parsed.highScores : [];
+  const storedSettings = isRecord(parsed.settings) ? parsed.settings : {};
+  const { cheatSheetOpen } = storedSettings;
 
   return {
     version: VERSION,
     highScores: ranked(
-      stored.map(readEntry).filter((entry): entry is ScoreEntry => entry !== undefined),
+      storedScores
+        .map(readEntry)
+        .filter((entry): entry is ScoreEntry => entry !== undefined),
     ),
     settings: {
       cheatSheetOpen:
@@ -170,11 +172,18 @@ export const parseSave = (raw: string | null): SaveData => {
  * handing over an entry that is not already in the table. Everyone a run ties
  * counts as ahead of it: a place has to be beaten out of the player holding it,
  * not merely matched.
+ *
+ * A run worth nothing lands nowhere. The first death of a first install comes
+ * during the teaching levels and scores 0, and an empty table would otherwise
+ * seat it first and send the score screen off to call it a new best under a
+ * number reading zero.
  */
 export const insertScore = (
   scores: readonly ScoreEntry[],
   entry: ScoreEntry,
 ): { readonly scores: readonly ScoreEntry[]; readonly rank: number | undefined } => {
+  if (entry.score <= 0) return { scores, rank: undefined };
+
   const place = scores.filter(({ score }) => score >= entry.score).length + 1;
 
   return {
@@ -237,7 +246,10 @@ export const recordScore = (entry: ScoreEntry): number | undefined => {
   const now = current();
   const { scores, rank } = insertScore(now.highScores, entry);
 
-  write({ ...now, highScores: scores });
+  // A run that missed the ten leaves the table exactly as it found it, and a
+  // write of an unchanged blob is a blocking `setItem` bought for nothing —
+  // which, once a player has ten runs banked, is most game-overs.
+  if (rank !== undefined) write({ ...now, highScores: scores });
 
   return rank;
 };

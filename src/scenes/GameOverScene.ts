@@ -1,20 +1,13 @@
 import Phaser from 'phaser';
 
-import { TIERS, type ColorTier } from '../core/colors';
+import { TIER_ORDER, type ColorTier } from '../core/colors';
+import type { RunSummary } from '../core/types';
 import { onceAnyInput } from '../input/anyInput';
 import { recordScore, today } from '../persist/storage';
+import { centredColumn, EXIT_GAP } from '../ui/layout';
 import { onScreenCentre } from '../ui/responsive';
 import { TextStack, type StackRow } from '../ui/text';
 import { SceneKey } from './keys';
-
-/** What the run was worth, handed over by GameScene (architecture §6). */
-export interface RunSummary {
-  readonly score: number;
-  readonly served: number;
-  readonly servedByTier: Record<ColorTier, number>;
-  readonly bestStreak: number;
-  readonly elapsedMs: number;
-}
 
 const asClock = (elapsedMs: number): string => {
   const seconds = Math.floor(elapsedMs / 1_000);
@@ -35,7 +28,7 @@ const TIER_WORDS: Record<ColorTier, string> = {
 
 /** Only what happened: a run with no over-mix in it does not read "mystery 0". */
 const tiers = (counts: Record<ColorTier, number>): string =>
-  TIERS.filter((tier) => counts[tier] > 0)
+  TIER_ORDER.filter((tier) => counts[tier] > 0)
     .map((tier) => `${TIER_WORDS[tier]} ${counts[tier]}`)
     .join('  ·  ');
 
@@ -44,12 +37,20 @@ const tiers = (counts: Record<ColorTier, number>): string =>
  * A screen the player is passing through on the way to the next run is no place
  * to be told they came fourteenth.
  */
-const placing = (rank: number | undefined): string => {
-  if (rank === undefined) return '';
+const placing = (rank: number | undefined): string | undefined => {
+  if (rank === undefined) return undefined;
   if (rank === 1) return 'a new best';
 
   return `#${rank} on the board`;
 };
+
+const CLOSED_SIZE = 40;
+const SCORE_SIZE = 64;
+const STAT_SIZE = 18;
+const PLACING_SIZE = 22;
+const PROMPT_SIZE = 20;
+/** Between the run's own stats, which read as one paragraph. */
+const STAT_GAP = 27;
 
 /** A row and the air above it, before the stack knows where it starts. */
 interface Line {
@@ -67,11 +68,11 @@ interface Line {
  */
 const lines = (summary: RunSummary, rank: number | undefined): readonly StackRow[] => {
   const spec: Line[] = [
-    { text: 'Shop closed', size: 40, gap: 0 },
-    { text: `${summary.score}`, size: 64, gap: 64 },
+    { text: 'Shop closed', size: CLOSED_SIZE, gap: 0 },
+    { text: `${summary.score}`, size: SCORE_SIZE, gap: 64 },
     {
       text: `${summary.served} candies served · ${asClock(summary.elapsedMs)} on the floor`,
-      size: 18,
+      size: STAT_SIZE,
       gap: 58,
     },
   ];
@@ -79,7 +80,7 @@ const lines = (summary: RunSummary, rank: number | undefined): readonly StackRow
   // The breakdown is what the run *did*, as opposed to what it was paid, and a
   // run that did neither says neither.
   if (summary.served > 0) {
-    spec.push({ text: tiers(summary.servedByTier), size: 18, gap: 27 });
+    spec.push({ text: tiers(summary.servedByTier), size: STAT_SIZE, gap: STAT_GAP });
   }
   // The count, not the multiplier it earned. `streakMultiplier` caps at ×2
   // (design §9), so a run of eight serves and a run of forty would print the
@@ -88,22 +89,21 @@ const lines = (summary: RunSummary, rank: number | undefined): readonly StackRow
   // standing *before* each serve.
   if (summary.bestStreak > 0) {
     const runs = summary.bestStreak === 1 ? 'serve' : 'in a row';
-    spec.push({ text: `best streak ${summary.bestStreak} ${runs}`, size: 18, gap: 27 });
+    spec.push({
+      text: `best streak ${summary.bestStreak} ${runs}`,
+      size: STAT_SIZE,
+      gap: STAT_GAP,
+    });
   }
 
   const placed = placing(rank);
-  if (placed !== '') spec.push({ text: placed, size: 22, gap: 44 });
+  if (placed !== undefined) spec.push({ text: placed, size: PLACING_SIZE, gap: 44 });
 
-  spec.push({ text: 'Press any key', size: 20, gap: 46 });
+  spec.push({ text: 'Press any key', size: PROMPT_SIZE, gap: EXIT_GAP });
 
-  let dy = 0;
-  const stacked = spec.map(({ text, size, gap }) => {
-    dy += gap;
-    return { text, size, dy };
-  });
-  const half = dy / 2;
+  const offsets = centredColumn(spec.map(({ gap }) => gap));
 
-  return stacked.map((row) => ({ ...row, dy: row.dy - half }));
+  return spec.map(({ text, size }, index) => ({ text, size, dy: offsets[index] ?? 0 }));
 };
 
 export class GameOverScene extends Phaser.Scene {

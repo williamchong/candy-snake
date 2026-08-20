@@ -46,13 +46,18 @@ export const mixCount = (color: ColorMask): number =>
 export type ColorTier = 1 | 2 | 3 | 'mistake';
 
 /**
- * The tiers in the order design §9's table lists them, and an empty tally of
- * them. Written once because four places now key off this set — the run's own
- * count, the score screen's wording, the points table and the tests — and a
- * fifth tier added to a set spelled five times is a tier added to four of them.
- * The `Record` is what makes the compiler say so.
+ * The tiers in the order design §9's table lists them — the reading order for
+ * the one screen that walks them, not a second definition of the set. Everything
+ * that tallies tiers (`noServes` below, `scoring.ts`'s points table, the score
+ * screen's wording) keys off the `ColorTier` type through a `Record`, and is
+ * exhaustive because of that rather than because of this array.
+ *
+ * Which leaves the list itself as the one thing the compiler cannot check for
+ * us: `satisfies` catches a value that is not a tier, but nothing in the type
+ * system catches a tier that was never added here — so a test walks `noServes`
+ * and says so instead.
  */
-export const TIERS: readonly ColorTier[] = [1, 2, 3, 'mistake'];
+export const TIER_ORDER = [1, 2, 3, 'mistake'] as const satisfies readonly ColorTier[];
 
 export const noServes = (): Record<ColorTier, number> => ({
   1: 0,

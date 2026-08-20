@@ -99,6 +99,15 @@ describe('insertScore', () => {
     expect(scores).toEqual([run(120)]);
   });
 
+  it('keeps a run worth nothing off the table, even an empty one', () => {
+    // The first death of a first install: it scores 0 during the teaching
+    // levels, and an empty table would otherwise call it a new best.
+    const { scores, rank } = insertScore([], run(0));
+
+    expect(rank).toBeUndefined();
+    expect(scores).toEqual([]);
+  });
+
   it('sorts the run into the table it landed in', () => {
     const { scores, rank } = insertScore([run(300), run(100)], run(200));
 

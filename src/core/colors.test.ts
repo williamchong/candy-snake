@@ -10,7 +10,9 @@ import {
   blend,
   colorInfo,
   mixCount,
+  noServes,
   primariesOf,
+  TIER_ORDER,
   type Primary,
 } from './colors';
 import { RAW, type ColorMask } from './types';
@@ -123,5 +125,12 @@ describe('palette', () => {
     for (const primary of PRIMARIES) expect(colorInfo(primary).tier).toBe(2);
     expect(colorInfo(RED | BLUE).tier).toBe(3);
     expect(colorInfo(BROWN).tier).toBe('mistake');
+  });
+
+  it('reads every tier out, so a new one cannot miss the score screen', () => {
+    // `noServes` is a `Record<ColorTier, number>`, so its keys are the whole
+    // union — which is the check `TIER_ORDER` cannot get from the type system.
+    // Keys come back as strings, so the numbered tiers are compared as those.
+    expect([...TIER_ORDER].map(String).sort()).toEqual(Object.keys(noServes()).sort());
   });
 });

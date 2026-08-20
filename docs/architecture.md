@@ -290,15 +290,16 @@ Single JSON blob under one key (`candy-snake:v1`). Corrupt/missing data falls
 back to defaults silently. No PII, no backend.
 
 The module is split the way `ui/safeArea.ts` is: `parseSave` and `insertScore`
-are pure and unit tested, while the four functions that reach for
-`localStorage` are guarded on `typeof localStorage` and covered by the smoke
-driver. Nothing touches the browser at import time, so the module loads under
-Node — which is why the table's rules can be tested at all without a DOM.
+are pure and unit tested, while the two that reach for `localStorage` — a
+private `read` and `write`, which everything exported goes through — are
+guarded on `typeof localStorage` and covered by the smoke driver. Nothing
+touches the browser at import time, so the module loads under Node — which is
+why the table's rules can be tested at all without a DOM.
 
 Every field is read one at a time rather than the blob being trusted wholesale,
 so a save written before a setting existed keeps the rest of itself and takes
 the default for that one. `Settings` holds only what has a feature behind it:
-mute, the D-pad and high-contrast symbols (design §10, §11) join it when they
+mute, the D-pad and high-contrast symbols (design §4, §10) join it when they
 are built.
 
 A score's `at` is stamped from the scene layer, never from `core/` — the core's
