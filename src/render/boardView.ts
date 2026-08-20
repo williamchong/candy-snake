@@ -15,6 +15,7 @@ import {
 import type { Frame } from '../ui/layout';
 import {
   BORDER,
+  adopt,
   makeDrawn,
   makeSprite,
   paint,
@@ -23,9 +24,10 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
+import { Burst, type BurstConfig } from './effects';
 import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
-import { CELL_SIZE, PIXEL_SCALE, STRAND_TEXTURES, TextureKey } from './textures';
+import { CELL_SIZE, STRAND_TEXTURES, TextureKey } from './textures';
 
 /**
  * The board draws itself in its own coordinates — origin at its top-left corner,
@@ -97,27 +99,6 @@ const Depth = {
   Head: 8,
   Shard: 9,
 } as const;
-
-/**
- * Moves freshly built objects into the board's container. `scene.add.*` puts
- * them on the scene's own display list, so everything the board draws has to be
- * taken in here or it would sit outside the container and never be scaled with
- * the rest of it.
- *
- * A container keeps its children in insertion order, and the pools build theirs
- * lazily — so the sort is what stops a sprite spawned late from landing above
- * the layer that owns it. Cheap enough to do on every adoption: pools grow to
- * the run's peak and then stop.
- */
-const adopt = (
-  root: Phaser.GameObjects.Container,
-  ...objects: readonly (Phaser.GameObjects.GameObject | undefined)[]
-): void => {
-  for (const object of objects) {
-    if (object !== undefined) root.add(object);
-  }
-  root.sort('depth');
-};
 
 /**
  * Anything that sits on a board cell. `color` is what a sprite is tinted and
@@ -266,52 +247,16 @@ class SpritePool {
 }
 
 /**
- * The one-cell puff: a block of debris coming apart, or a wasted dye. Pooled
- * because these overlap — a puff fades for longer than a move lasts, so a
- * crumbling strand always has several in flight — and creating a game object
- * per puff is exactly the churn SpritePool exists to avoid.
+ * The one-cell puff: a block of debris coming apart, or a wasted dye. It swells
+ * and thins where it stood and throws nothing, because design §2 asks for local
+ * and soft — a self-hit puffs at the cells that broke, never a screen flash.
  */
-class ShardBurst {
-  private readonly sprites: Phaser.GameObjects.Image[] = [];
-
-  constructor(
-    private readonly scene: Phaser.Scene,
-    private readonly root: Phaser.GameObjects.Container,
-  ) {}
-
-  /** Takes a whole segment, so the puff shows the color that was lost. */
-  burst(segment: Segment): void {
-    const at = cellToPixel(segment.pos);
-    const tint = colorInfo(segment.color).hex;
-
-    // Only a sprite whose tween has finished — it hides itself on complete —
-    // may be reclaimed. Claiming one still fading would cut that puff short,
-    // and a puff outlives a move, so there is always one in flight. The pool
-    // therefore settles at the peak number of overlapping puffs.
-    let sprite = this.sprites.find((candidate) => !candidate.visible);
-    if (sprite === undefined) {
-      sprite = makeSprite(this.scene, TextureKey.Segment, tint, Depth.Shard, at);
-      adopt(this.root, sprite);
-      this.sprites.push(sprite);
-    }
-
-    sprite
-      .setPosition(at.x, at.y)
-      .setTint(tint)
-      .setAlpha(1)
-      .setScale(PIXEL_SCALE)
-      .setVisible(true);
-
-    this.scene.tweens.add({
-      targets: sprite,
-      alpha: 0,
-      scale: PIXEL_SCALE * 1.5,
-      duration: SHATTER_MS,
-      ease: 'Quad.easeOut',
-      onComplete: () => sprite.setVisible(false),
-    });
-  }
-}
+const PUFF: BurstConfig = {
+  key: TextureKey.Segment,
+  depth: Depth.Shard,
+  durationMs: SHATTER_MS,
+  growth: 1.5,
+};
 
 /**
  * The two fates draw differently — spilled sugar fades, a waiting batch does
@@ -367,7 +312,7 @@ export class BoardView {
   private readonly dyes: SpritePool;
   private readonly debris: SpritePool;
   private readonly batch: SpritePool;
-  private readonly shards: ShardBurst;
+  private readonly puff: Burst;
   private previousPickups: readonly Pickup[] | undefined;
   /** The head's dye flash, held so a second jar can cut the first one short. */
   private headFlash: Phaser.Tweens.Tween | undefined;
@@ -424,7 +369,7 @@ export class BoardView {
       depth: Depth.Head,
       slides: true,
     });
-    this.shards = new ShardBurst(scene, this.root);
+    this.puff = new Burst(scene, this.root, PUFF);
   }
 
   /** Call when the core has moved the snake to a new set of cells. */
@@ -466,7 +411,7 @@ export class BoardView {
    * debris coming apart, or a dye that found no strand to knead itself into.
    */
   splash(pos: Vec2, color: ColorMask): void {
-    this.shards.burst({ pos, color });
+    this.puff.fire(cellToPixel(pos), colorInfo(color).hex);
   }
 
   /**

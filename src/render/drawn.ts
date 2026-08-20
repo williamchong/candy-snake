@@ -153,6 +153,27 @@ export const makeDrawn = (
 };
 
 /**
+ * Moves freshly built objects into the container that draws them. `scene.add.*`
+ * puts them on the scene's own display list, so anything meant to be fitted to
+ * the device by scaling a container has to be taken in here or it would sit
+ * outside it and never move with the rest.
+ *
+ * A container keeps its children in insertion order, and the pools that use
+ * this build theirs lazily — so the sort is what stops a sprite spawned late
+ * from landing above the layer that owns it. Cheap enough to do on every
+ * adoption: pools grow to the run's peak and then stop.
+ */
+export const adopt = (
+  root: Phaser.GameObjects.Container,
+  ...objects: readonly (Phaser.GameObjects.GameObject | undefined)[]
+): void => {
+  for (const object of objects) {
+    if (object !== undefined) root.add(object);
+  }
+  root.sort('depth');
+};
+
+/**
  * Moves a sprite and the glyph riding on it together, so they never drift.
  * Takes loose numbers because the per-frame path calls it for every visible
  * sprite, and a Vec2 per sprite per frame is pure garbage.
