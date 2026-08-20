@@ -13,6 +13,7 @@ import {
   type Vec2,
 } from '../core/types';
 import type { Frame } from '../ui/layout';
+import { ring } from './burst';
 import {
   BORDER,
   adopt,
@@ -24,8 +25,7 @@ import {
   type Drawn,
   type DrawnConfig,
 } from './drawn';
-import { ring } from './burst';
-import { Burst, type BurstConfig } from './effects';
+import { Burst, knock, type BurstConfig } from './effects';
 import { meltedTints, mixTint, type CornerTints } from './melt';
 import { strandSpriteAt } from './strand';
 import { CELL_SIZE, STRAND_TEXTURES, TextureKey } from './textures';
@@ -294,6 +294,41 @@ const CHOP_CRUMBS: BurstConfig = {
 };
 
 /**
+ * How far a shard is thrown: further than a crumb, because a break is an
+ * accident where a chop is a hand-off. Still inside the cell it happened on,
+ * which is design §2's constraint on every effect here.
+ */
+const SHARD_THROW = (CELL_SIZE * 7) / 8;
+
+/**
+ * The strand letting go where it was hit. Lozenges rather than rope — design §2
+ * is explicit that a piece cut loose is not rope any more — and they shrink as
+ * they fly, so the burst reads as the strand coming apart rather than as seven
+ * new segments appearing at the impact.
+ */
+const SHATTER: BurstConfig = {
+  key: TextureKey.Segment,
+  depth: Depth.Shard,
+  durationMs: SHATTER_MS,
+  growth: 0.6,
+  thrown: { pieces: 7, distance: SHARD_THROW, fling: ring },
+};
+
+/**
+ * The knock a break puts through the kitchen, and the one place this game moves
+ * the whole play field.
+ *
+ * Design §2 forbids a screen flash and makes comfort a constraint rather than a
+ * polish item, so this is budgeted in pixels rather than in Phaser's own units
+ * (see `knockIntensity`) and kept to a jolt: two pixels for an eighth of a
+ * second is about seven frames of jitter, under the amplitude where a knock
+ * starts reading as a strobe. Architecture §6 put the HUD in its own scene so
+ * this could exist at all; this is the first thing to spend that.
+ */
+const KNOCK_PIXELS = 2;
+const KNOCK_MS = 120;
+
+/**
  * The two fates draw differently — spilled sugar fades, a waiting batch does
  * not — so one pass sorts the cut pieces into the pool each belongs to.
  */
@@ -350,6 +385,21 @@ export class BoardView {
   private readonly puff: Burst;
   private readonly chopPop: Burst;
   private readonly chopCrumbs: Burst;
+  private readonly shards: Burst;
+  /**
+   * Impacts waiting out their move, and impacts reported this one.
+   *
+   * The view draws the strand *arriving* at the cell it already occupies
+   * logically (see `syncToState`), so a break played on the tick it was
+   * reported puts the shards and the knock a whole cell ahead of the head that
+   * caused them. Held a move, they land as the head is seen to arrive.
+   *
+   * Two fields rather than a queue with a delay on it: the hold is exactly one
+   * move and has to stay that way, and a general "play this later" is how it
+   * quietly becomes two.
+   */
+  private held: Segment[] = [];
+  private breaking: Segment[] = [];
   private previousPickups: readonly Pickup[] | undefined;
   /** The head's dye flash, held so a second jar can cut the first one short. */
   private headFlash: Phaser.Tweens.Tween | undefined;
@@ -409,6 +459,7 @@ export class BoardView {
     this.puff = new Burst(scene, this.root, PUFF);
     this.chopPop = new Burst(scene, this.root, CHOP_POP);
     this.chopCrumbs = new Burst(scene, this.root, CHOP_CRUMBS);
+    this.shards = new Burst(scene, this.root, SHATTER);
   }
 
   /** Call when the core has moved the snake to a new set of cells. */
@@ -433,6 +484,22 @@ export class BoardView {
         .map((pickup) => ({ pos: pickup.pos, color: pickup.primary })),
     );
     this.previousPickups = [...state.pickups];
+    this.playHeldBreaks();
+  }
+
+  /**
+   * Plays the impacts reported a move ago and takes this move's in. The swap is
+   * the whole of the hold — see `held` — and lives in one place so it cannot
+   * silently become none or two.
+   */
+  private playHeldBreaks(): void {
+    for (const impact of this.held) {
+      this.shards.fire(cellToPixel(impact.pos), colorInfo(impact.color).hex);
+      knock(this.scene, KNOCK_PIXELS, KNOCK_MS);
+    }
+
+    this.held = this.breaking;
+    this.breaking = [];
   }
 
   /**
@@ -463,6 +530,20 @@ export class BoardView {
    * One candy leaves per move per severed piece, and each from its own cell, so
    * two pops can never land on the same spot in the same frame and superimpose.
    */
+  /**
+   * The strand ran into itself. Takes the whole severed piece but bursts only
+   * at `severed[0]` — the impact end, which is where the event promises to put
+   * it. The rest of the piece is already coming apart one block per move with a
+   * puff of its own (design §6), and seven bursts on one tick superimpose into
+   * something that reads as one.
+   *
+   * Held a move before it plays, unlike everything else here: see `held`.
+   */
+  shatter(severed: readonly Segment[]): void {
+    const impact = severed[0];
+    if (impact !== undefined) this.breaking.push(impact);
+  }
+
   pop(pos: Vec2, color: ColorMask): void {
     const at = cellToPixel(pos);
     const tint = colorInfo(color).hex;

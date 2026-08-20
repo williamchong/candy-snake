@@ -40,3 +40,17 @@ export const ring: Flinger = (count, turn) =>
     const angle = GOLDEN_TURN * turn + (FULL_TURN * index) / count;
     return { x: Math.cos(angle), y: Math.sin(angle) };
   });
+
+/**
+ * What to hand `camera.shake` so a knock is at most `pixels` on either edge of
+ * the screen.
+ *
+ * Phaser's intensity is a *fraction* of the camera's width and height, not a
+ * distance (`cameras/2d/effects/Shake.js`), so one number knocks a desktop
+ * several times harder than a phone. Design §2 makes comfort a constraint
+ * rather than a polish item, and a constraint you cannot state in pixels is one
+ * you cannot hold — so the budget is spent in pixels here and converted against
+ * the longer edge, which is the one that would overspend it.
+ */
+export const knockIntensity = (pixels: number, width: number, height: number): number =>
+  pixels / Math.max(width, height, 1);

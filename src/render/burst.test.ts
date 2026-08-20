@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ring, type Fling } from './burst';
+import { knockIntensity, ring, type Fling } from './burst';
 
 const FULL_TURN = Math.PI * 2;
 
@@ -63,5 +63,49 @@ describe('ring', () => {
 
   it('throws nothing when a burst has no pieces to throw', () => {
     expect(ring(0, 0)).toStrictEqual([]);
+  });
+});
+
+/** The screens the game is actually laid out for (see `ui/layout.test.ts`). */
+const VIEWPORTS = [
+  ['a phone in portrait', 390, 844],
+  ['a phone in landscape', 844, 390],
+  ['a tablet', 820, 1180],
+  ['a desktop', 1600, 900],
+] as const;
+
+/**
+ * What Phaser will actually offset the camera by, at most: its shake takes a
+ * *fraction* of each edge rather than a distance
+ * (`cameras/2d/effects/Shake.js`), which is the whole reason this arithmetic
+ * exists.
+ */
+const knockOf = (intensity: number, width: number, height: number): number =>
+  Math.max(intensity * width, intensity * height);
+
+describe('knockIntensity', () => {
+  it.each(VIEWPORTS)('never knocks %s past its budget', (_name, width, height) => {
+    // Comfort is a constraint, not a polish item (design §2), and one stated in
+    // Phaser's units is one that quietly means something else on every device.
+    expect(knockOf(knockIntensity(2, width, height), width, height)).toBeLessThanOrEqual(
+      2,
+    );
+  });
+
+  it('spends the whole budget on the longer edge', () => {
+    // Under-spending is its own failure: a knock nobody feels is a jolt the
+    // player is never told about.
+    expect(knockOf(knockIntensity(2, 1600, 900), 1600, 900)).toBeCloseTo(2);
+  });
+
+  it('knocks a tall screen and a wide one by the same distance', () => {
+    // The same break has to feel the same however the phone is being held.
+    expect(knockIntensity(2, 390, 844)).toBeCloseTo(knockIntensity(2, 844, 390));
+  });
+
+  it('survives being asked before the camera has a size', () => {
+    // Scenes are built before the first resize lands, so a zero-sized camera is
+    // reachable — and a division by it would put NaN into the shake.
+    expect(Number.isFinite(knockIntensity(2, 0, 0))).toBe(true);
   });
 });

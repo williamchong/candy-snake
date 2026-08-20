@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 
 import type { Vec2 } from '../core/types';
-import type { Flinger } from './burst';
+import { knockIntensity, type Flinger } from './burst';
 import { adopt, makeSprite } from './drawn';
 import { PIXEL_SCALE, type TextureKey } from './textures';
 
@@ -41,6 +41,23 @@ export interface BurstConfig {
 
 /** How a piece eases out unless its config asks for something else. */
 const DISSIPATES = 'Quad.easeOut';
+
+/**
+ * Knocks the scene's own camera, and nothing else's. `UIScene` runs in parallel
+ * with a camera of its own — which architecture §6 says is exactly what the
+ * two-scene split was for, "so the HUD ignores any camera effects applied to
+ * the play field" — so the score and the queue stand still while the kitchen
+ * takes the hit.
+ *
+ * A second knock inside the first is dropped rather than stacked: Phaser's
+ * `force` defaults to false, and two impacts close together want one jolt, not
+ * a longer one. The shards from both still fire, because where the strand broke
+ * is information and the knock is not.
+ */
+export const knock = (scene: Phaser.Scene, pixels: number, durationMs: number): void => {
+  const camera = scene.cameras.main;
+  camera.shake(durationMs, knockIntensity(pixels, camera.width, camera.height));
+};
 
 /**
  * A pooled puff. Fires in the coordinates of the container it was given, so a

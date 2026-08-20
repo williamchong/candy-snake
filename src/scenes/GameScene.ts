@@ -155,8 +155,11 @@ export class GameScene extends Phaser.Scene {
       case 'life-lost':
         return;
 
-      // Nothing to play yet; the juice pass (Phase 7) fills these in.
       case 'strand-broken':
+        this.view.shatter(event.severed);
+        return;
+
+      // Nothing to play yet; the juice pass (Phase 7) fills these in.
       case 'strand-cut':
       case 'dye-kneaded':
       case 'sugar-pulled':
