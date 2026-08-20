@@ -629,3 +629,31 @@ export const screenCentre = (view: Viewport, insets: Insets = NO_INSETS): Vec2 =
   x: Math.round(insets.left + (view.width - insets.left - insets.right) / 2),
   y: Math.round(insets.top + (view.height - insets.top - insets.bottom) / 2),
 });
+
+/** Close enough to read as one list, far enough apart to read as ten lines. */
+const SCORE_PITCH_MIN = 18;
+const SCORE_PITCH_MAX = 26;
+
+export interface Scoreboard {
+  /** Distance between two entries, in pixels. */
+  readonly pitch: number;
+  /** How many of them there is room for. */
+  readonly shown: number;
+}
+
+/**
+ * How the high-score table fits the room the menu has left it. Ten entries need
+ * most of a phone's height held upright and more than all of one held sideways,
+ * so the table is cut to what fits rather than run off the bottom of the screen
+ * — a menu whose "press any key" has scrolled away is a menu with no way out.
+ *
+ * The pitch closes up before any entry is dropped, down to a floor: squeezing a
+ * list is a smaller loss than truncating it, but only until the lines touch.
+ */
+export const scoreboard = (available: number, count: number): Scoreboard => {
+  const pitch = Math.round(
+    clamp(available / Math.max(count, 1), SCORE_PITCH_MIN, SCORE_PITCH_MAX),
+  );
+
+  return { pitch, shown: clamp(Math.floor(available / pitch), 0, count) };
+};

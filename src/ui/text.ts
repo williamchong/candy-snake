@@ -27,7 +27,7 @@ export const textStyle = (
 });
 
 /** Air either side of the longest line, so nothing sits against the frame edge. */
-const MARGIN = 16;
+export const MARGIN = 16;
 
 export interface StackRow {
   readonly text: string;
@@ -38,8 +38,10 @@ export interface StackRow {
 
 /**
  * A stack of centred lines, which is the whole of what both message screens
- * are. They are re-centred rather than rebuilt on a resize, because on a phone
- * the middle of the screen moves when the device is turned over.
+ * are. Re-centring is the cheap path and the usual one — on a phone the middle
+ * of the screen moves when the device is turned over, and nothing else about
+ * the text has to. A screen whose *rows* depend on the frame rebuilds instead,
+ * which is what `destroy` is for.
  */
 export class TextStack {
   private readonly lines: readonly {
@@ -69,5 +71,14 @@ export class TextStack {
       if (line.width > room) line.setScale(room / line.width);
       line.setPosition(x, y + dy);
     }
+  }
+
+  /**
+   * For the one screen whose rows depend on the frame: a table that fits fewer
+   * entries sideways than upright has to be rebuilt when the phone is turned
+   * over, and its old lines have to go with it.
+   */
+  destroy(): void {
+    for (const { line } of this.lines) line.destroy();
   }
 }

@@ -24,13 +24,24 @@ export const onFrame = (scene: Phaser.Scene, apply: (frame: Frame) => void): voi
 
 /**
  * For the full-screen message screens: the middle of the frame to centre on,
- * and the width they have to fit inside.
+ * and the room around it — the width a line has to fit inside, and, for the one
+ * screen with a list on it, the height.
+ *
+ * Both are what the notch and the home indicator have left, to match the centre,
+ * which `screenCentre` has always inset. Handing over the raw width beside an
+ * inset centre is how a line comes to be allowed room it does not have and run
+ * off the side it was shifted away from.
  */
 export const onScreenCentre = (
   scene: Phaser.Scene,
-  apply: (centre: Vec2, width: number) => void,
+  apply: (centre: Vec2, width: number, height: number) => void,
 ): void =>
   onViewport(scene, () => {
     const view = scene.scale.gameSize;
-    apply(screenCentre(view, readSafeArea()), view.width);
+    const insets = readSafeArea();
+    apply(
+      screenCentre(view, insets),
+      view.width - insets.left - insets.right,
+      view.height - insets.top - insets.bottom,
+    );
   });

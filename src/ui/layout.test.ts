@@ -13,6 +13,7 @@ import {
   hitsTab,
   layout,
   LIVES_CLEARANCE,
+  scoreboard,
   TAB_SIZE,
   wheelSeats,
   WHEEL_PAIRS,
@@ -438,5 +439,50 @@ describe('layout', () => {
     expect(cell).toBeGreaterThan(0);
     expect(board.width).toBeGreaterThan(0);
     expect(board.scale).toBeGreaterThan(0);
+  });
+});
+
+describe('scoreboard', () => {
+  /** What the menu leaves the table: everything under it, less the prompt. */
+  const room = ([, view]: readonly [string, Viewport]): number => view.height / 2 - 40;
+
+  it.each(VIEWPORTS)('keeps the table inside the room it was given on %s', (...entry) => {
+    const available = room(entry);
+
+    const { pitch, shown } = scoreboard(available, 10);
+
+    // The last entry's own offset, which is what has to clear the bottom.
+    expect((shown - 1) * pitch).toBeLessThanOrEqual(available);
+    expect(shown).toBeGreaterThan(0);
+  });
+
+  it('never shows more entries than there are', () => {
+    expect(scoreboard(1_000, 3).shown).toBe(3);
+    expect(scoreboard(1_000, 0).shown).toBe(0);
+  });
+
+  it('closes the pitch up before it drops an entry', () => {
+    // Room for ten at a squeeze: all ten stay, sitting closer together.
+    const tight = scoreboard(200, 10);
+
+    expect(tight.shown).toBe(10);
+    expect(tight.pitch).toBeLessThan(scoreboard(400, 10).pitch);
+  });
+
+  it('drops entries rather than closing the pitch past reading', () => {
+    const cramped = scoreboard(90, 10);
+
+    expect(cramped.shown).toBeLessThan(10);
+    expect(cramped.pitch).toBe(scoreboard(20, 10).pitch);
+  });
+
+  it('holds a ceiling on the pitch, so a tall window is not a sparse list', () => {
+    expect(scoreboard(4_000, 10).pitch).toBe(scoreboard(400, 10).pitch);
+  });
+
+  it('asks for nothing on a frame with no room left in it', () => {
+    const { shown } = scoreboard(0, 10);
+
+    expect(shown).toBe(0);
   });
 });
