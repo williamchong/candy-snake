@@ -30,6 +30,9 @@ import {
  */
 const BENCH = CHOP_BLOCK_CELLS[0]!;
 
+const sum = (numbers: readonly number[]): number =>
+  numbers.reduce((total, value) => total + value, 0);
+
 /** Signed distance the short way round, since the kitchen edges wrap. */
 const shortest = (delta: number, size: number): number =>
   ((((delta + size / 2) % size) + size) % size) - size / 2;
@@ -94,9 +97,11 @@ const jarFor = (state: GameState, primary: Primary): Vec2 | undefined =>
     ?.pos;
 
 /**
- * The jar for the first primary `held` still lacks, if one is on the board.
- * Both bots want exactly this; they differ only in what they do when the floor
- * has not got it.
+ * The jar for the first primary `held` still lacks, if one is on the board —
+ * an order's primaries, for the maker filling that order. The batcher wants the
+ * same thing against its *ladder* rather than against one order, and reads the
+ * rung index out while it is there, so it does this inline; what the two share
+ * is `jarFor` above.
  */
 const jarTowards = (
   state: GameState,
@@ -128,8 +133,7 @@ const demandFor = (stage: StageConfig, color: ColorMask): number => {
   const weight = stage.mix[tier];
   if (weight === undefined) return 0;
 
-  const total = stage.mix.reduce((sum, share) => sum + share, 0);
-  return weight / total / (TIERS[tier]?.length ?? 1);
+  return weight / sum(stage.mix) / (TIERS[tier]?.length ?? 1);
 };
 
 /**
@@ -232,8 +236,7 @@ interface Ladder {
   readonly counts: readonly number[];
 }
 
-const ladderSize = (ladder: Ladder): number =>
-  ladder.counts.reduce((sum, count) => sum + count, 0);
+const ladderSize = (ladder: Ladder): number => sum(ladder.counts);
 
 /** One plain cube — the grinder's whole batch, and `bestLadder`'s floor. */
 const SOLO_CUBE: Ladder = { order: [], counts: [1] };
@@ -376,9 +379,9 @@ const bestLadder = (state: GameState, stage: StageConfig): Ladder => {
   //
   // Defensive rather than live, and measured as such: `LADDER_ORDERS` opens
   // with the empty order, which `buildable` can never reject, so the loop
-  // always assigns — and reaching here at all wants an empty window over a
-  // nearly-full rack. Neither fired once in 7671 calls across four
-  // seven-minute runs.
+  // always assigns — and a zero-size winner wants `openings` at nought, which
+  // is a **full** window over a **full** rack with no waiting child matching
+  // any rung. Neither fired once in 8263 calls across four seven-minute runs.
   return best !== undefined && ladderSize(best) > 0 ? best : SOLO_CUBE;
 };
 
@@ -400,10 +403,11 @@ const bestLadder = (state: GameState, stage: StageConfig): Ladder => {
  * mid-build, or a queue that changed while it was being built, simply re-plans
  * from whatever survived.
  *
- * That read-back is `done`: the ladder's jars the oldest segment has already
- * been through. Counting the *ladder's* dyes rather than the segment's mixes is
- * what keeps a re-plan honest, since a queue that changed can leave the strand
- * carrying a primary the new ladder does not call for.
+ * That read-back is the first of the ladder's jars the oldest segment has *not*
+ * been through. Finding that jar rather than counting how many it has been
+ * through is what keeps a re-plan honest: a queue that changed can leave the
+ * strand carrying a primary the new ladder does not call for, and a count would
+ * then point at the wrong rung while the jar pointed at the right one.
  *
  * Where the board withholds a cube, the bot takes the next jar it still needs
  * rather than stalling. That is not a special case for the opening levels: it
@@ -423,17 +427,19 @@ const batcherGoal: Goal = (state, stage) => {
    */
   const circle = state.snake.head;
 
-  // The first jar the strand has *not* been through, which is where the build
-  // has got to. Found rather than counted: a re-plan mid-build can leave the
-  // strand holding a later rung's primary and not an earlier one, and both the
-  // jar to head for and the rungs already owed have to be read off the same
-  // place or the maker fetches cubes for a rung it is not on.
-  const next = order.find((dye) => (held & dye) === 0);
+  // How far the build has got: the first jar the strand has *not* been through.
+  // Found rather than counted, and found **once** — a re-plan mid-build can
+  // leave the strand holding a later rung's primary and not an earlier one, so
+  // the jar to head for and the rungs already owed have to come off the same
+  // index or the maker fetches cubes for a rung it is not on. `findIndex` gives
+  // both from one scan, which is the coupling rather than a second lookup that
+  // has to agree with the first.
+  const at = order.findIndex((dye) => (held & dye) === 0);
   /** The ladder's jars are all through the strand; only the bench is left. */
-  const finished = next === undefined;
-  const rung = finished ? order.length : order.indexOf(next);
+  const finished = at < 0;
+  const rung = finished ? order.length : at;
   /** Every segment that must be on the strand before that jar is crossed. */
-  const wanted = counts.slice(0, rung + 1).reduce((sum, count) => sum + count, 0);
+  const wanted = sum(counts.slice(0, rung + 1));
 
   // Lay this rung's cubes before crossing the jar that tints them. A cube taken
   // after the jar stays raw, so the ladder would come out a rung short.
@@ -443,7 +449,7 @@ const batcherGoal: Goal = (state, stage) => {
     // No cube to be had, so press on with the next jar rather than stall.
   }
 
-  return finished ? BENCH : (jarFor(state, next) ?? circle);
+  return finished ? BENCH : (jarFor(state, order[rung]!) ?? circle);
 };
 
 const botFor = (game: Game, goalOf: Goal = grinderGoal): TurnSource => ({
@@ -601,11 +607,16 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
       // metric that answers a different question after a rules change, under
       // the same name, is how this harness has gone blind four times.
       //
-      // Read here rather than after the step, for the same reason: this is the
-      // moment the strand was parted. Off the event loop it would also have to
-      // assume one cut a step — true today, since `SPEED_RUNGS` floors a move
-      // at 125 ms against this loop's fixed 20, but an assumption a rules
-      // change could quietly cost.
+      // `kept` is the body at the end of the step, not at the cut — `step`
+      // returns its events already materialised, so reading it in here moves
+      // nothing in time. What being in here buys is that the accounting no
+      // longer assumes **one cut a step**. That assumption holds today
+      // (`SPEED_RUNGS` floors a move at 125 ms against this loop's fixed 20, so
+      // at most one move and so at most one cut) and is exactly the kind of
+      // thing a rules change costs you quietly. A second cut in one step would
+      // still add `kept` twice, so this is honest about the count and not yet
+      // about the length; if a rule ever lands that can part a strand twice in
+      // a move, that is the line to come back to.
       const kept = game.state.snake.body;
       const colors = new Set([...event.batch, ...kept].map((segment) => segment.color));
       if (colors.size > 1) ladders += 1;
@@ -762,7 +773,18 @@ const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
  * wide and read the difference as a curve that moved; on this evidence some of
  * those differences were the draw.
  *
- * It costs about a second of suite time, paid only by the batcher, since the
+ * Sixty-four rather than a rounder thirty-two, and the margin is the reason.
+ * Bootstrapped against a 512-seed pool of batcher deaths (true median ≈ 4.41),
+ * the chance a draw's own median lands under the 4-minute floor runs 12.3% at
+ * sixteen seeds, 6.4% at thirty-two and **1.8% at sixty-four** — and the
+ * sub-draw medians are not even monotonic below that (forty-eight reads lower
+ * than thirty-two), which is the noise saying so itself. The true median sits
+ * only ~0.4 min above a hard floor, so the draw has to be wide enough to
+ * resolve less than that or the assertion fails on the draw rather than on the
+ * game.
+ *
+ * It costs about a second of suite time — ~14 ms a seed, and this is the
+ * largest single test in the project — paid only by the batcher, since the
  * grinder outlives the sweep on most seeds and has no median to speak of.
  */
 const WIDE = [...SWEEP, ...Array.from({ length: 48 }, (_unused, at) => 1_000 + at * 37)];
@@ -844,15 +866,19 @@ describe('the reference players, after the ramp went in', () => {
   const choppedPerMinute = (run: RunResult): number =>
     run.chopped / (run.game.state.elapsedMs / 60_000);
 
+  /** When the ramp closed each batching run out, for the runs it closed. */
+  const deathsOf = (seeds: readonly number[]): number[] =>
+    target(batcherGoal, seeds)
+      .map((run) => run.diedAtMs)
+      .filter((ms): ms is number => ms !== undefined);
+
   it('ends a batching run inside the window the ramp is aimed at', () => {
     // How often the ramp closes a run out is a rate, so it is asked of the
     // wider draw (`SWEEP`) rather than of the four. Every seed, now that an
     // emptied window refills rather than standing open: the queue the run ends
     // on is one the maker actually had to hold off. Measured 16/16, against
     // 14/16 when the window admitted one child per interval whatever it held.
-    const diedAt = target(batcherGoal, SWEEP)
-      .map((run) => run.diedAtMs)
-      .filter((ms): ms is number => ms !== undefined);
+    const diedAt = deathsOf(SWEEP);
     expect(diedAt.length).toBeGreaterThanOrEqual(14);
 
     // *When* it closes them out is the target itself, and the median is what
@@ -864,7 +890,10 @@ describe('the reference players, after the ramp went in', () => {
     // median has moved to `WIDE` for that reason, and every median quoted below
     // was read off sixteen seeds and should be taken as ±0.3 min.
     //
-    // Measured 5.16 min, over deaths running 4.2 … 7.7, against
+    // Measured 4.21 min on `WIDE`, over deaths running 2.6 … 7.5. The figures
+    // that follow are the history of this number and were all read off sixteen
+    // seeds; the jump from the 5.16 recorded below is mostly the draw widening
+    // and not the curve moving. Against
     // 5.79 while the tide still waited for the three-minute mark — the ninth
     // sitting moved it to `SETTLED_MS` and a shape the maker meets a minute in
     // is one they have to hold off for the rest of the run.
@@ -888,10 +917,7 @@ describe('the reference players, after the ramp went in', () => {
     // and the arrival interval — neither of which adds a thing to do. A target
     // past the last of the levers was asking the ramp to hold attention with
     // arithmetic. See the plan's seventh sitting.
-    const sorted = target(batcherGoal, WIDE)
-      .map((run) => run.diedAtMs)
-      .filter((ms): ms is number => ms !== undefined)
-      .sort((a, b) => a - b);
+    const sorted = [...deathsOf(WIDE)].sort((a, b) => a - b);
     const median =
       sorted.length % 2 === 1
         ? sorted[(sorted.length - 1) / 2]!
@@ -906,18 +932,20 @@ describe('the reference players, after the ramp went in', () => {
     // draw could sit dead centre and still send a quarter of its runs past the
     // point the levers ran out, which is the thing the target is against.
     //
-    // Measured **2** of 16, against 3 for the serve count on the same
+    // Measured **2** of 64 — the same draw the median above is read from, so
+    // the two halves of this test are no longer measured on different
+    // populations. Against 3 of 16 for the serve count on the same
     // (mercy-fixed) draw. That is the one thing keying on score bought here,
     // and the interquartile range says it more plainly: 4.3–6.7 min under the
     // serve count against 4.7–6.2 under score, so the distribution closed in
     // from *both* ends. A score is a read on how well a run is going where a
     // serve count reads only how long it has been going on, so the runs that
     // used to get away are the ones the curve now catches.
-    const late = diedAt.filter((ms) => ms > 7 * 60_000);
+    const late = sorted.filter((ms) => ms > 7 * 60_000);
     expect(
       late.length * 4,
-      `${late.length} of ${diedAt.length} closed-out runs passed seven minutes`,
-    ).toBeLessThanOrEqual(diedAt.length);
+      `${late.length} of ${sorted.length} closed-out runs passed seven minutes`,
+    ).toBeLessThanOrEqual(sorted.length);
   });
 
   it('climbs the whole speed ladder and says so, once per rung', () => {
@@ -973,8 +1001,10 @@ describe('the reference players, after the ramp went in', () => {
       // That is the cost `broken` was put here to carry (a production line is a
       // longer strand, and a longer strand is easier to run into), so it is
       // held to a ceiling rather than to zero — a break every fifth run cannot
-      // account for a four-to-one score gap, which is what this has to
-      // establish before the gap can be read as economics.
+      // account for the score gap, which is what this has to establish before
+      // that gap can be read as economics. The gap is **2.24×** in aggregate
+      // over the four seeds here (2.64× over `SWEEP`), and the four carry no
+      // breaks at all.
       expect(batcher.broken).toBeLessThanOrEqual(1);
       expect(grinder.broken).toBe(0);
     });
@@ -992,8 +1022,8 @@ describe('the reference players, after the ramp went in', () => {
     // The batcher is held one slot lower, and the slack is a run length rather
     // than a window that failed to open: the last widening is a row on the ramp,
     // and a maker who dies before reaching that row never sees it. Measured
-    // 15 of 16 at the full depth and one at three, on a median run of 4.2 min —
-    // where before the ceiling went up it was 16 of 16 on a median of 5.7.
+    // 15 of 16 at the full depth and one at three, on a `SWEEP` median run of
+    // 3.95 min — where before the ceiling went up it was 16 of 16 on 5.7.
     // A *second* seed dropping would not be slack; it would be the window
     // closing, which is the thing the seventh sitting built this to catch.
     const short = target(batcherGoal, SWEEP).filter((run) => run.peakQueue < PEAK_QUEUE);
@@ -1057,17 +1087,20 @@ describe('the reference players, after the ramp went in', () => {
     });
 
     // Whether the maker doing more work is *paid* less for it used to be an
-    // invariant too, asked of the same four. A window that refills has taken
-    // it off that footing: a fixed bundle has more targets to land on when
-    // three children are waiting than when one is, and on one seed in the draw
-    // that is now enough to put the batcher ahead. One seed is not a closure —
-    // it is the first movement anything has produced on this finding, and it
-    // is a proportion now, so it moves to the draw that can carry a proportion
-    // (`SWEEP`, and see its own note on why four cannot).
+    // invariant, asked of the same four. It is a proportion now, so it is asked
+    // of the draw that can carry one (`SWEEP`, and see its own note on why four
+    // cannot) — and the proportion is **0 of 16**.
     //
-    // Measured 1 of 16, against 0 of 16 before. Closing the finding means this
-    // number crossing the halfway mark and the assertion inverting with it —
-    // not the assertion being deleted.
+    // It read 1 of 16 for two sittings, on a window that refills giving a fixed
+    // bundle more targets to land on. Raising the bot ceiling took it back to
+    // zero, and that is the more useful number: the seed the batcher used to
+    // win is gone, but it is gone from a bot that now builds a batch of three
+    // at the bench instead of two, plans past the window, and still loses on
+    // every seed. Five sittings held this open on the grounds that the harness
+    // could not be asked. Asked properly, the answer did not change.
+    //
+    // Closing the finding means this number crossing the halfway mark and the
+    // assertion inverting with it — not the assertion being deleted.
     const sweptGrinders = target(grinderGoal, SWEEP);
     const ahead = target(batcherGoal, SWEEP).filter(
       (batcher, seed) => batcher.game.state.score > sweptGrinders[seed]!.game.state.score,

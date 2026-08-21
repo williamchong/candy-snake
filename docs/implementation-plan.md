@@ -1442,7 +1442,9 @@ part of the strand back cannot quietly turn *how long a line did this maker
 build* into *how much of it sold this trip*. `broken` moves off zero for the
 first time — 3 across sixteen seven-minute runs, no seed contributing more than
 one — so it is held under a ceiling instead: that is the cost `broken` exists to
-carry, and a break every fifth run cannot account for a four-to-one score gap.
+carry, and a break every fifth run cannot account for the score gap — which is
+**2.24×** in aggregate over the four seeds that assertion runs, and 2.64× over
+sixteen.
 
 **And a third instrument turned out to have been lying for several sittings.**
 The 4–6 minute death target is read off the *median*, and the median was being
@@ -1468,6 +1470,15 @@ because the last widening is a *row on the ramp* and a run that ends at 4.2 min
 never reaches it. The claim belongs to the maker who lives long enough to be
 shown all four — the grinder, still 16 of 16 — and the batcher is held one slot
 lower, with a second seed dropping being the window closing rather than slack.
+
+Sixty-four is not a round number picked for comfort, either. Bootstrapped
+against a 512-seed pool of batcher deaths (true median ≈ 4.41 min), the chance a
+draw's own median falls under the 4-minute floor runs **12.3% at sixteen seeds,
+6.4% at thirty-two, 1.8% at sixty-four** — and below sixty-four the sub-draw
+medians are not even monotonic in the draw size, which is the noise announcing
+itself. The true median sits about 0.4 min above a hard floor, so the draw has
+to resolve finer than that or the assertion is measuring the draw. It costs
+~14 ms a seed, and the median is now the largest single test in the project.
 
 **With the ceiling up, the arm worth measuring was the one that keeps length and
 hands the color back.** The proposal's insight is right and rare — make a long
