@@ -80,7 +80,10 @@ export class Parade {
       show(drawn, pose.visible);
       if (!pose.visible) return;
 
-      drawn.image.setTexture(pose.key);
+      // Guarded, as the serving queue guards its own legs (`customerView`): a
+      // swap costs a texture lookup and a re-origin, and nine of the ten
+      // members here never change frame at all.
+      if (drawn.image.texture.key !== pose.key) drawn.image.setTexture(pose.key);
       place(drawn, this.left + pose.x, this.middle + pose.y);
     });
   }
