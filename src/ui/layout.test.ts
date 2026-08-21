@@ -12,6 +12,7 @@ import {
   CHILD_HEADROOM,
   CHILD_UNDERFOOT,
   EXIT_GAP,
+  HEADLINE_ROOM,
   hitsTab,
   layout,
   LIVES_CLEARANCE,
@@ -218,6 +219,28 @@ describe('layout', () => {
       queue.front.y,
     );
   });
+
+  it.each(VIEWPORTS)(
+    'hangs the tutorial headline on the kitchen edge on %s',
+    (_name, view) => {
+      const frame = layout(view);
+      const { headline, shelf } = frame.hud;
+
+      expect(headline.x).toBe(Math.round(frame.board.x + frame.board.width / 2));
+      if (frame.orientation === 'landscape') {
+        // Above the board it captions — a phone held sideways has no air over
+        // the kitchen, so there the line may lap the top wall, but it must
+        // never leave the screen instead.
+        expect(headline.y).toBeLessThanOrEqual(frame.board.y);
+        expect(headline.y).toBeGreaterThan(0);
+        return;
+      }
+      // Upright the band over the kitchen belongs to the open cheat sheet, so
+      // the line hangs under the board instead — and clear of the rack below.
+      expect(headline.y).toBeGreaterThanOrEqual(frame.board.y + frame.board.height);
+      expect(headline.y + HEADLINE_ROOM).toBeLessThanOrEqual(shelf.at.y - shelf.slot / 2);
+    },
+  );
 
   it.each(VIEWPORTS)('lands on whole pixels on %s', (_name, view) => {
     const { cell, board } = layout(view);

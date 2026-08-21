@@ -27,6 +27,25 @@ export interface TutorialLevel {
 /** A beat between levels, so the serve reads before the next child walks up. */
 export const TUTORIAL_ARRIVAL_GAP_MS = 1_000;
 
+/**
+ * The line the HUD hangs over the kitchen while each opening level runs,
+ * indexed the way `rollTutorial` orders them: raw first, then one dye, then
+ * the mix — whatever colors the seed happens to roll, so the words can stay
+ * fixed while the board varies. It lives beside the levels it captions so the
+ * two lists cannot drift apart.
+ *
+ * Each line names only what the player *does* — eat and chop, then dye, then
+ * blend. The serve at the end goes unmentioned because it is nothing the
+ * player does: a chopped candy is offered to the child at the window by
+ * itself (design §5), and the child's own bubble already says what the candy
+ * is for.
+ */
+export const TUTORIAL_HEADLINES: readonly string[] = [
+  'Eat sugar and chop it into candy',
+  'Dye the sugar to make colored candy',
+  'Mix two dyes to make a new color',
+];
+
 const level = (want: ColorMask): TutorialLevel => ({ want, stock: primariesOf(want) });
 
 /**

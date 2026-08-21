@@ -7,6 +7,7 @@ import {
   stockedPrimaries,
   stocksDyes,
   stocksSugar,
+  TUTORIAL_HEADLINES,
   type TutorialLevel,
 } from './tutorial';
 import { Dir, RAW, type ColorMask, type GameState } from './types';
@@ -61,6 +62,12 @@ describe('rollTutorial', () => {
 
   it('replays identically from the same seed', () => {
     expect(tutorialFor(42)).toEqual(tutorialFor(42));
+  });
+
+  it.each(SEEDS)('has one headline per level, and none to spare (seed %d)', (seed) => {
+    // The captions are indexed by `tutorialIndex`, so the two lists drifting
+    // apart would mean a level playing under the wrong lesson — or none.
+    expect(TUTORIAL_HEADLINES).toHaveLength(tutorialFor(seed).length);
   });
 
   it('does not always teach the same dye', () => {

@@ -27,6 +27,20 @@ export const textStyle = (
   ...extra,
 });
 
+/**
+ * Shrink-to-fit: a line too wide for `width` (less the margins) is scaled
+ * down to it rather than being clipped at both ends — the alternative is
+ * picking a font size that fits the smallest screen and looks lost on every
+ * other one. Measured unscaled, or a line that was shrunk once would keep
+ * shrinking.
+ */
+export const fitLine = (line: Phaser.GameObjects.Text, width: number): void => {
+  const room = width - 2 * TEXT_MARGIN;
+
+  line.setScale(1);
+  if (line.width > room) line.setScale(room / line.width);
+};
+
 export interface StackRow {
   readonly text: string;
   readonly size: number;
@@ -54,19 +68,10 @@ export class TextStack {
     }));
   }
 
-  /**
-   * `width` is what the line has to fit inside. A narrow phone is narrower than
-   * the title is long, so a line too wide for the frame is scaled down to it
-   * rather than being clipped at both ends — the alternative is picking a font
-   * size that fits the smallest screen and looks lost on every other one.
-   */
+  /** `width` is what each line has to fit inside — see `fitLine`. */
   centreOn({ x, y }: Vec2, width: number): void {
-    const room = width - 2 * TEXT_MARGIN;
-
     for (const { line, dy } of this.lines) {
-      // Measured unscaled, or a line that was shrunk once keeps shrinking.
-      line.setScale(1);
-      if (line.width > room) line.setScale(room / line.width);
+      fitLine(line, width);
       line.setPosition(x, y + dy);
     }
   }

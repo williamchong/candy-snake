@@ -49,6 +49,14 @@ export interface BoardFrame extends Vec2 {
 
 export interface HudFrame {
   readonly score: Vec2;
+  /**
+   * The centre of the tutorial's lesson line, hung on the kitchen's free edge
+   * — over it in landscape, under it upright, where the band above belongs to
+   * the open cheat sheet. The text is `core/tutorial.ts`'s
+   * `TUTORIAL_HEADLINES`, and the widget fits it to the board's width the way
+   * `TextStack` fits a line.
+   */
+  readonly headline: Vec2;
   /** The first heart; the rest follow along the row at `pitch`. */
   readonly lives: { readonly at: Vec2; readonly pitch: number };
   /**
@@ -335,6 +343,31 @@ const rowCentreY = (board: BoardFrame, cell: number, row: number): number =>
   board.y + row * cell + cell / 2;
 
 /**
+ * How far past the board's edge the headline's centre hangs — snug against
+ * the kitchen it captions, not centred in whatever slack a big window leaves
+ * beyond it, where it would read as belonging to nothing.
+ */
+const HEADLINE_LIFT = GUTTER;
+/** Half the line's height: what whatever bounds it must keep clear of its centre. */
+export const HEADLINE_ROOM = 12;
+
+/**
+ * Where the tutorial's lesson line sits in landscape: centred over the board,
+ * hung `HEADLINE_LIFT` above its top edge. A phone held sideways leaves no
+ * air over the kitchen at all, so there the frame edge wins and the line laps
+ * the board's top wall instead — snug on the wall it is still readable, half
+ * off the screen it is not.
+ *
+ * Only landscape hangs it on top: upright, that band is the open cheat
+ * sheet's (which stays up by design, and for exactly the player the tutorial
+ * is teaching), so `portraitFrame` hangs the line under the kitchen instead.
+ */
+const headlineFor = (board: BoardFrame, topEdge: number): Vec2 => ({
+  x: Math.round(board.x + board.width / 2),
+  y: Math.max(board.y - HEADLINE_LIFT, topEdge + HEADLINE_ROOM),
+});
+
+/**
  * Board left, serving column right, against the wall the chopping block cuts on
  * — bench, child and rack reading down one side (design §10).
  */
@@ -425,6 +458,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
     board,
     hud: {
       score: { x: columnX, y: insets.top + 40 },
+      headline: headlineFor(board, insets.top),
       lives: { at: { x: columnX + 8, y: livesY }, pitch: LIVES_PITCH },
       // `at` is the first slot's centre and `rackTop` its top edge: the run
       // starts half a slot below the clearance the child was given, or the
@@ -500,8 +534,10 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
   // band, so the gutter above the kitchen is what gives way rather than the
   // panel climbing off the top of the screen.
   const sheetBottom = clamp(board.y - GUTTER / 2, insets.top + wheel.height, board.y);
+  // The board's midline, which the sheet and the headline both centre on.
+  const midX = Math.round(board.x + board.width / 2);
   const sheetAt = {
-    x: Math.round(board.x + board.width / 2),
+    x: midX,
     y: Math.round(sheetBottom - wheel.height / 2),
   };
 
@@ -512,6 +548,15 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
     hud: {
       // Score and lives take the band above the board, at either end of it.
       score: { x: board.x, y: insets.top + SCORE_ROW },
+      // Under the kitchen, not over it: the band above is where the cheat
+      // sheet opens, and it is exactly the player mid-tutorial who has it
+      // open. The gap below the board is spare on every upright screen but
+      // the smallest, where the strip's edge wins and the line hugs the
+      // board's bottom wall instead.
+      headline: {
+        x: midX,
+        y: Math.min(board.y + board.height + HEADLINE_LIFT, stripTop - HEADLINE_ROOM),
+      },
       lives: {
         at: {
           x: right - 8 - (STARTING_LIVES - 1) * LIVES_PITCH,

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { RED } from '../core/colors';
 import { STARTING_LIVES, type Game } from '../core/game';
+import { TUTORIAL_HEADLINES } from '../core/tutorial';
 import type { GameEvent } from '../core/types';
 import { bindHotkey, HotKey } from '../input/keyboard';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
@@ -13,7 +14,7 @@ import { MuteTab } from '../ui/muteTab';
 import { onFrame } from '../ui/responsive';
 import { RushDoor } from '../ui/rushDoor';
 import { ShelfStrip } from '../ui/shelfStrip';
-import { textStyle } from '../ui/text';
+import { fitLine, textStyle } from '../ui/text';
 import { SceneKey } from './keys';
 
 /**
@@ -41,6 +42,9 @@ type HudEvent = Extract<
 export class UIScene extends Phaser.Scene {
   private core!: Game;
   private scoreText!: Phaser.GameObjects.Text;
+  private headline!: Phaser.GameObjects.Text;
+  /** The width the headline has to fit inside, from the last layout pass. */
+  private headlineWidth = 0;
   private lives: Phaser.GameObjects.Image[] = [];
   private queue!: CustomerQueue;
   private door!: RushDoor;
@@ -53,6 +57,8 @@ export class UIScene extends Phaser.Scene {
    * would suppress the first draw of a fresh one.
    */
   private shownLives = -1;
+  /** Lesson line last drawn. Reset in `create` for the reason `shownLives` is. */
+  private shownLesson = '';
 
   constructor() {
     super(SceneKey.UI);
@@ -62,7 +68,13 @@ export class UIScene extends Phaser.Scene {
     this.core = data.core;
 
     this.shownLives = -1;
+    this.shownLesson = '';
     this.scoreText = this.add.text(0, 0, '0', textStyle(30)).setOrigin(0, 0.5);
+
+    // The tutorial's lesson line, hung over the kitchen. What it says is read
+    // from core state every frame like everything else here, so it changes as
+    // each opening level is served and goes blank when the tutorial is over.
+    this.headline = this.add.text(0, 0, '', textStyle(20)).setOrigin(0.5);
 
     // Hearts in ink rather than red: a life is not a candy, and hue in this
     // game belongs to candies alone (design §4, palette constraints). The heart
@@ -106,6 +118,10 @@ export class UIScene extends Phaser.Scene {
       const { score, lives } = frame.hud;
 
       this.scoreText.setPosition(score.x, score.y);
+      this.headline.setPosition(frame.hud.headline.x, frame.hud.headline.y);
+      // Fits the board it now hangs over, not the one it was last fitted to.
+      this.headlineWidth = frame.board.width;
+      fitLine(this.headline, this.headlineWidth);
       this.lives.forEach((heart, life) =>
         heart.setPosition(lives.at.x + life * lives.pitch, lives.at.y),
       );
@@ -128,6 +144,18 @@ export class UIScene extends Phaser.Scene {
     const { state } = this.core;
 
     this.scoreText.setText(`${state.score}`);
+
+    // Only the opening levels carry a headline: once `openingLevel` runs out
+    // the line goes blank for the rest of the run.
+    const lesson = this.core.openingLevel
+      ? (TUTORIAL_HEADLINES[state.tutorialIndex] ?? '')
+      : '';
+    if (lesson !== this.shownLesson) {
+      this.shownLesson = lesson;
+      this.headline.setText(lesson);
+      fitLine(this.headline, this.headlineWidth);
+    }
+
     this.shelf.render(state.shelf);
     // Real elapsed time, not the core's fixed slice: the children walk on the
     // display's clock, the way every other tween in the HUD does.
