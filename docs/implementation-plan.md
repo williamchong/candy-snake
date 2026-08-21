@@ -1717,6 +1717,131 @@ the half that is a judgement.
 | 7     | Teachability + juice                     | New-player comprehension        |
 | 8     | Shipped URL                              | Release mechanics               |
 
+### What the speed-ladder pass measured — the ramp's quietest lever
+
+Not a sitting: one report from the chair, and a sharp one — *the snake gets
+faster with no visual hint or expectation, so the player only vaguely feels it
+sometimes*. The first answer given was that the ramp already varies speed and
+has since Phase 5, which is true and is not what was asked. Whether the
+mechanic exists and whether the player can perceive it are different questions,
+and only the first had ever been measured.
+
+**Measured, the speed column was below the threshold of noticing.** Sampling
+`moveIntervalMs` off the curve, as a percentage change over windows a player
+could actually attend to:
+
+| ramp-min | interval | cells/s | Δ per 5 s | Δ per 15 s |
+| -------- | -------- | ------- | --------- | ---------- |
+| 0.0      | 200 ms   | 5.00    | 2.38%     | 7.12%      |
+| 0.5      | 171 ms   | 5.83    | 2.77%     | 8.31%      |
+| 1.0      | 143 ms   | 6.99    | **0.52%** | 1.57%      |
+| 2.0      | 134 ms   | 7.46    | 0.56%     | 1.68%      |
+| 3.0      | 125 ms   | 8.00    | **0.00%** | 0.00%      |
+
+Speed discrimination sits around 5%. From the Settled row to the cap the strand
+crossed a third of its whole range at a tenth of that rate — and then stopped
+for good at three minutes, against a median death of 5.2. So the chair's report
+was three separate faults, only one of which was the missing indicator:
+
+1. **No channel at all.** `grep moveIntervalMs` reached `core/game.ts`'s step
+   loop and the tables that fill it, and nothing else — not `scenes/`, not
+   `ui/`, not `render/`, not `audio/`. Arrivals got `Game.rush`, `ui/rushDoor.ts`
+   and nine seconds of telegraph; speed got nothing.
+2. **A rate nobody can resolve**, per the table above.
+3. **No terminal signal.** Past three minutes the strand never gets faster
+   again, and the run had no way to say so — leaving the rest of every run
+   braced for an acceleration that was not coming.
+
+**The fix steps the column and announces each step** (`SPEED_RUNGS`): seven
+geometric rungs of 6.9%, comfortably over the threshold, each firing
+`speed-raised` → the Quicken cue and a pulse on the head. The top rung pulses
+twice and resolves to an octave, which is fault 3 answered.
+
+**Stepping a knob the whole table interpolates needed the sweeps re-run, and
+they came back flat.** Two things say so:
+
+- **The snap is centred, not one-sided.** Over seven minutes of ramp the mean
+  interval moves **0.003%**, with the ramp spending 21.4% of itself just under
+  the old curve against 21.4% just over it. Snapping *down* to the last rung
+  passed would have been the obvious implementation and would have made the
+  whole ramp quietly slower.
+- **A 64-seed draw of the batching bot reads 5.30 min against the continuous
+  curve's 5.17 on the same seeds**, same 5 runs past seven minutes either side.
+  The 16-seed sweep alone read 5.16 → 5.52, which is why it was widened: at
+  n=16 a 7% median move is noise, and this file has now said four times that a
+  run either side of a change that moves an rng draw is a different run.
+
+**What fell out of it that was not designed.** Rung 5 is 143 ms — the Settled
+anchor exactly — because the handover-to-Settled span is 2.49 times the
+Settled-to-Rush span in log terms and five rungs against two is 2.5. The ladder
+was already implied by the table, which is the other reason this moved the
+curve so little. And the rungs land at 6.9 s, 20, 32, 44, 55, 91 and 151 s on
+the clock: five gear changes in the first minute that teach what the cue means,
+then two spaced ones that mean something. Nobody chose that shape either.
+
+**The ladder is on the stopwatch, not on the score — which the docs do not
+claim and probably should not want.** `rampMs` is `max(endlessMs, score × 70)`,
+so speed already keys on score in the sense §7 describes. Measured on the
+batching bot, it barely does:
+
+| rung | ramp-s when played | ramp-s on the clock alone | pulled forward |
+| ---- | ------------------ | ------------------------- | -------------- |
+| 1–6  | 6.9, 20.1, 32.4, 44.0, 54.8, 91.0 | 6.9, 20.1, 32.5, 44.0, 54.8, 91.0 | ~0 s |
+| 7    | 131.7              | 151.0                     | **19.3 s**     |
+
+Six of the seven gear changes land on the clock; score only overtakes at the
+cap. That is `MS_PER_POINT` doing exactly what it was fitted to do and no more
+— it was measured against ramp-minute 1.5 *onward*, and the whole speed ladder
+finishes at ramp 151 s. So the legibility argument that moved the ramp onto
+score ("the shop gets busier as your score climbs" is readable off the HUD) is
+true of the arrival column and false of this one.
+
+Left where it is, deliberately. Dropping the clock floor would make it *worse*:
+`max` fires at or before either term alone, so score-only strictly **delays**
+rungs 1–6, and it would leave a struggling maker — scoring slowly, and the one
+who most needs the run to keep moving — at the handover speed indefinitely
+(§1 has difficulty ramping until lives run out). Making score genuinely lead
+needs a *larger* coefficient for this column alone, and 85 and 100 ms/point
+were both tried and rejected for the ramp as a whole; doing it for speed only
+decouples this column from the single ramp position every other knob reads,
+which is the property that keeps `stageAt` one function over one table.
+**Open, as a known gap between the doc's stated rule and this column's
+behaviour, rather than as work.**
+
+**Left open: the expectation half.** The chair asked for a *hint* and an
+*expectation*, and this delivers the hint. A player is now told the strand
+changed gear, but still cannot see how many gears are left before the cap —
+the ladder is legible one rung at a time rather than as a whole. A rung gauge
+in the HUD is the obvious answer and is deliberately not built here, since the
+announcement may well be enough on its own. **Open until the chair says.**
+
+### What the queue-coupling question settled — speed stays off the window
+
+Asked in the same breath as the report above: *should speed be related to the
+number of pending customers?* The instinct is right — a visible cause is
+exactly what the speed column lacked — and the answer is still no.
+
+- **The window already drives a lever, and it is the arrival one.**
+  `arrivalGapMs` is `intervalMs × (customers + 1) / maxQueue`, so an emptier
+  window fills proportionally faster (§7). Coupling speed to the same number
+  doubles a feedback path rather than adding one.
+- **It points the wrong way whichever way it points.** Faster when busy
+  compounds falling behind into falling further behind; slower when busy pays
+  the maker for being late. The ramp's other levers all tighten monotonically
+  and none of them reads the player's current trouble.
+- **It is the control parameter.** Speed is the tempo the player's hands are
+  matched to, which is why the table eases it rather than stepping it at a
+  stage boundary. Yanking it on every arrival and every serve makes the strand
+  feel unreliable to steer, and a serve would *slow the maker down* — success
+  reading as a brake.
+- **It cannot coexist with the ladder.** A rung that goes up and down is cue
+  spam, and the top rung — the one genuinely new thing the run can now say —
+  stops existing.
+
+The tide is the shape the window was already given to play against, and it is
+the right home for "the shop got busier": it moves arrivals, is telegraphed in
+the doorway, and leaves the maker's own tempo alone.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

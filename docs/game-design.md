@@ -445,6 +445,29 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   all three tiers, so dropping the order mix back would read as going backwards
   — but a strand that jumped 40% faster the instant the third child was served
   would lurch.
+- **Snake speed is the one stepped column.** Every other knob interpolates so
+  it cannot lurch; speed did too, and it made the game's most expensive lever
+  imperceptible — measured off the curve, the interval changed 0.52% per five
+  seconds between the Settled row and the cap, against a discrimination
+  threshold near 5%, and then stopped moving at three minutes with the median
+  run still ninety seconds from ending. So the interval is snapped to a ladder
+  of **seven geometric rungs, 6.9% apiece** (`SPEED_RUNGS`), and each new rung
+  is announced: the head pulses, and a cue climbs a step. Rung 5 is 143 ms —
+  the Settled row exactly, which fell out of the table's own proportions rather
+  than being arranged. The snap is to the *nearest* rung, so the mean interval
+  moves 0.003% and the curve the sweeps measured is the curve that still runs.
+- **The top rung is news, and is drawn and sounded as such** — a double pulse
+  and an octave. Past it the strand never gets faster, and a player who is not
+  told that spends the rest of the run braced for an acceleration that is not
+  coming. It is the only lever whose *exhaustion* the game announces, because
+  it is the only one the player would otherwise keep waiting on.
+- **Speed is not coupled to the depth of the window, deliberately.** The queue
+  already drives the arrival lever (the bullet below), so keying speed to it
+  too doubles one feedback path instead of adding one — and it points the wrong
+  way either way: faster-when-busy compounds falling behind, slower-when-busy
+  pays the maker for being late. Speed is also the tempo the player's hands are
+  matched to; a serve that *slowed the maker down* would read as success being
+  punished. The tide (below) is where "the shop got busier" belongs.
 - **Arrival interval is the lever that ends a run.** Speed caps at 8 cells/s, so
   past the Rush row the window is the only thing still tightening; a curve that
   flattened while the player still had headroom would never bring the run to an
@@ -503,7 +526,7 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
 - The rare **brown-accepting customer** (~5% once the ramp has settled) only
   appears if a brown candy is on the shelf. Because a new arrival sweeps the
   rack, they are served the moment they walk up: the cleanup is the whole visit.
-- Measured against the reference bots, a maker who batches dies around 5.2
+- Measured against the reference bots, a maker who batches dies around 5.3
   minutes on most seeds, against a target of 4–6. The target read 8–10 until the seventh
   sitting, which is where the case for moving it is: **every lever that adds a
   new thing to do is spent by the 3-minute mark** — max queue at 2 min, the order
@@ -686,6 +709,13 @@ High scores (top 10, with date) persist in `localStorage`.
   hearts are inked in the symbol's own dark value rather than red: a life is
   not a candy, and hue in this game belongs to candies alone (§4, palette
   constraints).
+- **Announcements go where the player is already looking.** The gear change of
+  §7's speed ladder pulses the *head* rather than lighting a pip beside the
+  score: the thing whose speed changed is the thing being steered, and news
+  delivered to the far end of the screen is news read late or not at all. It is
+  pale ink, not heat — orange would be the obvious colour for a strand running
+  hotter, which is exactly why it is not used (§4: hue belongs to candies, and a
+  head flashing a secondary reads as a candy being made).
 - **No prose in the HUD.** The only text on the play screen is the score, and
   that is a number. Everything else — what a child wants, how long they will
   wait, how they took it — is carried by a drawn thing, because the HUD is read
