@@ -5,6 +5,7 @@ import { patienceFraction } from '../core/customers';
 import { RAW, type ColorMask, type Customer } from '../core/types';
 import {
   BORDER,
+  CHILD_TINT,
   GLYPH_TINT,
   HudDepth,
   makeDrawn,
@@ -52,8 +53,6 @@ export const CHILD_SCALE = 3;
 /** How tall a child is drawn — what anything standing one on the line needs. */
 export const CHILD_HEIGHT = TEXTURE_SIZE * CHILD_SCALE;
 
-/** A customer, in ink diluted toward the chrome: shop, not candy (design §4). */
-export const CHILD_TINT = 0xa08fb4;
 /** The bubble is a panel like any other, and reads against the same ground. */
 const BUBBLE_TINT = PANEL_FILL;
 

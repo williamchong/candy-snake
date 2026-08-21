@@ -16,6 +16,7 @@ import type { Frame } from '../ui/layout';
 import { ring } from './burst';
 import {
   BORDER,
+  HEAD_TINT,
   adopt,
   makeDrawn,
   makeSprite,
@@ -56,13 +57,6 @@ const BOARD_Y = 0;
  * silently redraws the furniture.
  */
 const BOARD_BORDER_WIDTH = 4;
-
-/**
- * Hue carries meaning in this game, so only candies may spend it (design §4,
- * palette constraints). The head is not a candy: it is separated by value, as
- * the darkest thing on the board.
- */
-const HEAD_TINT = 0x6e6478;
 
 /**
  * The bench sits between the head and the floor in value, and takes no hue —

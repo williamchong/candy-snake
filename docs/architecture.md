@@ -91,12 +91,14 @@ candy-snake/
     │   ├── melt.ts            # where two colours meet along the rope (pure)
     │   ├── deform.ts          # the pull, and the swallow: per-frame scale (pure)
     │   ├── burst.ts           # where a burst throws; the knock's budget (pure)
+    │   ├── parade.ts          # the menu's walkers: cast, and where they are (pure)
     │   ├── boardView.ts       # grid → sprites, segment coloring
     │   └── effects.ts         # particles, tweens (chop pop, shatter, confetti)
     ├── ui/
     │   ├── customerView.ts    # one child: walk, bubble, face, patience bar
     │   ├── customerQueue.ts   # the line at the window, keyed by customer id
     │   ├── shelfStrip.ts      # the six candy slots, under the window
+    │   ├── parade.ts          # the menu's parade, on screen: sprites and a band
     │   ├── text.ts            # one answer to "what does screen text look like"
     │   ├── cheatSheet.ts      # the mixing wheel, and when it shows itself
     │   ├── muteTab.ts         # the audio toggle, beside the sheet's own tab

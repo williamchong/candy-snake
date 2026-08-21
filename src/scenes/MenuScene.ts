@@ -3,6 +3,7 @@ import Phaser from 'phaser';
 import { onceAnyInput } from '../input/anyInput';
 import { asDay, highScores, type ScoreEntry } from '../persist/storage';
 import { EXIT_GAP, menuPlan, type MenuPlan } from '../ui/layout';
+import { Parade } from '../ui/parade';
 import { onScreenCentre } from '../ui/responsive';
 import { TextStack, type StackRow } from '../ui/text';
 import { SceneKey } from './keys';
@@ -17,6 +18,10 @@ import { SceneKey } from './keys';
  * coordinates, so it reads the same on a phone as it does in a window. Starting
  * the run is a tap anywhere (`onceAnyInput`), which is as large as a touch
  * target can be.
+ *
+ * Between the tagline and the table walks the parade (`ui/parade.ts`), on the
+ * frames with room to spare for one — the only part of this screen that shows
+ * what the game looks like.
  */
 const TITLE = 'Candy Snake';
 const TAGLINE = 'Pull sugar · knead dye · chop candy';
@@ -35,7 +40,8 @@ const sameAs = (a: MenuPlan, b: MenuPlan | undefined): boolean =>
   a.title === b.title &&
   a.top === b.top &&
   a.pitch === b.pitch &&
-  a.shown === b.shown;
+  a.shown === b.shown &&
+  a.parade === b.parade;
 
 /**
  * The whole screen, laid out downward from the title. Everything below it is
@@ -75,6 +81,11 @@ const rows = (scores: readonly ScoreEntry[], laid: MenuPlan): readonly StackRow[
 export class MenuScene extends Phaser.Scene {
   /** The stack and what it was laid out for — one field, because they move together. */
   private built: { readonly stack: TextStack; readonly laid: MenuPlan } | undefined;
+  /**
+   * Built once and only ever re-centred: what walks past does not depend on the
+   * frame, so a window drag has no reason to rebuild it the way it can the text.
+   */
+  private parade: Parade | undefined;
 
   constructor() {
     super(SceneKey.Menu);
@@ -82,15 +93,28 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     const scores = highScores();
-    // Phaser reuses the scene instance, so this outlives `create` and would
-    // otherwise point at text destroyed on the way out to the last run.
+    // Phaser reuses the scene instance, so these outlive `create` and would
+    // otherwise point at objects destroyed on the way out to the last run.
     this.built = undefined;
+    this.parade = new Parade(this);
 
     onScreenCentre(this, (centre, width, height) => {
-      this.stackFor(scores, menuPlan(height, scores.length)).centreOn(centre, width);
+      const laid = menuPlan(height, scores.length);
+
+      this.stackFor(scores, laid).centreOn(centre, width);
+      this.parade?.centreOn(centre, width, laid.parade);
     });
 
     onceAnyInput(this, () => this.scene.start(SceneKey.Game));
+  }
+
+  /**
+   * The one thing on this screen that moves. Off the scene clock rather than an
+   * accumulated delta: the walkers' phases are functions of the time, so a
+   * dropped frame costs a step rather than sliding the whole parade behind.
+   */
+  override update(time: number): void {
+    this.parade?.update(time);
   }
 
   /**

@@ -1,8 +1,8 @@
 import type Phaser from 'phaser';
 
-import { HudDepth, makeSprite } from '../render/drawn';
+import { CHILD_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { TextureKey } from '../render/textures';
-import { BODY_Y, CHILD_SCALE, CHILD_TINT } from './customerView';
+import { BODY_Y, CHILD_SCALE } from './customerView';
 import type { Frame } from './layout';
 
 /**

@@ -2023,6 +2023,54 @@ The tide is the shape the window was already given to play against, and it is
 the right home for "the shop got busier": it moves arrivals, is telegraphed in
 the doorway, and leaves the maker's own tempo alone.
 
+### What the menu-parade pass added — the front of the shop showed no shop
+
+The menu was four lines of text and a table over an empty band, on a screen
+where every sprite the game owns is already baked (`BootScene`). A short strand
+now walks one way across that band while a child carrying a candy walks the
+other, and they pass in front of the high-score table.
+
+- **It is also the palette, before a key is pressed.** The strand carries six of
+  the eight colours — every second- and third-tier one — each wearing its
+  accessibility symbol (§4), melted at the seams by the same `meltedTints` the
+  board uses. Brown is left out: it is the mistake colour, and the front of the
+  shop is not the place to advertise one.
+- **The band is a layout decision, so `menuPlan` owns it.** `ui/layout.ts` is
+  the only file that knows a screen pixel (arch §9), and the band is the same
+  kind of question the title clamp already is. It comes back as one more offset,
+  and the menu's rebuild guard compares it like the rest.
+- **The parade gives way before the table does.** Same order the title is
+  already in: the band is reserved only when it costs the table no entry *and*
+  what is left still ends inside the frame. A phone held sideways drops it and
+  keeps its five scores. The second half of that rule is the one no device
+  exercises — with no scores yet the table cannot lose an entry, which would
+  otherwise buy the band a run off the bottom for free.
+- **Most of the band was already there.** The gap under the title is 72 px of
+  which only the bottom belongs to the table's heading and the top to the
+  tagline, so the screen grows by the 44 px the band could not find — few enough
+  that a 960×640 window still shows all ten scores. The first cut reserved the
+  band as new air on top of the gap and put the rope through the "press any key"
+  line; the fix was to spend the gap rather than to add to it.
+- **The child carries the candy in front rather than over their head.** A bubble
+  overhead is how the serving queue holds an *order* up; this one has already
+  been paid for. It also costs the band no height, and height is what the score
+  table pays for.
+- **The maths is a separate pure module, as `melt.ts` and `deform.ts` are.**
+  `render/parade.ts` answers where every member of a fixed cast stands given the
+  clock and the width; `ui/parade.ts` does nothing but push those numbers into
+  sprites. That is what let a test catch the one bug worth catching: the loop's
+  turnover and the visibility cull were two independent numbers, and the lead
+  sprite re-entered from the left while still counting as visible — a teleport in
+  plain sight. Both now come off one `CLEARANCE`.
+- **`HEAD_TINT` and `CHILD_TINT` moved down into `render/drawn.ts`.** The parade
+  needs both and `render/` may not reach up into `ui/`, so they now sit beside
+  `GLYPH_TINT` and `BORDER` — the module that already owns the chrome tints —
+  rather than being copied a third time.
+
+Nothing here is random and nothing here is audible: a fixed cast at fixed speeds
+needs no draw at all, and the menu is before the first gesture, which is before
+a browser will let a cue play.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

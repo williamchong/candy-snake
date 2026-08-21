@@ -28,6 +28,16 @@ export const NO_TINT = 0xffffff;
 export const GLYPH_TINT = 0x5f5668;
 export const BORDER = 0xc9b4dd;
 
+/**
+ * Hue carries meaning in this game, so only candies may spend it (design §4,
+ * palette constraints). The head is not a candy: it is separated by value, as
+ * the darkest thing on the board.
+ */
+export const HEAD_TINT = 0x6e6478;
+
+/** A customer, in ink diluted toward the chrome: shop, not candy (design §4). */
+export const CHILD_TINT = 0xa08fb4;
+
 /** Outline thickness for every framed slot in the HUD, in screen pixels. */
 export const CHROME_WIDTH = 2;
 

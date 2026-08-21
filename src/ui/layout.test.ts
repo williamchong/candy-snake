@@ -16,6 +16,7 @@ import {
   layout,
   LIVES_CLEARANCE,
   menuPlan,
+  PARADE_GROWTH,
   scoreboard,
   TEXT_MARGIN,
   TAB_SIZE,
@@ -577,6 +578,52 @@ describe('menuPlan', () => {
 
   it('drops the title to a smaller size rather than let a short frame clip it', () => {
     expect(menuPlan(320, 10).size).toBeLessThan(menuPlan(900, 10).size);
+  });
+
+  it.each(VIEWPORTS)('never buys the parade a score entry on %s', (_name, view) => {
+    // The band is furniture and the table is content, so the band is what gives
+    // way — the same order this screen already puts the title in.
+    const { top, shown, parade } = menuPlan(view.height, 10);
+    if (parade === undefined) return;
+
+    // What `top` would have been with no band to make room for, which is the
+    // layout the table has to come out of unchanged.
+    const bare = top - PARADE_GROWTH;
+
+    expect(shown).toBe(
+      scoreboard(view.height / 2 - bare - EXIT_GAP - TEXT_MARGIN, 10).shown,
+    );
+  });
+
+  it.each(VIEWPORTS)('leaves room to press any key with a parade on %s', (_n, view) => {
+    const { top, pitch, shown, parade } = menuPlan(view.height, 10);
+    if (parade === undefined) return;
+    const prompt = shown === 0 ? top : top + (shown - 1) * pitch + EXIT_GAP;
+
+    expect(prompt).toBeLessThanOrEqual(view.height / 2);
+  });
+
+  it('drops the parade rather than truncate the table on a short frame', () => {
+    // A phone held sideways is already cutting the list to what fits; the band
+    // would come straight out of what is left.
+    expect(menuPlan(320, 10).parade).toBeUndefined();
+    expect(menuPlan(900, 10).parade).not.toBeUndefined();
+  });
+
+  it('drops the parade on a frame with no room, first run or not', () => {
+    // With no scores yet the table is empty and cannot lose an entry, so the
+    // "costs no entry" rule alone would let the band walk off the bottom. Below
+    // anything with a screen, and that is the point: it is the half of the rule
+    // no real device exercises, which is exactly why it needs a test.
+    expect(menuPlan(200, 0).parade).toBeUndefined();
+    expect(menuPlan(200, 0).top).toBeLessThanOrEqual(100);
+  });
+
+  it('walks the parade between the title and the table', () => {
+    const { title, size, top, parade } = menuPlan(900, 10);
+
+    expect(parade).toBeGreaterThan(title + size);
+    expect(parade).toBeLessThan(top);
   });
 });
 

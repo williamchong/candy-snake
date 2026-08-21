@@ -728,6 +728,34 @@ const TITLE_DY = -140;
 const TITLE_TO_TABLE = 72;
 
 /**
+ * The band the menu's parade walks through: two rows of sprites, one behind the
+ * other, which is the tallest thing that crosses it.
+ */
+const PARADE_BAND = 52;
+/**
+ * What the band leaves under itself. Measured down from `top`, so it is the
+ * same clearance whether what stands there is the table's heading or — on a
+ * first run, with no table — the line saying how to start.
+ */
+const PARADE_CLEAR = 40;
+/**
+ * The tagline's share of the gap under the title. It hangs into that gap rather
+ * than sitting above it, so this much of the gap was never free.
+ */
+const TAGLINE_ROOM = 24;
+
+/**
+ * How much taller the menu is for having a parade in it. Most of the band is
+ * paid for out of the gap the title already leaves above the table — only the
+ * bottom of that gap belongs to the heading, and the top of it to the tagline —
+ * so the screen grows by what the band could not find there and no more.
+ */
+export const PARADE_GROWTH = Math.max(
+  PARADE_BAND + PARADE_CLEAR + TAGLINE_ROOM - TITLE_TO_TABLE,
+  0,
+);
+
+/**
  * Where the menu's rows fall, given the room. Separated from the rows themselves
  * because it is also the answer to "has anything actually moved?" —
  * `Scale.RESIZE` fires on every frame of a window drag, and rebuilding a stack
@@ -740,6 +768,11 @@ export interface MenuPlan {
   readonly top: number;
   readonly pitch: number;
   readonly shown: number;
+  /**
+   * The middle of the band the parade walks through, or undefined when the
+   * frame had no room to spare for one.
+   */
+  readonly parade: number | undefined;
 }
 
 export const menuPlan = (height: number, count: number): MenuPlan => {
@@ -751,13 +784,27 @@ export const menuPlan = (height: number, count: number): MenuPlan => {
   const title = Math.round(
     Math.max(TITLE_DY, -(height / 2 - TEXT_MARGIN - size * HALF_LINE)),
   );
-  const top = title + size + TITLE_TO_TABLE;
+  const bare = title + size + TITLE_TO_TABLE;
+  const walked = bare + PARADE_GROWTH;
+  const roomAt = (at: number): Scoreboard =>
+    scoreboard(height / 2 - at - EXIT_GAP - TEXT_MARGIN, count);
+
+  // The parade is furniture and the table is content, so the parade is what
+  // gives way — the same order this screen already puts the title in. It walks
+  // only when the band costs the table no entry, and only when what is left
+  // still ends inside the frame: with no scores yet the table is empty and
+  // cannot lose an entry, which would otherwise buy the band a run off the
+  // bottom of a short screen for free.
+  const walks =
+    roomAt(walked).shown === roomAt(bare).shown && walked + TEXT_MARGIN <= height / 2;
+  const top = walks ? walked : bare;
 
   return {
     size,
     title,
     top,
-    ...scoreboard(height / 2 - top - EXIT_GAP - TEXT_MARGIN, count),
+    parade: walks ? walked - PARADE_CLEAR - PARADE_BAND / 2 : undefined,
+    ...roomAt(top),
   };
 };
 
