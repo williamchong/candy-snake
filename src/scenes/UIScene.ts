@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { RED } from '../core/colors';
 import { STARTING_LIVES, type Game } from '../core/game';
-import { TUTORIAL_HEADLINES } from '../core/tutorial';
+import { mixingUnlocked, TUTORIAL_HEADLINES } from '../core/tutorial';
 import type { GameEvent } from '../core/types';
 import { bindHotkey, HotKey } from '../input/keyboard';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
@@ -157,6 +157,9 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.shelf.render(state.shelf);
+    // The wheel arrives with the mix level: the first two opening levels have
+    // nothing to mix, so the sheet — tab and all — waits for level 3.
+    this.sheet.render(mixingUnlocked(this.core.openingLevel));
     // Real elapsed time, not the core's fixed slice: the children walk on the
     // display's clock, the way every other tween in the HUD does.
     this.queue.render(state.customers, delta);

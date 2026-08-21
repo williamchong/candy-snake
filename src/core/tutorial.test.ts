@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { PRIMARIES, colorInfo, primariesOf } from './colors';
 import { createRng } from './rng';
 import {
+  mixingUnlocked,
   rollTutorial,
   stockedPrimaries,
   stocksDyes,
@@ -74,6 +75,22 @@ describe('rollTutorial', () => {
     const taught = new Set(SEEDS.map((seed) => tutorialFor(seed)[1]?.want));
 
     expect(taught.size).toBeGreaterThan(1);
+  });
+});
+
+describe('mixingUnlocked', () => {
+  it.each(SEEDS)('holds the wheel back until the mix level (seed %d)', (seed) => {
+    const [raw, primary, mix] = tutorialFor(seed);
+
+    // The first two levels stock at most one jar, so there is nothing to mix
+    // and no wheel; the mix level's two jars are what earn it.
+    expect(mixingUnlocked(raw)).toBe(false);
+    expect(mixingUnlocked(primary)).toBe(false);
+    expect(mixingUnlocked(mix)).toBe(true);
+  });
+
+  it('keeps the wheel up once the tutorial is over', () => {
+    expect(mixingUnlocked(undefined)).toBe(true);
   });
 });
 

@@ -162,8 +162,12 @@ The mixing table must always be discoverable without blocking play:
    the HUD carries no prose (§11), and a wheel is read at a glance where a
    written table has to be studied. Semi-transparent and never covering the
    play grid's active area, so it costs nothing to leave up.
-3. **It is shown unless the player has hidden it**, and that choice is
-   persisted. It used to take itself down a few seconds after the first turn,
+3. **It arrives with the mix level, and from then on is shown unless the
+   player has hidden it** — that choice is persisted. The first two opening
+   levels stock at most one jar, so a wheel over them would answer a question
+   the board cannot yet ask; §7 authors those levels by removing options, and
+   the wheel (tab included) is one of the options removed. It used to take
+   itself down a few seconds after the first turn,
    which is what "non-obstructive" was originally read to mean. From the chair
    it read as the game confiscating the one reference it has: *what makes
    purple* does not stop being a question once a player starts steering, and a

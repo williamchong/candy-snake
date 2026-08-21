@@ -15,6 +15,7 @@ import {
   placeTab,
   scaleDrawn,
   show,
+  showTab,
   type Drawn,
   type Tab,
 } from '../render/drawn';
@@ -32,7 +33,8 @@ import { TAB_SIZE, wheelSeats, WHEEL_PAIRS, type Frame, type WheelSeats } from '
  * reads instead of playing. So this one is drawn rather than written and sits
  * clear of the kitchen.
  *
- * **It stays up until the player puts it away.** It used to take itself down a
+ * **It arrives with the mix level (`render`) and then stays up until the
+ * player puts it away.** It used to take itself down a
  * few seconds after the first turn, on the reasoning that a wheel left open is
  * a wheel in the way. From the chair it read as the game confiscating the one
  * reference it has: the sheet is semi-transparent, sits outside the play grid
@@ -76,6 +78,14 @@ export class CheatSheet {
   /** Three jars then three candies, seated in `wheelSeats`' own order. */
   private readonly seats: readonly Drawn[];
   private open = readOpen();
+  /**
+   * Whether the run has earned the wheel yet (`core/tutorial.ts`'s
+   * `mixingUnlocked`); until it has, nothing of the sheet shows — tab
+   * included, or a tap on it would open a wheel the level has no use for.
+   * Starts false because every run opens on the raw level; a run without
+   * opening levels unlocks on the first `render`, before anything is drawn.
+   */
+  private unlocked = false;
 
   constructor(scene: Phaser.Scene) {
     // Built off-screen at a placeholder size, like every other HUD widget here;
@@ -175,21 +185,42 @@ export class CheatSheet {
    * always already sitting where it belongs and this has nothing to place.
    */
   private apply(): void {
-    this.panel.setVisible(this.open);
+    const showing = this.unlocked && this.open;
+
+    this.panel.setVisible(showing);
     this.seats.forEach((drawn) => {
-      show(drawn, this.open);
+      show(drawn, showing);
     });
+    showTab(this.tab, this.unlocked);
   }
 
   /**
-   * The C key, or a tap on the tab — the only thing that ever moves the sheet,
-   * which is why the wheel is shown from here rather than from a per-frame
-   * pass. It used to need one: the auto-collapse gave the sheet a countdown
-   * that could change its mind between frames, and with that gone a `render`
-   * hook would be polling a value nothing but this line can write
-   * (architecture §7 — effects hang off events, never off polled state).
+   * Whether the sheet is on the screen at all is core state — the mix level
+   * is what earns it (design §7) — so unlike `open` it is drawn from state
+   * and guarded on the last value, the way the hearts are.
+   */
+  render(unlocked: boolean): void {
+    if (unlocked === this.unlocked) return;
+
+    this.unlocked = unlocked;
+    this.apply();
+  }
+
+  /**
+   * The C key, or a tap on the tab — the only thing that ever writes `open`,
+   * which is why the preference is applied from here rather than from a
+   * per-frame pass: a hook polling `open` would be watching a value nothing
+   * but this line can write (architecture §7 — effects hang off events,
+   * never off polled state). It used to need one, when the auto-collapse
+   * gave the sheet a countdown that could change its mind between frames.
+   * `unlocked` is the opposite case — core writes it — which is why that one
+   * does get the per-frame `render` above.
    */
   toggle(): void {
+    // The C key while the wheel is still locked must not flip — and persist —
+    // a preference the player cannot see.
+    if (!this.unlocked) return;
+
     this.open = !this.open;
     rememberOpen(this.open);
     this.apply();

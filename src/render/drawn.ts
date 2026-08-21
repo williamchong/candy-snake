@@ -215,6 +215,12 @@ export const placeTab = ({ frame, icon }: Tab, at: Vec2): void => {
   icon.setPosition(at.x, at.y);
 };
 
+/** Hiding the frame also stops its taps: Phaser skips invisible hit areas. */
+export const showTab = ({ frame, icon }: Tab, visible: boolean): void => {
+  frame.setVisible(visible);
+  icon.setVisible(visible);
+};
+
 /**
  * A sprite plus its symbol glyph, built as a pair so every layer that wants a
  * glyph gets the same alignment and the same alpha (design §4).

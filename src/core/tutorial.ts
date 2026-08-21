@@ -78,6 +78,17 @@ export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Pri
   level?.stock ?? PRIMARIES;
 
 /**
+ * Whether the run has reached mixing at all: the mix level's two jars, or the
+ * endless board's three. The first two opening levels put at most one jar
+ * out, so a recipe wheel over them would answer a question the board cannot
+ * yet ask — design §7 authors those levels by removing options, and the
+ * wheel is one of the options it removes. Read off the stock rather than the
+ * level's index, so it stays true to whatever the levels actually permit.
+ */
+export const mixingUnlocked = (level: TutorialLevel | undefined): boolean =>
+  stockedPrimaries(level).length > 1;
+
+/**
  * The jars the spawner lays *at this moment*: the level's own stock, narrowed
  * to the ones that would still change the strand.
  *
