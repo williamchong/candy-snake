@@ -1338,6 +1338,137 @@ seen to crawl, the peak comes down before anything else is touched: on a roomy
 desktop the board's container scale is exactly 1, so the sprites are sampled 1:1
 and that is where an uneven texel row would show first.
 
+### What the tenth sitting settled — the ceiling came up, and the tail is the cheap end
+
+One proposal, aimed straight at the open finding: a **partial chop**. Keep the
+front *k* segments attached to the head, sever the rest, so that a maker who
+builds a long strand is not made to hand all of it over at once. It arrived with
+the prerequisite already read and quoted back — *raise the bot ceiling first* —
+which is the first proposal in this record to do that, and it is why this sitting
+produced two results instead of one.
+
+**The proposal's mechanism is sound and its economics are backwards.** Everything
+it claimed about the code holds: `shatterAt` already slices at an index, so a
+suffix cut is exactly what `sever` does for a self-hit; `consumeSevered` drains
+by array position and needs no change; and the tutorial is untouched, because
+`stocksSugar` restocks only on an empty strand, so an opening level's strand is
+length 1 and `min(k, len - 1)` is 0. The objection recorded at `game.ts`'s
+`cutAtBlock` really does only cover mid-strand removal.
+
+What it misses is which end of the strand it keeps. `growTail` appends, so
+`body[0]` is the **oldest** segment; a jar tints every segment that crosses it,
+so the oldest has been through the most jars. The front of the strand is
+therefore always the most-mixed — which is to say the **highest tier**. Against
+`BASE_POINTS`, an `[orange, yellow, raw]` ladder is 50 + 25 + 10; keeping the
+front two sells **10 of the 85** and banks the rest. Built and swept at
+`CHOP_KEEP = 2`, `ladders` — cuts whose strand held more than one color — read
+**0**. Not fewer multi-color batches: none. The production line stopped reaching
+customers entirely.
+
+And `blend` is a bitwise OR, so a retained segment can never lose a primary,
+while every jar crossed to build the *next* ladder pushes it up. Brown drift is
+not a risk to watch, it is a ratchet with three clicks in it, and brown is
+`tier: 'mistake'` — servable only through `rollWant`'s mercy path, which wants a
+brown already racked, a settled ramp, and a roll. The rest of the time it holds
+a rack slot until it stales something out.
+
+**The cut that would pay is the one the geometry forbids.** Selling the dyed head
+and keeping the raw base is removal of a *prefix*, which leaves the retained
+segments a gap behind the head — the teleport `cutAtBlock` refuses. Suffix
+removal is safe and sells the cheap end; prefix removal sells the dear end and
+breaks follow-the-leader. There is no third cut. That is the sentence design §5
+was missing and now carries.
+
+**A second thing falls out of the block being three cells tall.** `cutAtBlock`
+fires every move, so under `min(k, len - 1)` driving *along* the column shaves a
+segment a move: measured, a six-segment strand entering at the top leaves the
+block empty three cells later, in three separate severed pieces. That is the
+bench-riding variant the proposal deliberately deferred, arriving unasked and
+undocumented, and it would ship two visually identical chop verbs with different
+outcomes. Any partial chop needs a decision there first; the arm below took the
+guard (one visit is one chop, tested off `before.head`) so the measurement was of
+the cut and not of the accident.
+
+**Then the ceiling, which is the half that shipped.** `bestLadder` sized a batch
+from the primaries of one waiting order plus the raw beneath them, so the bot
+could not ask for a fourth segment — the fifth time this harness has been blind
+in one direction, and the prerequisite this record has been carrying since the
+sugar-supply pass. Two changes lift it. A rung can carry **more than one
+segment**: the color system caps *distinct* rungs at four, so height has to come
+from repeats, and a dye sequence alone could not say so. And the plan runs
+**past the window** — speculative segments valued off the stage's own mix
+(`demandFor`, which is `rollOrder` read backwards) against every mouth the batch
+could still reach, the slots left to fill *and* the room on the rack, since a
+candy nobody wants now is racked and the next child sweeps the rack first.
+Stacking is bounded by the binomial tail rather than a chosen cap: a second red
+only pays if a second child wants red.
+
+Only jars the floor can supply are planned around. A waiting order has the pity
+spawner's promise and is worth circling for; a guess has not, and level 1 stocks
+no jars at all — without that test the maker circles forever waiting on a jar the
+level will never lay. It cost a sweep to find, and it is the same shape as every
+other finding here: the bot wanted something the board had no way to give.
+
+Measured over the sixteen seeds, before → after:
+
+| reading                | before | after |
+| ---------------------- | ------ | ----- |
+| batch at the bench     | 2.32   | 3.04  |
+| carried, mean          | 1.22   | 2.00  |
+| carried, peak          | 4      | 9     |
+| batcher ahead (of 16)  | 0      | 2     |
+
+**Two instruments had to be re-cut to survive that, and one to survive what comes
+next.** `meanBatch` is new and is the length reading no sweep ever had.
+`ladders` measures *variety* — a rung carried twice is the same color twice — so
+it falls (14 … 44 against 32 … 51) while the strand gets longer; read the two
+together or neither means anything. And both now read the batch **plus whatever
+stayed on the head**, which is identical today and is there so a rule keeping
+part of the strand back cannot quietly turn *how long a line did this maker
+build* into *how much of it sold this trip*. `broken` moves off zero for the
+first time — 9 across sixteen seven-minute runs, about one a run — so it is held
+under a ceiling instead: that is the cost `broken` exists to carry, and one break
+per run cannot account for a two-to-one score gap.
+
+**With the ceiling up, the arm worth measuring was the one that keeps length and
+hands the color back.** The proposal's insight is right and rare — make a long
+strand *cheaper* rather than taxing it — and the record's own diagnosis says
+where the cost is. So: sever the suffix, then scrape the retained stub back to
+plain sugar. No ladder inversion, no brown ratchet, the whole batch still sold
+oldest-first. Swept on the widened 64-seed draw against the same baseline, since
+sixteen cannot read a median:
+
+| arm                    | median | chopped/min | staled | batcher score | ahead (of 64) |
+| ---------------------- | ------ | ----------- | ------ | ------------- | ------------- |
+| baseline (whole chop)  | 4.38   | 23.4        | 2590   | 328 002       | **2**         |
+| keep 1, color reset    | 3.87   | 18.2        | 1474   | 214 886       | **0**         |
+| keep 2, color reset    | 2.65   | 13.0        | 595    | 75 569        | **0**         |
+
+**Nothing shipped, and the monotonicity is the finding.** Every retained segment
+costs, and it costs in a way the record had backwards. The sugar-supply pass
+wrote that growth is quadratic in length because *the Nth segment costs a trip to
+the cube plus N moves of dragging*, and read the cube trip as the expensive term.
+A retained stub deletes exactly that term — the cube trips — and keeps the whole
+of the other one, because a pickup is spent only once the **whole** strand has
+cleared it, so every jar and every cube for the rest of the run is paid *k* moves
+late. Candy a minute halves at `keep = 2`. **The dragging is the cost, not the
+fetching**, and any future lever that means to make a long strand cheaper has to
+touch how long a pickup takes to clear, not how many of them are needed.
+
+**One correction to the eighth sitting.** It records the immortal jar as fixed by
+a chop leaving the snake head-only. Traced under a partial chop, the jar beside
+the bench is spent one move later rather than never: the fix lives in the
+cube-versus-jar payment rule in `releaseAbandonedPickups` — a cube is re-closed
+and a jar is spent — and it holds whatever the chop keeps back. The old wording
+described the trigger, not the fix.
+
+**What this unblocks.** The ceiling was the named prerequisite for two
+measurements, not one: a sugar-supply lever means something now that the bot
+walks to the nearest cube and can want a fifth segment, and the rush can be
+measured against a maker who builds *into* a peak that has not arrived. Both were
+recorded as unaskable and are now askable. The combo meter is unaffected by all
+of this and is still on the list, with two players behind it.
+
 ## Phase 8 — Persistence, high scores & release (S) ✅
 
 - `persist/storage.ts` (versioned blob): high scores top-10, settings

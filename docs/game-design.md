@@ -269,6 +269,21 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
   back in the order it was made.
 - Chopping the whole strand is intentional — there is no partial cut. Anything
   no customer wants isn't wasted: it goes to the shelf.
+- **Why there is no partial cut**, since it gets proposed and the reason is not
+  the obvious one. A strand can only be parted at one end. Cutting a *suffix* —
+  keeping the front of the strand and severing everything behind — is safe, and
+  is exactly what a self-hit already does (§6); cutting from the front instead
+  would leave the segments behind the cut a gap adrift of the head, and next
+  move they would teleport to close it. But the front of the strand is the
+  **oldest** sugar, and the oldest sugar has been through the most jars, so the
+  only cut the movement rules permit is the one that keeps the dear end and
+  sells the cheap one — a maker who kept two rungs of an orange-yellow-raw
+  ladder would be selling the raw and banking the orange. **The tail is the
+  cheap end**, and a partial cut can only ever take the cheap end.
+  Two further costs, for anyone who returns to this: a retained segment can
+  never lose a primary (§4's blending is one-way), so it drifts to brown and
+  matches no regular order; and the bench is a run of cells, so a maker driving
+  *along* it would part the strand once per cell.
 - The maker is not sugar, so a head crossing the bench alone cuts nothing.
 
 ### Shelf (candy cache)
