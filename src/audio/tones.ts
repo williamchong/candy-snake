@@ -40,6 +40,8 @@ export const CueKey = {
   Serve: 'cue-serve',
   /** A child who ran out of patience: design §12's muffled trombone. */
   Walkout: 'cue-walkout',
+  /** The strand changing gear — one rung of design §7's speed ladder. */
+  Quicken: 'cue-quicken',
   /** The run ending. */
   Over: 'cue-over',
 } as const;
@@ -293,6 +295,33 @@ export const CUES: Record<CueKey, CueSpec> = {
     band: [70, 1100],
     attack: 0.09,
     gain: 0.4,
+    repeat: ONE_SHOT,
+  },
+  // The pull-machine taken up a gear: a swell rather than a strike, because
+  // nothing here is being hit — the maker is working the strand faster. So it
+  // keeps the harmonic series and takes the slowest attack in the table bar the
+  // pull itself, and bends up a fifth over its own length so the *direction* is
+  // audible on one hearing. The rung it lands on then pitches the whole thing
+  // (see `QUICKEN_SCALE`), which is what makes seven of these read as a ladder
+  // being climbed rather than the same noise seven times.
+  //
+  // Rare — seven in a run, and never again after the cap — so it can afford to
+  // be longer and more present than anything else that is not a life lost.
+  [CueKey.Quicken]: {
+    durationMs: 220,
+    hz: 392,
+    bend: 1.5,
+    partials: [1, 0.3, 0.12],
+    noise: 0.1,
+    band: [600, 4200],
+    attack: 0.06,
+    // Placed against the table rather than picked: at 0.34 this rendered to a
+    // peak of 0.257, level with the pull — which is the sound the game makes
+    // most often and the one this must not be mistaken for. 0.38 puts it at
+    // 0.287, in among the cues that carry news (the walkout, the crack) and
+    // still well under the run ending. Wants an ear all the same: `peak` says
+    // how loud a cue is and nothing about whether it is heard.
+    gain: 0.38,
     repeat: ONE_SHOT,
   },
   // The shop closing: the walkout's shape, lower and longer, with the partials
@@ -622,6 +651,23 @@ const DYE_STEPS = [0, 4, 7];
  */
 const STREAK_SCALE = [0, 2, 4, 7, 9, 12, 14, 16];
 
+/**
+ * The speed ladder, one step per rung (design §7's `SPEED_RUNGS`). That table
+ * holds eight rungs and *seven of them are announced* — rung 0 is the speed
+ * every run opens at — so there are seven entries here, one per announcement
+ * rather than one per rung.
+ *
+ * The last is a clean octave rather than the next note up the scale, because
+ * the top rung is the one that means something different: the strand is as fast
+ * as it will ever get. A ladder that resolves is how that gets said without a
+ * word on the screen (design §11) — which is also what makes the length of this
+ * table load-bearing rather than incidental. `scaled` clamps, so a rung added
+ * to `SPEED_RUNGS` without a step added here would sound the top two the same
+ * and quietly retire the resolution; `tones.test.ts` holds the two to each
+ * other.
+ */
+const QUICKEN_SCALE = [0, 2, 4, 5, 7, 9, 12];
+
 const scaled = (scale: readonly number[], step: number): number =>
   semitones(scale[Math.min(Math.max(step, 0), scale.length - 1)] ?? 0);
 
@@ -677,6 +723,11 @@ export const cueFor = (event: GameEvent): Play | undefined => {
 
     case 'customer-left':
       return { key: CueKey.Walkout, rate: 1 };
+
+    case 'speed-raised':
+      // Rungs count from 1 — rung 0 is the speed every run opens at and is
+      // never announced — so the scale is indexed from the step below it.
+      return { key: CueKey.Quicken, rate: scaled(QUICKEN_SCALE, event.rung - 1) };
 
     case 'game-over':
       return { key: CueKey.Over, rate: 1 };

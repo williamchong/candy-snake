@@ -1,7 +1,14 @@
 import { COLS, ROWS, isChopBlock } from './board';
 import { BROWN, PRIMARIES, colorInfo, noServes, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
-import { SETTLED_MS, rampMs, rushAt, stageAt } from './difficulty';
+import {
+  SETTLED_MS,
+  SPEED_RUNGS,
+  rampMs,
+  rushAt,
+  speedRungOf,
+  stageAt,
+} from './difficulty';
 import { rollOrder, type StageConfig } from './orders';
 import {
   NO_PITY,
@@ -74,6 +81,15 @@ export class Game {
   private moveAccMs = 0;
   /** Time the window has had room, against the current arrival gap. */
   private waitMs = 0;
+  /**
+   * The last speed rung the run was told about. Held here rather than derived,
+   * because the event is a one-shot and the rung is a level: without a memory
+   * the announcement would either fire every step or not at all.
+   *
+   * Starts at 0 — the handover rung, which is where every run begins and so is
+   * never news.
+   */
+  private announcedRung = 0;
   /**
    * Time on the endless ramp, which only starts once the opening levels are
    * done (design §7) — so a player who takes their time learning does not find
@@ -183,6 +199,39 @@ export class Game {
   }
 
   /**
+   * Says so when the strand changes gear (design §7, `SPEED_RUNGS`).
+   *
+   * Read off `stage` rather than recomputed from the ramp, so the rung the
+   * player is told about is by construction the rung they are being moved at —
+   * the two cannot drift the way a second path through the curve would let
+   * them.
+   *
+   * A pinned stage has no ladder, for the same reason it has no ramp or tide.
+   */
+  private announceSpeed(events: GameEvent[]): void {
+    if (this.config.stage !== undefined) return;
+    // The window can end the run on the way past — `loseCustomer` sets this and
+    // pushes `game-over` into the very batch being built. Without the guard a
+    // rung crossing on that same step lands *after* it, and `GameScene.play`
+    // walks the batch in order: it stops the HUD, starts the score screen, and
+    // then tweens the head of the scene it just shut down. `serveWindow` keeps
+    // the same guard over its own tail for the same reason.
+    if (this.state.over) return;
+
+    const rung = speedRungOf(this.stage.moveIntervalMs);
+    // `>` and not `!==`: the ladder only climbs (see `SPEED_RUNGS`), so anything
+    // else is a bug rather than a gear the player wants announcing.
+    if (rung <= this.announcedRung) return;
+
+    this.announcedRung = rung;
+    events.push({
+      type: 'speed-raised',
+      rung,
+      top: rung === SPEED_RUNGS.length - 1,
+    });
+  }
+
+  /**
    * How far the snake stands between its last cell and its next, 0…1.
    * Movement is discrete here but must not look it, so the view draws the
    * snake at this fraction of the way across. `extraMs` lets a caller add
@@ -224,6 +273,9 @@ export class Game {
     }
 
     this.serveWindow(dtMs, events);
+    // After the window, not before it: a serve moves the score, the score moves
+    // the ramp, and a rung reached by *this* step's serve belongs to this step.
+    this.announceSpeed(events);
 
     return events;
   }

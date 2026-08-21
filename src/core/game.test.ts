@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { CHOP_BLOCK_CELLS, COLS, ROWS, cellKey, eq, stepCell } from './board';
 import { BLUE, BROWN, PRIMARIES, RED, YELLOW, noServes, type Primary } from './colors';
 import { createCustomer } from './customers';
+import { SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { MIXING_STAGE, type StageConfig } from './orders';
 import { createRng } from './rng';
@@ -1084,6 +1085,118 @@ describe('Game opening levels', () => {
     game.step(1_000, NO_TURNS);
 
     expect(game.state.customers[0]?.patience?.totalMs).toBe(MIXING_STAGE.patienceMs);
+  });
+});
+
+describe('Game speed ladder', () => {
+  /**
+   * A run with the ramp left alone — `stage` deliberately unpinned, since
+   * pinning it is exactly what turns the ladder off.
+   *
+   * Nobody plays it, so it loses its three lives to walkouts at 58 s having
+   * climbed five of the seven rungs. That is why the window below stops at 55:
+   * what belongs here is that `Game` announces a rung at all, once, in order,
+   * and at the speed it is actually moving the maker. Whether a run reaches the
+   * *top* of the ladder is a question about how long runs last, and it is asked
+   * in `simulation.test.ts`, where a bot plays well enough to get there.
+   */
+  const rampingGame = (): Game =>
+    new Game({ ...DEFAULT_CONFIG, openingLevels: false, seed: 1 });
+
+  /**
+   * How long an unplayed run lasts, less a margin. Named for what bounds it —
+   * the walkouts — and not for the ease-in, which runs to `SETTLED_MS` and is a
+   * different 60 000 entirely: someone "correcting" this to that would push the
+   * window past the death and take the other assertions here down with it.
+   */
+  const BEFORE_WALKOUTS_MS = 55_000;
+
+  /** Every gear change, with the speed in force at the instant it was called. */
+  const gears = (
+    game: Game,
+    ms: number,
+  ): { rung: number; top: boolean; intervalMs: number }[] => {
+    const raised = [];
+    for (let elapsed = 0; elapsed < ms; elapsed += 100) {
+      for (const event of game.step(100, NO_TURNS)) {
+        if (event.type === 'speed-raised') {
+          raised.push({
+            rung: event.rung,
+            top: event.top,
+            intervalMs: game.stage.moveIntervalMs,
+          });
+        }
+      }
+    }
+
+    return raised;
+  };
+
+  it('announces each rung once, in order, and never the one it starts on', () => {
+    const game = rampingGame();
+    const raised = gears(game, BEFORE_WALKOUTS_MS);
+
+    // Said rather than assumed: if a balance change ever ends an unplayed run
+    // before the window closes, this is the line that explains the other
+    // failures rather than leaving them to be puzzled over.
+    expect(game.state.over, 'the run has to outlast the window being measured').toBe(
+      false,
+    );
+    expect(raised.map((gear) => gear.rung)).toEqual([1, 2, 3, 4, 5]);
+    expect(raised.every((gear) => !gear.top)).toBe(true);
+  });
+
+  it('is moving the maker at the speed it just announced', () => {
+    // The half that would rot silently. An announcement computed down a second
+    // path through the curve could drift from the interval actually being
+    // stepped, and nothing on screen would say so — the player would be told
+    // about a gear change that had not happened, or moved at one they were not
+    // told about, which is the failure this whole ladder exists to end.
+    const raised = gears(rampingGame(), BEFORE_WALKOUTS_MS);
+
+    expect(
+      raised.length,
+      'nothing was announced, so nothing was checked',
+    ).toBeGreaterThan(0);
+    raised.forEach((gear) => expect(gear.intervalMs).toBe(SPEED_RUNGS[gear.rung]));
+  });
+
+  it('does not change gear on the step the run ends', () => {
+    // The window can end the run halfway through a step, and the rung is read
+    // after it — so a gear change and a `game-over` can land in one batch, in
+    // that order. `GameScene.play` walks a batch in order and would stop the
+    // HUD, start the score screen, and then tween the head of the scene it had
+    // just shut down.
+    const game = rampingGame();
+    while (!game.state.over && game.state.lives > 1) game.step(100, NO_TURNS);
+
+    // One long step: enough patience drains to take the last life, and enough
+    // ramp passes to cross a rung. Both resolve into the same batch.
+    const events = game.step(120_000, NO_TURNS);
+
+    expect(
+      events.some((event) => event.type === 'game-over'),
+      'the long step has to end the run, or this proves nothing',
+    ).toBe(true);
+    expect(events.filter((event) => event.type === 'speed-raised')).toEqual([]);
+  });
+
+  it('says nothing at all while a stage is pinned', () => {
+    // A pinned stage has no ramp and no tide, and it has no ladder either — or
+    // every test in this file that pins one would be full of gear changes it
+    // never asked for.
+    //
+    // Pinned to the *top* rung rather than to `CLOSED_WINDOW`, which is the
+    // whole test. `MIXING_STAGE.moveIntervalMs` is 200 ms, which is rung 0 —
+    // the rung every run already opens on — so a game pinned there announces
+    // nothing whether the guard exists or not, and this passed identically with
+    // `announceSpeed`'s pinned check deleted. Pinned at the cap it would call
+    // rung 7 on the first step if the guard ever went away.
+    const pinned = newGame({
+      stage: { ...CLOSED_WINDOW, moveIntervalMs: SPEED_RUNGS[SPEED_RUNGS.length - 1]! },
+    });
+
+    expect(gears(pinned, BEFORE_WALKOUTS_MS)).toEqual([]);
   });
 });
 

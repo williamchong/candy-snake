@@ -85,6 +85,20 @@ const SHATTER_MS = 280;
  * current one.
  */
 const DYE_FLASH_MS = 120;
+/**
+ * The head's gear-change pulse. Longer than the dye flash and deliberately so:
+ * a jar landing is confirmation of something the player just did and only has
+ * to keep up with them, where a rung of the speed ladder is news they did not
+ * ask for and have to catch while steering (design §11's glance).
+ */
+const QUICKEN_FLASH_MS = 260;
+/**
+ * What the head goes to. Pale ink rather than a hue — the strand runs hotter,
+ * and heat is the one thing in this kitchen that could reasonably be drawn in
+ * orange, which is exactly why it is not: colour belongs to candies (design §4)
+ * and a head that flashed a secondary would read as a candy being made.
+ */
+const QUICKEN_TINT = 0xf2ecf7;
 
 /** Enough to read debris as spilled sugar rather than as live strand. */
 const DEBRIS_ALPHA = 0.5;
@@ -690,26 +704,58 @@ export class BoardView {
    * The maker takes the jar's color for a moment and washes back to its own —
    * confirmation that the pickup landed, on the move it landed, since the
    * strand itself does not start turning until the move after (design §4).
-   * Borrowed, never kept: `HEAD_TINT` is where it always ends up, so the head
-   * cannot be mistaken for a candy hue once the tween is done.
    */
   flashHead(primary: Primary): void {
-    // Taking a second jar mid-flash restarts from that jar's color rather than
-    // leaving two tweens writing the same tint on the same frame.
+    this.washHead(colorInfo(primary).hex, DYE_FLASH_MS);
+  }
+
+  /**
+   * The head borrows a color, beats, and is handed back — the shared shape of
+   * every effect that writes the head's tint.
+   *
+   * One tween at a time by construction, because there is one slot: whatever is
+   * in flight is stopped before the next claims it, so two effects can never be
+   * left writing the same tint on the same frame. `HEAD_TINT` is where every
+   * one of them ends up, so the head cannot be left wearing a borrowed color —
+   * which for a jar's hue would mean a maker indistinguishable from a candy.
+   *
+   * `beats` is extra repeats, not total: 0 is one pulse. Not a yoyo — each beat
+   * is a strike and a decay, so a repeat starts bright again rather than fading
+   * back up into itself.
+   */
+  private washHead(from: number, durationMs: number, beats = 0): void {
     this.headFlash?.stop();
 
     const wash = { t: 0 };
-    const from = colorInfo(primary).hex;
 
     this.head.wash(from);
     this.headFlash = this.scene.tweens.add({
       targets: wash,
       t: 1,
-      duration: DYE_FLASH_MS,
+      duration: durationMs,
+      repeat: beats,
       ease: 'Quad.easeIn',
+      onRepeat: () => this.head.wash(from),
       onUpdate: () => this.head.wash(mixTint(from, HEAD_TINT, wash.t)),
       onComplete: () => this.head.wash(HEAD_TINT),
     });
+  }
+
+  /**
+   * The strand changes gear: the head pulses pale and settles back (design §7).
+   *
+   * On the head rather than in the HUD because this is the one announcement
+   * whose subject the player is already looking at — the speed that changed is
+   * the speed of the thing they are steering, and a pip lighting up beside the
+   * score would be news delivered to the wrong end of the screen.
+   *
+   * `top` pulses twice. The extra beat is the whole of the terminal signal on
+   * this side (the cue resolves to an octave on its own): from here the strand
+   * never gets faster again, and a run that is never told that is a run spent
+   * bracing for an acceleration that is not coming.
+   */
+  quicken(top: boolean): void {
+    this.washHead(QUICKEN_TINT, QUICKEN_FLASH_MS, top ? 1 : 0);
   }
 
   /**

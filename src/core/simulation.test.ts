@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
-import { RAMP } from './difficulty';
+import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
@@ -335,6 +335,14 @@ interface RunResult {
   readonly peakSegments: number;
   /** The same, averaged over the ticks the maker was alive. */
   readonly meanSegments: number;
+  /**
+   * Every gear change the run was told about, in order (design §7's speed
+   * ladder). Collected here because this is the only harness that plays long
+   * enough to reach the top of it: an unattended `Game` loses its lives to
+   * walkouts before the sixth rung, so `game.test.ts` can only ever see the
+   * ease-in.
+   */
+  readonly gears: { readonly rung: number; readonly top: boolean }[];
 }
 
 const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResult => {
@@ -352,12 +360,14 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
   let peakSegments = 0;
   let segmentSum = 0;
   let liveTicks = 0;
+  const gears: { rung: number; top: boolean }[] = [];
 
   for (let tick = 0; tick < ticks; tick += 1) {
     for (const event of game.step(20, bot)) {
       if (event.type === 'candy-chopped') chopped += 1;
       if (event.type === 'candy-staled') staled += 1;
       if (event.type === 'strand-broken') broken += 1;
+      if (event.type === 'speed-raised') gears.push({ rung: event.rung, top: event.top });
       if (event.type === 'strand-cut') {
         const colors = new Set(event.batch.map((segment) => segment.color));
         if (colors.size > 1) ladders += 1;
@@ -395,6 +405,7 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
     peakQueue,
     peakSegments,
     meanSegments: segmentSum / liveTicks,
+    gears,
   };
 };
 
@@ -639,6 +650,26 @@ describe('the reference players, after the ramp went in', () => {
       late.length * 4,
       `${late.length} of ${diedAt.length} closed-out runs passed seven minutes`,
     ).toBeLessThanOrEqual(diedAt.length);
+  });
+
+  it('climbs the whole speed ladder and says so, once per rung', () => {
+    // The half of the ladder no unattended game can reach: the sixth rung lands
+    // at 91 s of ramp and the seventh at 151, and a `Game` nobody plays has
+    // lost its three lives to walkouts by 58 s. So the announcement is checked
+    // end to end here, on runs that actually last (design §7).
+    target(batcherGoal).forEach((run) => {
+      expect(run.gears.map((gear) => gear.rung)).toEqual(
+        // Rung 0 is the speed every run opens at, so it is never announced.
+        Array.from({ length: SPEED_RUNGS.length - 1 }, (_, index) => index + 1),
+      );
+
+      // And the top of the ladder is called exactly once, at the end of it.
+      // This is the one piece of news the ramp had no way to deliver before:
+      // from here the strand never gets faster, and only the window tightens.
+      const tops = run.gears.filter((gear) => gear.top);
+      expect(tops).toHaveLength(1);
+      expect(run.gears[run.gears.length - 1]!.top).toBe(true);
+    });
   });
 
   it('buys a batching maker more candy per minute than a grinder', () => {

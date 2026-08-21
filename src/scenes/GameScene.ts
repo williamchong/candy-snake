@@ -170,6 +170,11 @@ export class GameScene extends Phaser.Scene {
         this.view.shatter(event.severed);
         return;
 
+      // The ramp's one lever the player could never see arrive (design §7).
+      case 'speed-raised':
+        this.view.quicken(event.top);
+        return;
+
       case 'sugar-pulled':
         this.view.swallow(event.pos);
         return;

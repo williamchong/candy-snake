@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { PRIMARIES, RED } from '../core/colors';
+import { SPEED_RUNGS } from '../core/difficulty';
 import { RAW, type Customer, type GameEvent } from '../core/types';
 import {
   AMBIENCE_RATE,
@@ -172,6 +173,23 @@ describe('cueFor', () => {
 
     expect(rising).toStrictEqual([...rising].sort((left, right) => left - right));
     expect(new Set(rising).size).toBe(rising.length);
+  });
+
+  it('climbs one step per announced speed rung, and resolves at the top', () => {
+    // The cue table's length is load-bearing: `scaled` clamps, so a rung added
+    // to `SPEED_RUNGS` without a step added to `QUICKEN_SCALE` would sound the
+    // top two rungs identically — retiring the octave that is the whole of how
+    // the ladder says "this is the last one" (design §7, §11).
+    const rungs = Array.from({ length: SPEED_RUNGS.length - 1 }, (_, index) => index + 1);
+    const rising = rungs.map(
+      (rung) =>
+        cueOf({ type: 'speed-raised', rung, top: rung === SPEED_RUNGS.length - 1 }).rate,
+    );
+
+    expect(rising).toStrictEqual([...rising].sort((left, right) => left - right));
+    expect(new Set(rising).size).toBe(rising.length);
+    // The top rung, an octave over the first — a rate of exactly 2.
+    expect(rising[rising.length - 1]).toBeCloseTo(2 * rising[0]!);
   });
 
   it('stops climbing where the streak bonus stops growing', () => {

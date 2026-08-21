@@ -96,6 +96,74 @@ export const RAMP: readonly Anchor[] = [
 ];
 
 /**
+ * The speed ladder — the one knob on this table that is **stepped rather than
+ * interpolated**, and the reason is that a smooth speed curve is one nobody can
+ * feel.
+ *
+ * Every other column moves continuously because a jump would lurch, and speed
+ * was written the same way. It cost the ramp its most expensive lever. Measured
+ * off the curve, the interval changed 2.4–3.1% per five seconds through the
+ * ease-in and **0.52%** per five seconds from the Settled row to the cap.
+ * Speed discrimination sits around 5%, so between minute one and minute three
+ * the strand crossed a third of its whole range at a tenth of the rate an eye
+ * can resolve — and then stopped for good at the cap, a minute and a half
+ * before the median run ends. What the player was left with was "it feels
+ * faster sometimes", which is a lever spending itself where nobody is looking.
+ *
+ * So the interval is snapped to the rungs below, and each new rung is announced
+ * (`speed-raised`, the Quicken cue, the head's pulse). Seven steps of **6.9%**
+ * apiece, comfortably over that threshold: the strand changes gear at a moment
+ * the player can point at, and the last rung is a thing the run can finally
+ * say out loud rather than a silence that happens to go on forever.
+ *
+ * The rungs are geometric rather than evenly spaced in milliseconds, because
+ * what the player resolves is the *ratio*: an even ladder in ms would step 8%
+ * at the slow end and 5% at the fast one for the same nominal size. Two things
+ * fall out of that which are worth knowing before retuning it.
+ *
+ * - **Rung 5 is 143 ms, the Settled anchor exactly.** Not arranged — the
+ *   handover-to-Settled span is 2.49 times the Settled-to-Rush span in log
+ *   terms, and five rungs against two is 2.5. The ladder the table already
+ *   implied is the ladder it got, which is why this changes the shape of the
+ *   ramp far less than a stepped column sounds like it should.
+ * - **The snap is to the nearest rung, never down to the last one passed.**
+ *   Down would leave the strand slower than the measured curve everywhere
+ *   between rungs — a difficulty change wearing a legibility change's clothes.
+ *   Nearest keeps the deviation centred either side: measured over seven
+ *   minutes of ramp the mean interval moves by **0.003%**, and the ramp spends
+ *   21.4% of itself just under the old curve against 21.4% just over it. On a
+ *   64-seed draw of the batching bot that lands the median at 5.30 min against
+ *   the continuous curve's 5.17 on the same seeds, with the same 5 runs past
+ *   seven minutes — a re-roll, not a re-balance.
+ *
+ * The ladder cannot go backwards: `rampMs` only ever climbs, so the interval
+ * only ever shrinks and the rung only ever rises. That is what lets `Game`
+ * announce a rung by remembering the last one, with no hysteresis to tune.
+ */
+export const SPEED_RUNGS: readonly number[] = [
+  200, 187, 174.9, 163.5, 152.9, 143, 133.7, 125,
+];
+
+/**
+ * Which rung an interval stands on.
+ *
+ * The ladder descends, so the scan stops at the first rung the value sits above
+ * the midpoint of: nearest, in one pass, with no `Math.abs` and no second table
+ * of boundaries that could drift out of step with this one.
+ *
+ * A plain loop for the same measured reason `spanAt` is one — this runs inside
+ * `stageAt`, which `Game.step` re-reads between every grid move.
+ */
+export const speedRungOf = (intervalMs: number): number => {
+  const top = SPEED_RUNGS.length - 1;
+  for (let rung = 0; rung < top; rung += 1) {
+    if (intervalMs > (SPEED_RUNGS[rung]! + SPEED_RUNGS[rung + 1]!) / 2) return rung;
+  }
+
+  return top;
+};
+
+/**
  * Where the speed ease-in finishes and the ramp proper begins — read off the
  * table rather than written down twice, so moving the anchor moves this with it.
  * The brown-mercy customer is held back until here (design §7).
@@ -214,7 +282,9 @@ const PEAK_RATE = 2.6;
 export const rampMs = (endlessMs: number, endlessScore: number): number =>
   Math.max(endlessMs, endlessScore * MS_PER_POINT);
 
-const lerp = (from: number, to: number, t: number): number => from + (to - from) * t;
+/** Exported for the tests, which rebuild the pre-snap speed curve with it. */
+export const lerp = (from: number, to: number, t: number): number =>
+  from + (to - from) * t;
 
 /**
  * Brackets `at` in a table sorted by `keyOf` and reports how far between the two
@@ -235,6 +305,11 @@ const lerp = (from: number, to: number, t: number): number => from + (to - from)
  * settles the first of those. Rows must have distinct keys, or `t` divides by
  * zero.
  *
+ * Exported for the same reason `arrivalRateAt` is — the drift test rebuilds the
+ * continuous curve this file used to hand out, and transcribing the bracketing
+ * rule over there would let the two drift apart silently: the test would go on
+ * measuring the snap against a curve the module had stopped drawing.
+ *
  * The scan is a plain loop and not `findIndex` for a measured reason. With two
  * call sites passing different row shapes, `keyOf` inside a builtin's callback
  * goes polymorphic, inlining stops and both closures start being materialized:
@@ -243,7 +318,7 @@ const lerp = (from: number, to: number, t: number): number => from + (to - from)
  * a frame budget — but a 4× on the most-called function in `core/` is not worth
  * paying for a builtin that saves two lines.
  */
-const spanAt = <T>(
+export const spanAt = <T>(
   table: readonly T[],
   keyOf: (row: T) => number,
   at: number,
@@ -357,6 +432,10 @@ export const stageAt = (endlessMs: number, endlessScore: number): StageConfig =>
     // backstop rather than freezing at whatever phase 15 minutes lands on.
     arrivalIntervalMs:
       lerp(from.arrivalIntervalMs, to.arrivalIntervalMs, t) / arrivalRateAt(pos),
-    moveIntervalMs: lerp(from.moveIntervalMs, to.moveIntervalMs, t),
+    // The one stepped column: interpolated like the rest, then snapped to the
+    // ladder so the change is something the player can feel and be told about
+    // rather than a drift under the threshold of noticing (`SPEED_RUNGS`).
+    moveIntervalMs:
+      SPEED_RUNGS[speedRungOf(lerp(from.moveIntervalMs, to.moveIntervalMs, t))]!,
   };
 };

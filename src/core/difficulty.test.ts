@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   RAMP,
+  SPEED_RUNGS,
+  lerp,
   RUSH_FROM_MS,
   RUSH_PERIOD_MS,
   SETTLED_MS,
   arrivalRateAt,
   rampMs,
   rushAt,
+  spanAt,
+  speedRungOf,
   stageAt,
 } from './difficulty';
 import { MIXING_STAGE } from './orders';
@@ -97,6 +101,115 @@ describe('the difficulty curve', () => {
     // GameScene caps catch-up at 100 ms; a shorter move interval than that
     // would let one frame advance two grid moves and the strand would teleport.
     for (const anchor of RAMP) expect(anchor.moveIntervalMs).toBeGreaterThan(100);
+  });
+
+  describe('the speed ladder', () => {
+    /** The ramp, sampled a tenth of a second at a time out to the backstop. */
+    const WALK = Array.from({ length: 9_000 }, (_, tick) => tick * 100);
+
+    it('only ever hands out a speed that is on the ladder', () => {
+      // The point of stepping the column is that there is a countable set of
+      // speeds. A value between two rungs would be a gear the player was never
+      // told about, which is the whole failure this replaced.
+      //
+      // Collected and asserted once rather than asserted per sample: 9 000
+      // `expect` calls cost 69 ms where the 9 000 `stageAt` calls behind them
+      // cost 1, and the failure names every offending sample instead of only
+      // the first.
+      const between = WALK.filter(
+        (ms) => !SPEED_RUNGS.includes(stageAt(ms, 0).moveIntervalMs),
+      );
+
+      expect(between).toEqual([]);
+    });
+
+    it('steps far enough each time to be felt', () => {
+      // Speed discrimination sits around 5%. A ladder whose rungs fell under
+      // that would be the smooth curve again, wearing steps — so this is the
+      // assertion the change exists to make, and the one to look at first if
+      // anyone ever adds a rung.
+      for (let rung = 1; rung < SPEED_RUNGS.length; rung += 1) {
+        const step = SPEED_RUNGS[rung - 1]! / SPEED_RUNGS[rung]! - 1;
+        expect(step, `rung ${rung} steps ${(step * 100).toFixed(2)}%`).toBeGreaterThan(
+          0.05,
+        );
+      }
+    });
+
+    it('never drops a gear', () => {
+      // What lets `Game` announce a rung by remembering the last one. If this
+      // fails, the announcement needs hysteresis and the cue starts flapping.
+      const drops: number[] = [];
+      let last = -1;
+      for (const ms of WALK) {
+        const rung = speedRungOf(stageAt(ms, 0).moveIntervalMs);
+        if (rung < last) drops.push(ms);
+        last = rung;
+      }
+
+      expect(drops).toEqual([]);
+    });
+
+    it('starts at the handover speed and ends at the cap', () => {
+      expect(SPEED_RUNGS[0]).toBe(FIRST.moveIntervalMs);
+      expect(SPEED_RUNGS[SPEED_RUNGS.length - 1]).toBe(LAST.moveIntervalMs);
+    });
+
+    it('puts a rung on the Settled anchor rather than beside it', () => {
+      // Not decoration: the ladder is geometric and the anchor table's own two
+      // spans are 2.49 : 1 in log terms, so five rungs against two lands on it.
+      // A retune that breaks this has changed the shape of the ramp, not just
+      // the size of its steps.
+      expect(SPEED_RUNGS).toContain(RAMP[1]!.moveIntervalMs);
+    });
+
+    it('snaps to the nearest rung, so the curve underneath is left where it was', () => {
+      // The reason this is balance-neutral rather than a difficulty change: the
+      // deviation is centred, not one-sided. Snapping *down* would pass this
+      // file's monotonicity tests and quietly make the whole ramp slower.
+      //
+      // Through the module's own `spanAt` and `lerp` rather than a transcription
+      // of them: the only difference between the two sides of this comparison
+      // has to be the snap. A hand-copied bracketing rule would go on measuring
+      // against a curve the module had stopped drawing, and pass while doing it.
+      let snapped = 0;
+      let continuous = 0;
+      for (const ms of WALK) {
+        const at = Math.min(Math.max(ms, FIRST.atMs), LAST.atMs);
+        const { from, to, t } = spanAt(RAMP, (anchor) => anchor.atMs, at);
+
+        snapped += stageAt(ms, 0).moveIntervalMs;
+        continuous += lerp(from.moveIntervalMs, to.moveIntervalMs, t);
+      }
+
+      const drift = snapped / continuous - 1;
+      expect(
+        Math.abs(drift),
+        `mean speed drifted ${(drift * 100).toFixed(3)}%`,
+      ).toBeLessThan(0.005);
+    });
+
+    it('reads a rung off any interval between the rungs either side of it', () => {
+      SPEED_RUNGS.forEach((interval, rung) => {
+        expect(speedRungOf(interval)).toBe(rung);
+        expect(speedRungOf(interval + 0.5)).toBe(rung);
+        expect(speedRungOf(interval - 0.5)).toBe(rung);
+      });
+
+      // And the handover is at the midpoint, which is what makes the snap the
+      // nearest rung rather than the last one passed — the ±0.5 ms above sits
+      // nowhere near it, since the gaps run 9 to 13 ms.
+      SPEED_RUNGS.slice(0, -1).forEach((interval, rung) => {
+        const midpoint = (interval + SPEED_RUNGS[rung + 1]!) / 2;
+
+        expect(speedRungOf(midpoint + 0.01)).toBe(rung);
+        expect(speedRungOf(midpoint - 0.01)).toBe(rung + 1);
+      });
+
+      // Off the ends it clamps rather than running off the table.
+      expect(speedRungOf(1_000)).toBe(0);
+      expect(speedRungOf(1)).toBe(SPEED_RUNGS.length - 1);
+    });
   });
 
   describe('the score and the clock, whichever is further along', () => {

@@ -239,6 +239,31 @@ export type GameEvent =
   /** Patience ran out; the child leaves angry (design §5). */
   | { readonly type: 'customer-left'; readonly customer: Customer }
   | { readonly type: 'life-lost'; readonly lives: number }
+  /**
+   * The strand changed gear (`core/difficulty.ts`'s `SPEED_RUNGS`).
+   *
+   * The ramp's other levers are all things the player can see arrive — a fourth
+   * place at the window, a secondary order, children gathering in the doorway.
+   * Speed is the one that only ever showed up as a feeling, so it is the one
+   * that has to be *said*: this is what the Quicken cue and the head's pulse
+   * hang off. Nothing in the rules reads it — the new interval is already in
+   * `stage.moveIntervalMs` — which is exactly the arrangement `Game.rush` has
+   * with the doorway.
+   */
+  | {
+      readonly type: 'speed-raised';
+      /** The rung just reached, 1 … `SPEED_RUNGS.length - 1`. */
+      readonly rung: number;
+      /**
+       * The top of the ladder. Carried rather than left to be worked out from
+       * the rung, because it is the half of this event that is *news*: the
+       * strand is now as fast as it will ever get, and from here it is the
+       * window alone that tightens (design §7). A player who is never told that
+       * spends the rest of the run braced for an acceleration that is not
+       * coming.
+       */
+      readonly top: boolean;
+    }
   /** The run, as the score screen has to tell it — see `RunSummary`. */
   | ({ readonly type: 'game-over' } & RunSummary);
 
