@@ -57,6 +57,37 @@ const steerTowards = (state: GameState, goal: Vec2): Dir => {
 type Goal = (state: GameState) => Vec2;
 
 /**
+ * The cube a maker standing here would actually walk to, measured the short way
+ * round rather than by array order — `shortest` above, so the wrap through a
+ * service door is defined in one place and not a second time here.
+ *
+ * Inert while design §8.1's floor is one cube: with a single cube on the map the
+ * nearest is the only one, so this cannot move a number until something raises
+ * that floor. That is exactly why it goes in ahead of time — a sugar-supply
+ * lever that lays three would otherwise be measured against a bot walking past
+ * two of them to reach whichever the spawner happened to push first.
+ */
+const nearestSugar = (state: GameState): Vec2 | undefined => {
+  const { head } = state.snake;
+  let best: Vec2 | undefined;
+  let bestDistance = Infinity;
+
+  for (const pickup of state.pickups) {
+    if (pickup.kind !== 'sugar') continue;
+
+    const distance =
+      Math.abs(shortest(pickup.pos.x - head.x, COLS)) +
+      Math.abs(shortest(pickup.pos.y - head.y, ROWS));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = pickup.pos;
+    }
+  }
+
+  return best;
+};
+
+/**
  * The jar for the first primary `held` still lacks, if one is on the board.
  * Both bots want exactly this; they differ only in what they do when the floor
  * has not got it.
@@ -83,9 +114,9 @@ const jarTowards = (
  * kept as a reference: it is the floor a balancing pass has to beat.
  */
 const grinderGoal: Goal = (state) => {
-  const sugar = state.pickups.find((pickup) => pickup.kind === 'sugar');
+  const sugar = nearestSugar(state);
   const carried = state.snake.body[0];
-  if (carried === undefined) return sugar?.pos ?? BENCH;
+  if (carried === undefined) return sugar ?? BENCH;
 
   const want = state.customers[0]?.want ?? RAW;
 
@@ -217,8 +248,8 @@ const batcherGoal: Goal = (state) => {
   // taken first would cross this jar too, and the ladder would come out flat.
   if (mixes < carried.length) return jarTowards(state, held, needed) ?? circle;
 
-  const sugar = state.pickups.find((pickup) => pickup.kind === 'sugar');
-  if (sugar !== undefined) return sugar.pos;
+  const sugar = nearestSugar(state);
+  if (sugar !== undefined) return sugar;
 
   // No cube to be had, so press on with the next jar rather than stall. This is
   // a real test rather than the one above again: an order that changed
