@@ -343,10 +343,12 @@ they ordered. The simulation tests assert it on every tick.
   toward the loose tail end** — the crack propagating down the strand. Debris
   is inert: it blocks nothing and collides with nothing, but pickups will not
   spawn on it while it is still there.
-- A pickup the lost length was still passing through is **left on the board,
-  closed again** — the strand that was drawing through it no longer exists, so
-  the head has to come back for it. A batch cut at the block leaves its
-  pickups the same way, for the same reason.
+- A pickup the lost length was still passing through settles by **what it has
+  already paid**, and the two kinds differ: a **cube** is left on the board,
+  closed again, for the head to come back for; a **jar** has already kneaded its
+  color into the piece that was cut, so it is **spent**. A batch cut at the
+  block leaves its pickups the same way, for the same reason. §8 has the full
+  rule and the grind loop that re-closing a jar turned out to open.
 - **Walls:** the kitchen edges wrap (pass-through service doors on each wall —
   exit left, re-enter right). This keeps flow forgiving on mobile. Station
   cells (the chopping block) are crossed, not collided with: they interact

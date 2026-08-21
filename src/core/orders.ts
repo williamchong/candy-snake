@@ -15,8 +15,15 @@ const SECONDARIES: readonly ColorMask[] = PRIMARIES.flatMap(
     PRIMARIES.slice(index + 1).map((second: Primary) => first | second),
 );
 
-/** Indexed to match `StageConfig.mix`: tier 1, tier 2, tier 3. */
-const TIERS: readonly (readonly ColorMask[])[] = [[RAW], PRIMARIES, SECONDARIES];
+/**
+ * Indexed to match `StageConfig.mix`: tier 1, tier 2, tier 3. Exported because
+ * `rollOrder` below is not the only thing that needs to know the shape of
+ * demand — the balancing sim's batching bot plans against it, and a second copy
+ * of the cardinalities there was right about tier 3 only because there happen
+ * to be three primaries (`SECONDARIES` has three members for the same reason,
+ * and would not if there were four).
+ */
+export const TIERS: readonly (readonly ColorMask[])[] = [[RAW], PRIMARIES, SECONDARIES];
 
 /**
  * One row of the difficulty table (design §7). Phase 4 pins a single stage;

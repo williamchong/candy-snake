@@ -4,7 +4,7 @@ import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
 import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
-import type { StageConfig } from './orders';
+import { TIERS, type StageConfig } from './orders';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
 import {
@@ -13,7 +13,6 @@ import {
   RAW,
   type ColorMask,
   type GameState,
-  type Segment,
   type TurnSource,
   type Vec2,
 } from './types';
@@ -89,15 +88,16 @@ const nearestSugar = (state: GameState): Vec2 | undefined => {
   return best;
 };
 
+/** Where a primary's jar is standing, if it is out. */
+const jarFor = (state: GameState, primary: Primary): Vec2 | undefined =>
+  state.pickups.find((pickup) => pickup.kind === 'dye' && pickup.primary === primary)
+    ?.pos;
+
 /**
  * The jar for the first primary `held` still lacks, if one is on the board.
  * Both bots want exactly this; they differ only in what they do when the floor
  * has not got it.
  */
-const jarFor = (state: GameState, primary: Primary): Vec2 | undefined =>
-  state.pickups.find((pickup) => pickup.kind === 'dye' && pickup.primary === primary)
-    ?.pos;
-
 const jarTowards = (
   state: GameState,
   held: ColorMask,
@@ -123,15 +123,13 @@ const jarTowards = (
  * played a few minutes knows roughly what gets asked for, and the plan's open
  * finding is about a maker who builds for demand that has not arrived yet.
  */
-const TIER_COLORS = [1, PRIMARIES.length, PRIMARIES.length] as const;
-
 const demandFor = (stage: StageConfig, color: ColorMask): number => {
   const tier = mixCount(color);
   const weight = stage.mix[tier];
   if (weight === undefined) return 0;
 
   const total = stage.mix.reduce((sum, share) => sum + share, 0);
-  return weight / total / (TIER_COLORS[tier] ?? 1);
+  return weight / total / (TIERS[tier]?.length ?? 1);
 };
 
 /**
@@ -237,6 +235,9 @@ interface Ladder {
 const ladderSize = (ladder: Ladder): number =>
   ladder.counts.reduce((sum, count) => sum + count, 0);
 
+/** One plain cube — the grinder's whole batch, and `bestLadder`'s floor. */
+const SOLO_CUBE: Ladder = { order: [], counts: [1] };
+
 /** Coverage is worth an order of magnitude more than length; see `planLadder`. */
 const COVERAGE_WEIGHT = 10;
 
@@ -259,11 +260,12 @@ const COVERAGE_WEIGHT = 10;
  *   already had.
  *
  * Speculation stacks with diminishing returns: the *j*th segment of a color is
- * worth `openings × chance / j`, since a second red only sells if a second child
- * wants red. A segment costs 1 against the `COVERAGE_WEIGHT` a serve is worth,
- * so the plan stops adding rungs the moment the next one is likelier to stale
- * than to sell. That tie-break is the one that matters: what kills a maker is
- * not waste but the time spent building before anybody is handed anything.
+ * worth the chance that **at least *j* of the `openings` ask for it** (`atLeast`
+ * above), since a second red only sells if a second child wants red. A segment
+ * costs 1 against the `COVERAGE_WEIGHT` a serve is worth, so the plan stops
+ * adding rungs the moment the next one is likelier to stale than to sell. That
+ * tie-break is the one that matters: what kills a maker is not waste but the
+ * time spent building before anybody is handed anything.
  */
 const planLadder = (
   order: readonly Primary[],
@@ -314,9 +316,11 @@ const planLadder = (
   let from = 0;
   while (from < counts.length - 1 && counts[from] === 0) from += 1;
 
+  const ladder = { order: order.slice(from), counts: counts.slice(from) };
+
   return {
-    ladder: { order: order.slice(from), counts: counts.slice(from) },
-    score: (matched + expected) * COVERAGE_WEIGHT - counts.reduce((a, b) => a + b, 0),
+    ladder,
+    score: (matched + expected) * COVERAGE_WEIGHT - ladderSize(ladder),
   };
 };
 
@@ -353,7 +357,7 @@ const bestLadder = (state: GameState, stage: StageConfig): Ladder => {
   const buildable = (order: readonly Primary[]): boolean =>
     order.every((dye) => promised.has(dye) || jarFor(state, dye) !== undefined);
 
-  let best: Ladder = { order: [], counts: [1] };
+  let best: Ladder | undefined;
   let bestScore = -Infinity;
 
   for (const order of LADDER_ORDERS) {
@@ -369,7 +373,13 @@ const bestLadder = (state: GameState, stage: StageConfig): Ladder => {
   // Nothing worth building — no one waiting and no rung likelier to sell than
   // to stale. One plain cube is still better than standing still: it is the
   // grinder's whole batch, and the bench is on the way to everything.
-  return ladderSize(best) > 0 ? best : { order: [], counts: [1] };
+  //
+  // Defensive rather than live, and measured as such: `LADDER_ORDERS` opens
+  // with the empty order, which `buildable` can never reject, so the loop
+  // always assigns — and reaching here at all wants an empty window over a
+  // nearly-full rack. Neither fired once in 7671 calls across four
+  // seven-minute runs.
+  return best !== undefined && ladderSize(best) > 0 ? best : SOLO_CUBE;
 };
 
 /**
@@ -413,27 +423,24 @@ const batcherGoal: Goal = (state, stage) => {
    */
   const circle = state.snake.head;
 
-  const done = order.filter((dye) => (held & dye) !== 0).length;
-  /** Every segment that must be on the strand before jar `done` is crossed. */
-  const wanted = counts
-    .slice(0, done + 1)
-    .reduce((sum: number, count: number) => sum + count, 0);
-
-  // The first jar the strand has *not* been through, rather than `order[done]`:
-  // a re-plan mid-build can leave the strand holding a later rung's primary and
-  // not an earlier one, and the ladder still wants the one it is missing.
+  // The first jar the strand has *not* been through, which is where the build
+  // has got to. Found rather than counted: a re-plan mid-build can leave the
+  // strand holding a later rung's primary and not an earlier one, and both the
+  // jar to head for and the rungs already owed have to be read off the same
+  // place or the maker fetches cubes for a rung it is not on.
   const next = order.find((dye) => (held & dye) === 0);
   /** The ladder's jars are all through the strand; only the bench is left. */
   const finished = next === undefined;
+  const rung = finished ? order.length : order.indexOf(next);
+  /** Every segment that must be on the strand before that jar is crossed. */
+  const wanted = counts.slice(0, rung + 1).reduce((sum, count) => sum + count, 0);
 
   // Lay this rung's cubes before crossing the jar that tints them. A cube taken
   // after the jar stays raw, so the ladder would come out a rung short.
   if (carried.length < wanted) {
     const sugar = nearestSugar(state);
     if (sugar !== undefined) return sugar;
-
     // No cube to be had, so press on with the next jar rather than stall.
-    return finished ? BENCH : (jarFor(state, next) ?? circle);
   }
 
   return finished ? BENCH : (jarFor(state, next) ?? circle);
@@ -578,32 +585,32 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
   const gears: { rung: number; top: boolean }[] = [];
 
   for (let tick = 0; tick < ticks; tick += 1) {
-    const events = game.step(20, bot);
-    /** The batch this step cut loose, if it cut one. */
-    let batch: readonly Segment[] | undefined;
-
-    for (const event of events) {
+    for (const event of game.step(20, bot)) {
       if (event.type === 'candy-chopped') chopped += 1;
       if (event.type === 'candy-staled') staled += 1;
       if (event.type === 'strand-broken') broken += 1;
       if (event.type === 'speed-raised') gears.push({ rung: event.rung, top: event.top });
-      if (event.type === 'strand-cut') batch = event.batch;
-    }
+      if (event.type !== 'strand-cut') continue;
 
-    // Both readings are of the **strand the maker built**, which is the batch
-    // plus whatever stayed on the head — not of the batch alone. Today those
-    // are the same thing, since a chop severs the whole body (design §5) and
-    // leaves the snake head-only; the retained term is here so that a rule
-    // keeping part of the strand back cannot quietly turn "how long a line did
-    // this maker build" into "how much of it was sold this trip". A metric that
-    // answers a different question after a rules change, under the same name,
-    // is how this harness has gone blind four times.
-    if (batch !== undefined) {
+      // Both readings are of the **strand the maker built**, which is the batch
+      // plus whatever stayed on the head — not of the batch alone. Today those
+      // are the same thing, since a chop severs the whole body (design §5) and
+      // leaves the snake head-only; the retained term is here so that a rule
+      // keeping part of the strand back cannot quietly turn "how long a line
+      // did this maker build" into "how much of it was sold this trip". A
+      // metric that answers a different question after a rules change, under
+      // the same name, is how this harness has gone blind four times.
+      //
+      // Read here rather than after the step, for the same reason: this is the
+      // moment the strand was parted. Off the event loop it would also have to
+      // assume one cut a step — true today, since `SPEED_RUNGS` floors a move
+      // at 125 ms against this loop's fixed 20, but an assumption a rules
+      // change could quietly cost.
       const kept = game.state.snake.body;
-      const colors = new Set([...batch, ...kept].map((segment) => segment.color));
+      const colors = new Set([...event.batch, ...kept].map((segment) => segment.color));
       if (colors.size > 1) ladders += 1;
       cuts += 1;
-      cutSum += batch.length + kept.length;
+      cutSum += event.batch.length + kept.length;
     }
 
     violations.push(...violationsIn(game, tick));
@@ -743,6 +750,24 @@ const TARGET_TICKS = 30_000;
 const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
 
 /**
+ * Wider still, and only the **median** is asked of it — because sixteen turns
+ * out not to be enough for that either, which is a thing this file has now
+ * learned twice about two different statistics.
+ *
+ * A proportion needed sixteen where four would not do (`SWEEP` above). A median
+ * needs sixty-four: measured on the same build, the batching maker's death
+ * reads **3.95 min across `SWEEP` and 4.21 across this draw** — a quarter of a
+ * minute apart, which straddles the floor of the 4–6 window the ramp is aimed
+ * at. Half the sittings recorded in the plan compared two medians sixteen seeds
+ * wide and read the difference as a curve that moved; on this evidence some of
+ * those differences were the draw.
+ *
+ * It costs about a second of suite time, paid only by the batcher, since the
+ * grinder outlives the sweep on most seeds and has no median to speak of.
+ */
+const WIDE = [...SWEEP, ...Array.from({ length: 48 }, (_unused, at) => 1_000 + at * 37)];
+
+/**
  * The deepest window the ramp ever opens, off the table rather than written
  * down again — the last row's, since the cap only climbs and then holds past
  * the end of the table (`difficulty.test.ts` pins both). A retune that widens
@@ -833,7 +858,13 @@ describe('the reference players, after the ramp went in', () => {
     // *When* it closes them out is the target itself, and the median is what
     // carries it: the tail is a re-roll on any given seed (anything that moves
     // a spawn re-rolls every free cell drawn after it) but the middle of the
-    // draw is not. Measured 5.16 min, over deaths running 4.2 … 7.7, against
+    // draw is not — or so this said until the ceiling went up, when the middle
+    // of *sixteen* turned out to move by a quarter of a minute against sixty-
+    // four (3.95 against 4.21) and to straddle the floor while doing it. The
+    // median has moved to `WIDE` for that reason, and every median quoted below
+    // was read off sixteen seeds and should be taken as ±0.3 min.
+    //
+    // Measured 5.16 min, over deaths running 4.2 … 7.7, against
     // 5.79 while the tide still waited for the three-minute mark — the ninth
     // sitting moved it to `SETTLED_MS` and a shape the maker meets a minute in
     // is one they have to hold off for the rest of the run.
@@ -857,7 +888,10 @@ describe('the reference players, after the ramp went in', () => {
     // and the arrival interval — neither of which adds a thing to do. A target
     // past the last of the levers was asking the ramp to hold attention with
     // arithmetic. See the plan's seventh sitting.
-    const sorted = [...diedAt].sort((a, b) => a - b);
+    const sorted = target(batcherGoal, WIDE)
+      .map((run) => run.diedAtMs)
+      .filter((ms): ms is number => ms !== undefined)
+      .sort((a, b) => a - b);
     const median =
       sorted.length % 2 === 1
         ? sorted[(sorted.length - 1) / 2]!
@@ -925,33 +959,53 @@ describe('the reference players, after the ramp went in', () => {
       // measures variety and not length. Raising the ceiling bought length by
       // letting a rung carry several segments, and a rung carried twice is the
       // same color twice — so the batcher builds longer strands and trips this
-      // counter less often. Measured 14 … 44 across the wider draw against
-      // 32 … 51 before, while the batch at the bench went 2.32 → 3.04 segments.
+      // counter less often. Measured 11 … 28 across the wider draw against
+      // 32 … 51 before, while the batch at the bench went 2.32 → 2.96 segments.
       // Read the two together or neither means anything: `meanBatch` below is
-      // the length, this is the variety, and the grinder's 4 … 9 is still the
+      // the length, this is the variety, and the grinder's 1 … 10 is still the
       // separation the number is here for.
       expect(batcher.ladders).toBeGreaterThan(10);
-      // The gap below is *mostly* what the candy is worth, and no longer all of
-      // it. The grinder still never steers into itself, and the batcher now
-      // occasionally does — measured 9 breaks across the sixteen seven-minute
-      // runs of `SWEEP`, against 0 before the ceiling went up. That is the cost
-      // `broken` was put here to carry (a production line is a longer strand,
-      // and a longer strand is easier to run into), so it is held to a ceiling
-      // rather than to zero: at roughly one break per run it cannot account for
-      // a two-to-one score gap, which is what the assertion needs to establish.
-      expect(batcher.broken).toBeLessThanOrEqual(3);
+      // The gap below is *mostly* what the candy is worth, and no longer quite
+      // all of it. The grinder still never steers into itself; the batcher now
+      // rarely does — measured **3 breaks across the sixteen** seven-minute runs
+      // of `SWEEP`, no seed contributing more than one, and 0 across the four
+      // this test runs over. Against 0 everywhere before the ceiling went up.
+      // That is the cost `broken` was put here to carry (a production line is a
+      // longer strand, and a longer strand is easier to run into), so it is
+      // held to a ceiling rather than to zero — a break every fifth run cannot
+      // account for a four-to-one score gap, which is what this has to
+      // establish before the gap can be read as economics.
+      expect(batcher.broken).toBeLessThanOrEqual(1);
       expect(grinder.broken).toBe(0);
     });
   });
 
   it('fills the window the seventh sitting opened', () => {
-    // See `peakQueue` for why occupancy is read back at all. Measured: every
-    // slot the ramp opens is reached on every seed of the draw, both bots.
-    for (const goalOf of [batcherGoal, grinderGoal]) {
-      target(goalOf, SWEEP).forEach((run, index) => {
-        expect(run.peakQueue, `seed ${SWEEP[index]}`).toBe(PEAK_QUEUE);
-      });
-    }
+    // See `peakQueue` for why occupancy is read back at all. The claim is about
+    // the **ramp** — that every slot it promises is a slot a run actually sees
+    // — so it is carried by the maker who lives long enough to be shown them
+    // all. That is the grinder, on every seed of the draw.
+    target(grinderGoal, SWEEP).forEach((run, index) => {
+      expect(run.peakQueue, `seed ${SWEEP[index]}`).toBe(PEAK_QUEUE);
+    });
+
+    // The batcher is held one slot lower, and the slack is a run length rather
+    // than a window that failed to open: the last widening is a row on the ramp,
+    // and a maker who dies before reaching that row never sees it. Measured
+    // 15 of 16 at the full depth and one at three, on a median run of 4.2 min —
+    // where before the ceiling went up it was 16 of 16 on a median of 5.7.
+    // A *second* seed dropping would not be slack; it would be the window
+    // closing, which is the thing the seventh sitting built this to catch.
+    const short = target(batcherGoal, SWEEP).filter((run) => run.peakQueue < PEAK_QUEUE);
+    expect(
+      short.length,
+      `${short.length} of ${SWEEP.length} short of the window`,
+    ).toBeLessThanOrEqual(1);
+    target(batcherGoal, SWEEP).forEach((run, index) => {
+      expect(run.peakQueue, `seed ${SWEEP[index]}`).toBeGreaterThanOrEqual(
+        PEAK_QUEUE - 1,
+      );
+    });
   });
 
   it('builds the long strand the open finding is about', () => {
@@ -969,15 +1023,21 @@ describe('the reference players, after the ramp went in', () => {
     // is what the plan named as the prerequisite for asking any long-strand
     // question at all.
     //
-    // Measured over `SWEEP`, before → after: batch at the bench 2.32 → 3.04
-    // segments, carried mean 1.22 → 2.00, peak 4 → 9. The floors below are set
-    // under the *worst* seed rather than at the mean, since what has to be true
-    // for the evidence to mean anything is that no seed is quietly still
-    // playing the old game.
+    // Measured over `SWEEP`, before → after: batch at the bench 2.32 → 2.96
+    // segments, carried mean 1.22 → 1.94, peak 4 → 9. The floors below are set
+    // under the *worst* seed rather than at the mean (batch 2.69, peak 5,
+    // carried 1.71), since what has to be true for the evidence to mean
+    // anything is that no seed is quietly still playing the old game.
     target(batcherGoal, SWEEP).forEach((batcher, index) => {
       const seed = `seed ${SWEEP[index]}`;
       expect(batcher.peakSegments, seed).toBeGreaterThan(4);
       expect(batcher.meanBatch, seed).toBeGreaterThan(2.4);
+      // Pinned beside the batch it is quoted with. `meanSegments` is what the
+      // old ceiling test held *under* 2 on every seed; it is a different
+      // question from `meanBatch` — what the maker drags around all run, not
+      // what reaches the bench — and a documented metric nothing reads is how
+      // this file has gone blind before.
+      expect(batcher.meanSegments, seed).toBeGreaterThan(1.5);
     });
 
     // And the grinder is untouched by all of it: it carries one segment by

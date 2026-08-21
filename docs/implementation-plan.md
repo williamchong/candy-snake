@@ -1361,9 +1361,16 @@ so the oldest has been through the most jars. The front of the strand is
 therefore always the most-mixed — which is to say the **highest tier**. Against
 `BASE_POINTS`, an `[orange, yellow, raw]` ladder is 50 + 25 + 10; keeping the
 front two sells **10 of the 85** and banks the rest. Built and swept at
-`CHOP_KEEP = 2`, `ladders` — cuts whose strand held more than one color — read
-**0**. Not fewer multi-color batches: none. The production line stopped reaching
-customers entirely.
+`CHOP_KEEP = 2`, `ladders` — then reading the colors of the batch alone — read
+**0**. Not fewer multi-color batches: none. Every rung of variety stayed on the
+head and only the raw bottom reached a customer.
+
+That zero is also the sitting's first sighting of its second finding, and it was
+read as a catastrophe before it was read as an instrument fault. Both are true:
+the production line really did stop reaching customers, *and* `ladders` was
+measuring the wrong thing the moment a chop stopped taking the whole strand. It
+is re-cut below to read the batch plus whatever stayed on the head — under which
+the same arm would score its variety honestly, and still lose.
 
 And `blend` is a bitwise OR, so a retained segment can never lose a primary,
 while every jar crossed to build the *next* ladder pushes it up. Brown drift is
@@ -1411,24 +1418,56 @@ other finding here: the bot wanted something the board had no way to give.
 
 Measured over the sixteen seeds, before → after:
 
-| reading                | before | after |
-| ---------------------- | ------ | ----- |
-| batch at the bench     | 2.32   | 3.04  |
-| carried, mean          | 1.22   | 2.00  |
-| carried, peak          | 4      | 9     |
-| batcher ahead (of 16)  | 0      | 2     |
+| reading               | before | after |
+| --------------------- | ------ | ----- |
+| batch at the bench    | 2.32   | 2.96  |
+| carried, mean         | 1.22   | 1.94  |
+| carried, peak         | 4      | 9     |
+| batcher ahead (of 16) | 0      | 0     |
+
+The last row is the one to sit with. Five sittings said the harness could not
+be asked; asked properly, it gives the same answer it always did. **The open
+finding is not an artefact of a bot that would not build** — a maker who builds
+ahead of the window, for demand off the stage's own mix, still loses to the
+grinder on every seed of sixteen. That is worth more than the 1-of-16 the old
+bot occasionally scored, because it is now evidence rather than a ceiling.
 
 **Two instruments had to be re-cut to survive that, and one to survive what comes
 next.** `meanBatch` is new and is the length reading no sweep ever had.
 `ladders` measures *variety* — a rung carried twice is the same color twice — so
-it falls (14 … 44 against 32 … 51) while the strand gets longer; read the two
+it falls (11 … 28 against 32 … 51) while the strand gets longer; read the two
 together or neither means anything. And both now read the batch **plus whatever
 stayed on the head**, which is identical today and is there so a rule keeping
 part of the strand back cannot quietly turn *how long a line did this maker
 build* into *how much of it sold this trip*. `broken` moves off zero for the
-first time — 9 across sixteen seven-minute runs, about one a run — so it is held
-under a ceiling instead: that is the cost `broken` exists to carry, and one break
-per run cannot account for a two-to-one score gap.
+first time — 3 across sixteen seven-minute runs, no seed contributing more than
+one — so it is held under a ceiling instead: that is the cost `broken` exists to
+carry, and a break every fifth run cannot account for a four-to-one score gap.
+
+**And a third instrument turned out to have been lying for several sittings.**
+The 4–6 minute death target is read off the *median*, and the median was being
+asked of sixteen seeds. Measured on one build, the batching maker's median death
+reads **3.95 across `SWEEP` and 4.21 across sixty-four** — a quarter of a minute
+apart, straddling the floor of the window the whole target is stated in. Sixteen
+was chosen, correctly, as the draw that could carry a *proportion* where four
+could not; nobody then asked whether it could carry a median, and it cannot.
+Half the medians quoted in the sittings above were compared sixteen seeds wide
+and read as curves that moved. Some of them were the draw. The assertion now
+runs on a 64-seed `WIDE`, at about a second of suite time, and every median
+recorded before this line should be read as ±0.3 min.
+
+That is the fifth time a reading in this harness has been found answering a
+different question from the one its name implies, and the second time in this
+sitting. The pattern is consistent enough to be worth stating as a rule: **a
+number is only evidence about the draw it was measured on**, and this file
+should say which draw beside every figure it pins.
+
+One consequence lands immediately. `peakQueue` asserted that both bots reach
+every slot the ramp opens, on every seed; the batcher now misses on 1 of 16,
+because the last widening is a *row on the ramp* and a run that ends at 4.2 min
+never reaches it. The claim belongs to the maker who lives long enough to be
+shown all four — the grinder, still 16 of 16 — and the batcher is held one slot
+lower, with a second seed dropping being the window closing rather than slack.
 
 **With the ceiling up, the arm worth measuring was the one that keeps length and
 hands the color back.** The proposal's insight is right and rare — make a long
@@ -1438,11 +1477,11 @@ plain sugar. No ladder inversion, no brown ratchet, the whole batch still sold
 oldest-first. Swept on the widened 64-seed draw against the same baseline, since
 sixteen cannot read a median:
 
-| arm                    | median | chopped/min | staled | batcher score | ahead (of 64) |
-| ---------------------- | ------ | ----------- | ------ | ------------- | ------------- |
-| baseline (whole chop)  | 4.38   | 23.4        | 2590   | 328 002       | **2**         |
-| keep 1, color reset    | 3.87   | 18.2        | 1474   | 214 886       | **0**         |
-| keep 2, color reset    | 2.65   | 13.0        | 595    | 75 569        | **0**         |
+| arm                   | median | chopped/min | staled | batcher score | ahead (of 64) |
+| --------------------- | ------ | ----------- | ------ | ------------- | ------------- |
+| baseline (whole chop) | 4.21   | 23.1        | 2582   | 327 458       | **1**         |
+| keep 1, color reset   | 4.08   | 18.2        | 1475   | 229 942       | **0**         |
+| keep 2, color reset   | 2.64   | 13.0        | 619    | 73 662        | **0**         |
 
 **Nothing shipped, and the monotonicity is the finding.** Every retained segment
 costs, and it costs in a way the record had backwards. The sugar-supply pass

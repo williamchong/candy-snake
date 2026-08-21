@@ -359,6 +359,14 @@ export class Game {
    * follow-the-leader: a segment removed from the middle of a live strand
    * leaves the one behind it two cells adrift, and next move it teleports to
    * close the gap. Nothing on this board teleports.
+   *
+   * That covers a cut in the *middle*, and it is only half the reason — which
+   * is worth saying here, because the missing half is what makes a partial chop
+   * keep getting proposed. `sever` takes an index, so keeping the front of the
+   * strand and cutting the rest loose is already legal and already happens on a
+   * self-hit. It is the wrong end. `growTail` appends, so the front is the
+   * oldest sugar, and the oldest sugar has crossed the most jars — a partial
+   * cut can only ever bank the dear end and sell the cheap one (design §5).
    */
   private cutAtBlock(before: SnakeState, events: GameEvent[]): void {
     if (!isChopBlock(this.state.snake.head) || this.state.snake.body.length === 0) return;
