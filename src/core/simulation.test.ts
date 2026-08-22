@@ -4,7 +4,7 @@ import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
 import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
-import { TIERS, TWIN_CHANCE, echoable, type StageConfig } from './orders';
+import { TIERS, echoable, type StageConfig } from './orders';
 import { SHELF_SLOTS } from './shelf';
 import { ordersLeft, stockedPrimaries, stocksSugar } from './tutorial';
 import {
@@ -58,7 +58,7 @@ const steerTowards = (state: GameState, goal: Vec2): Dir => {
 };
 
 /** Where a bot is heading this move, given the row the ramp is on. */
-type Goal = (state: GameState, stage: StageConfig) => Vec2;
+type Goal = (state: GameState, stage: StageConfig, twinChance: number) => Vec2;
 
 /**
  * The cube a maker standing here would actually walk to, measured the short way
@@ -147,6 +147,12 @@ const demandFor = (
   // stopped having. The window it echoes is the one standing now, which is an
   // approximation: children leave. It is the same approximation `openings`
   // already makes about children arriving.
+  //
+  // And a second one, worth naming because this file's habit is to name them:
+  // `planLadder` feeds this chance into `atLeast`, a binomial that takes the
+  // arrivals as independent — which the echo is precisely what stops them being.
+  // It over-counts the chance of *one* more mouth and under-counts a third, so
+  // the plan is a shade conservative under a correlated window.
   const echoes = echoable(waiting);
   if (twinChance <= 0 || echoes.length === 0) return rolled;
 
@@ -477,7 +483,7 @@ const ladderGoal = (
   state: GameState,
   stage: StageConfig,
   cap: number,
-  twinChance = TWIN_CHANCE,
+  twinChance: number,
 ): Vec2 => {
   const carried = state.snake.body;
   const held = carried[0]?.color ?? RAW;
@@ -520,7 +526,8 @@ const ladderGoal = (
  * The maker the open finding is about: uncapped, so the plan stops itself where
  * the next segment is likelier to stale than to sell.
  */
-const batcherGoal: Goal = (state, stage) => ladderGoal(state, stage, Infinity);
+const batcherGoal: Goal = (state, stage, twinChance) =>
+  ladderGoal(state, stage, Infinity, twinChance);
 
 /**
  * The grinder, plus one segment when the window is offering a pair — and
@@ -563,10 +570,19 @@ const pairGrinderGoal: Goal = (state) => {
  * the strand is halfway through. It is kept and asserted below so that the two
  * variables cannot silently be read as one again.
  */
-const soloPlannerGoal: Goal = (state, stage) => ladderGoal(state, stage, 1);
+const soloPlannerGoal: Goal = (state, stage, twinChance) =>
+  ladderGoal(state, stage, 1, twinChance);
 
+/**
+ * The maker's beliefs come off the **game**, never off a default of their own:
+ * `stage` is where the difficulty is, and `twinChance` is how correlated the
+ * window is. An arm of a sweep sets one number on the `Game` and both the rule
+ * and the maker planning against it move together — which is the whole point of
+ * `echoable` being shared rather than copied, and it is not something a second
+ * default over here could keep true.
+ */
 const botFor = (game: Game, goalOf: Goal = grinderGoal): TurnSource => ({
-  take: () => steerTowards(game.state, goalOf(game.state, game.stage)),
+  take: () => steerTowards(game.state, goalOf(game.state, game.stage, game.twinChance)),
 });
 
 /** Everything that must be true after every single step of every run. */
@@ -1318,6 +1334,25 @@ describe('the reference players, after the ramp went in', () => {
     target(grinderGoal, SWEEP).forEach((run, index) => {
       expect(run.pairOffered, `seed ${SWEEP[index]}`).toBeGreaterThan(0.45);
     });
+  });
+
+  it('is the echo that puts the pair at the window', () => {
+    // The one assertion that turns the knob, and it is here so the override path
+    // has a caller: `twinChance` runs from `GameConfig` through `rollWant` to
+    // `rollOrder`, and `botFor` hands the same number to the maker. Threaded end
+    // to end and never exercised, it would be four signatures of plumbing that
+    // nothing proves still works — and the arm it exists for is the control the
+    // twin pass was measured against.
+    //
+    // Measured on the grinder, which takes no pairs, so this is the window and
+    // not the maker: 43% of the run without the echo, 58% with it.
+    const off = SWEEP.map((seed) => play(seed, TARGET_TICKS, grinderGoal, 0));
+    const bare = sum(off.map((run) => run.pairOffered)) / SWEEP.length;
+    const shipped =
+      sum(target(grinderGoal, SWEEP).map((run) => run.pairOffered)) / SWEEP.length;
+
+    expect(bare).toBeLessThan(0.5);
+    expect(shipped).toBeGreaterThan(bare + 0.1);
   });
 
   it('does not let strand length stand in for who the strand is built for', () => {

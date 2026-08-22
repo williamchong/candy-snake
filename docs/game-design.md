@@ -585,11 +585,22 @@ several children want the same candy at the same moment — and that is a shape
 *demand* has to supply, not one the maker can build toward. Uncorrelated across
 seven colors it is left to coincidence.
 
-- **It changes the joint distribution and not the marginal one.** An echo copies
-  a want that was itself drawn from the weights, so the table's T1/T2/T3 column
-  still says what a stage asks for on average. What moves is how often two of
-  those draws land together — measured, a duplicate stands at the window 43% of
-  the time without the echo and 58% with it.
+- **What it is mostly doing is changing the joint distribution.** An echo copies
+  a want that was itself drawn from the weights, so the draw invents no demand
+  the table did not ask for. What moves is how often two of those draws land
+  together — measured, a duplicate stands at the window 43% of the time without
+  the echo and 58% with it.
+- **It does move the marginal a little, and the table should be read knowing
+  it.** The window a child is copied from is not a fair sample of what was
+  ordered: an easy color leaves it faster, because a raw or a primary is the more
+  likely to be waiting on the rack when its child walks up and gets swept on the
+  spot (§5). So what is left to be echoed skews toward the slow colors. Measured
+  over 64 seeds against the mix in force at each arrival, secondaries are
+  delivered at **59.8% against the table's 57.1%**, with raw and the primaries
+  each about a point light; at a chance of zero the same measurement comes back
+  level. That is less than one step of the T3 column and the death target held
+  across the sweep, so it is recorded rather than corrected — but it is the first
+  thing to re-measure if this constant is ever raised.
 - **Brown is never echoed.** It is the over-mix mistake and reaches the window
   only through the mercy customer, who wants one already on the rack.
 - **It is not the fix for the batching finding.** Measured, it pays the maker who
@@ -597,8 +608,9 @@ seven colors it is left to coincidence.
   production line is still behind — see the implementation plan. The reason to
   have it is that the combo the game already scores is a thing the window now
   offers rather than a thing it occasionally allows.
-- The opening levels are untouched: their orders are scripted (§7 above), and
-  their window holds one child.
+- The opening levels are untouched: their orders are scripted (§7 above), so
+  nothing they ask for comes through this draw at all — including level 4's
+  pair, which is authored rather than rolled.
 
 ### The rush (from the 1-minute mark)
 

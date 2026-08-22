@@ -9,7 +9,7 @@ import {
   speedRungOf,
   stageAt,
 } from './difficulty';
-import { rollOrder, type StageConfig } from './orders';
+import { rollOrder, TWIN_CHANCE, type StageConfig } from './orders';
 import {
   NO_PITY,
   duePrimaries,
@@ -169,6 +169,17 @@ export class Game {
     if (this.config.stage !== undefined) return this.config.stage;
 
     return stageAt(this.endlessMs, this.endlessScore);
+  }
+
+  /**
+   * How correlated the window is (`orders.ts`'s `TWIN_CHANCE`), or whatever a
+   * balancing sim pinned instead — the same shape as `stage` above and for the
+   * same reason: a maker's model of the rules is read off the game, so an arm
+   * of a sweep cannot move the rule and leave the maker planning against the
+   * old one.
+   */
+  get twinChance(): number {
+    return this.config.twinChance ?? TWIN_CHANCE;
   }
 
   /**
@@ -709,7 +720,7 @@ export class Game {
       stage,
       this.rng,
       this.state.customers.map((customer) => customer.want),
-      this.config.twinChance,
+      this.twinChance,
     );
   }
 

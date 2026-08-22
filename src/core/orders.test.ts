@@ -7,11 +7,15 @@ import { RAW, type ColorMask } from './types';
 
 const stageWith = (mix: StageConfig['mix']): StageConfig => ({ ...MIXING_STAGE, mix });
 
+/** What share of `orders` came back at a tier — the weights, read back out. */
+const tierShare = (orders: readonly ColorMask[], tier: number): number =>
+  orders.filter((order) => colorInfo(order).tier === tier).length / orders.length;
+
 /** A run of orders from one seed — deterministic, so any assertion is stable. */
 const roll = (mix: StageConfig['mix'], count = 500, seed = 7): ColorMask[] => {
   const rng = createRng(seed);
   const stage = stageWith(mix);
-  return Array.from({ length: count }, () => rollOrder(stage, rng));
+  return Array.from({ length: count }, () => rollOrder(stage, rng, [], TWIN_CHANCE));
 };
 
 describe('rollOrder', () => {
@@ -44,12 +48,10 @@ describe('rollOrder', () => {
 
   it('splits orders across tiers roughly by weight', () => {
     const orders = roll([10, 50, 40], 2_000);
-    const share = (tier: number): number =>
-      orders.filter((order) => colorInfo(order).tier === tier).length / orders.length;
 
-    expect(share(1)).toBeCloseTo(0.1, 1);
-    expect(share(2)).toBeCloseTo(0.5, 1);
-    expect(share(3)).toBeCloseTo(0.4, 1);
+    expect(tierShare(orders, 1)).toBeCloseTo(0.1, 1);
+    expect(tierShare(orders, 2)).toBeCloseTo(0.5, 1);
+    expect(tierShare(orders, 3)).toBeCloseTo(0.4, 1);
   });
 });
 
@@ -110,14 +112,20 @@ describe('rollOrder, echoing the window', () => {
 
     expect(
       Array.from({ length: 200 }, () => rollOrder(MIXING_STAGE, off, [RED], 0)),
-    ).toEqual(Array.from({ length: 200 }, () => rollOrder(MIXING_STAGE, never)));
+    ).toEqual(Array.from({ length: 200 }, () => rollOrder(MIXING_STAGE, never, [], 0)));
   });
 
-  it('leaves the tier shares the difficulty table asked for', () => {
-    // The claim `TWIN_CHANCE` is written on: an echo copies a want that was
-    // itself drawn from the weights, so the *joint* distribution of the window
-    // changes and the marginal one does not. Played out as a window that fills
-    // from its own draws, the mix still comes back as the table wrote it.
+  it('invents no demand of its own: the roller keeps the table’s tier shares', () => {
+    // Half of the claim `TWIN_CHANCE` is written on, and the half that is exact:
+    // an echo copies a want that was itself drawn from the weights, so the draw
+    // cannot invent demand the table did not ask for.
+    //
+    // The window here empties **oldest first**, which is blind to color — and
+    // that is what makes this the roller's property rather than the game's. A
+    // real window does not empty that way (design §5 sweeps an easy color off
+    // the rack the moment its child walks up), so the delivered mix does skew;
+    // `TWIN_CHANCE`'s own note carries the measurement. Keep this test reading
+    // the roller, and do not let it be mistaken for a claim about a run.
     const rng = createRng(23);
     const stage = stageWith([10, 50, 40]);
     const orders: ColorMask[] = [];
@@ -129,11 +137,8 @@ describe('rollOrder, echoing the window', () => {
       waiting = [...waiting, order].slice(-3);
     }
 
-    const share = (tier: number): number =>
-      orders.filter((order) => colorInfo(order).tier === tier).length / orders.length;
-
-    expect(share(1)).toBeCloseTo(0.1, 1);
-    expect(share(2)).toBeCloseTo(0.5, 1);
-    expect(share(3)).toBeCloseTo(0.4, 1);
+    expect(tierShare(orders, 1)).toBeCloseTo(0.1, 1);
+    expect(tierShare(orders, 2)).toBeCloseTo(0.5, 1);
+    expect(tierShare(orders, 3)).toBeCloseTo(0.4, 1);
   });
 });

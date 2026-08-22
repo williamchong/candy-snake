@@ -2361,12 +2361,33 @@ against 6 649).
 | 0.25 | batcher | 7968  | 64/64 | 5.29   | 44.2%         | 3.66       | 52     |
 
 The batching maker's median death stays inside the window (5.29 against a 4.34
-baseline), the grinder's score does not move (13 080 → 13 244), the tier shares
-the table asks for are unchanged by construction and pinned in `orders.test.ts`,
-and a pair stands at the window 58% of the time instead of 43%. **Every seeded
-assertion in the suite held across the change** — which is worth stating, since
-this moves an rng draw and every previous such change had to re-measure the
-whole table.
+baseline), the grinder's score does not move (13 080 → 13 244), and a pair
+stands at the window 58% of the time instead of 43%. **Every seeded assertion in
+the suite held across the change** — which is worth stating, since this moves an
+rng draw and every previous such change had to re-measure the whole table.
+
+**One claim in this section was written ahead of its measurement and has since
+been corrected.** It said the tier shares the table asks for were "unchanged by
+construction". That is true of the roller — an echo copies a want drawn from the
+weights, and `orders.test.ts` pins it — and it is **not** true of a running
+game, because the window an echo copies from is not a fair sample of what was
+ordered. An easy color leaves it faster: a raw or a primary is the more likely
+to be waiting on the rack when its child walks up, and design §5 sweeps it there
+and then. What is left standing to be echoed skews toward the slow colors.
+
+Measured over `WIDE` against the mix in force at each arrival, on the grinder:
+
+| arm       | T1 obs / exp  | T2 obs / exp    | T3 obs / exp    |
+| --------- | ------------- | --------------- | --------------- |
+| twin 0    | 5.4% / 5.7%   | 37.7% / 37.1%   | 56.9% / 57.2%   |
+| twin 0.25 | 4.5% / 5.7%   | 35.7% / 37.2%   | **59.8% / 57.1%** |
+
+Secondaries run 2.7 points over the table, raw and the primaries about a point
+light each. It is smaller than one step of the anchor table's own T3 column and
+the death target held across the whole sweep, so it is recorded rather than
+corrected — but it is the first thing to re-measure if the constant is raised.
+The lesson is the one this file keeps relearning: the claim was reasoned from
+the shape of the draw, and the draw is not the game.
 
 **What it is and is not.** It is not the fix for the open finding: at a
 difficulty-neutral constant the maker who builds a production line is still

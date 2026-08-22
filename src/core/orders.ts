@@ -81,11 +81,27 @@ const pick = (colors: readonly ColorMask[], rng: Rng): ColorMask =>
  * offered and nothing else — it beats the grinder on 54 seeds of 64 — so this
  * is the knob that decides how often the game offers it.
  *
- * It changes the **joint** distribution of the window and not the marginal one:
- * an echo copies a want that was itself drawn from the stage's weights, so what
- * the table says a stage asks for is still what it asks for on average, and
- * `mix` keeps meaning exactly what design §7 says it means. What moves is how
- * often two of those draws land together.
+ * What it is mostly doing is changing the **joint** distribution of the window
+ * rather than the marginal one: an echo copies a want that was itself drawn
+ * from the stage's weights, so the draw cannot invent demand the table did not
+ * ask for. Measured on the roller alone that is exact, and `orders.test.ts`
+ * pins it.
+ *
+ * In a running game it is **not** exact, and the reason is that the window a
+ * child is copied from is not a fair sample of what was ordered. An easy color
+ * leaves it faster: a raw or a primary is the more likely to be sitting on the
+ * rack when its child walks up, and design §5 has them swept and served on the
+ * spot. So what is left standing to be echoed skews toward the colors that are
+ * slow to make, and the echo repeats that skew. Measured over 64 seeds against
+ * the mix in force at each arrival, the delivered share of secondaries runs
+ * **59.8% against the 57.1% the table asked for**, with raw and the primaries
+ * each about a point light; at a chance of zero the same measurement comes back
+ * level (56.9% against 57.2%).
+ *
+ * That is a deviation worth knowing about before this constant is raised — it
+ * is smaller than one step of the anchor table's own T3 column, and the death
+ * target held across the sweep, which is why it is recorded rather than
+ * corrected.
  */
 export const TWIN_CHANCE = 0.25;
 
@@ -111,20 +127,23 @@ export const echoable = (waiting: readonly ColorMask[]): readonly ColorMask[] =>
  * within that tier. A tier weighted 0 can never come up — the weights are the
  * only thing gating which colors a stage can ask for.
  *
- * `waiting` is the window as it stands, and `TWIN_CHANCE` of the time the draw
- * echoes one of it instead. The roll is taken only when there is something to
- * echo *and* the chance is above zero, so a run with the knob at zero draws the
- * same stream it always did — a feature that is off costs nothing, which is
- * what makes it a control rather than another arm.
+ * `waiting` is the window as it stands, and `twinChance` of the time the draw
+ * echoes one of it instead.
  */
 export const rollOrder = (
   stage: StageConfig,
   rng: Rng,
   waiting: readonly ColorMask[] = [],
-  twinChance: number = TWIN_CHANCE,
+  twinChance: number,
 ): ColorMask => {
-  const echoes = twinChance > 0 ? echoable(waiting) : [];
-  if (echoes.length > 0 && rng.next() < twinChance) return pick(echoes, rng);
+  // Nothing is drawn unless the echo could actually happen: a run with the knob
+  // at zero, or a window with nobody echoable in it, must leave the rng stream
+  // exactly where a game without this feature left it. That is what makes zero
+  // a control rather than another arm, and `orders.test.ts` pins it.
+  if (twinChance > 0) {
+    const echoes = echoable(waiting);
+    if (echoes.length > 0 && rng.next() < twinChance) return pick(echoes, rng);
+  }
 
   return rollTier(stage, rng);
 };
