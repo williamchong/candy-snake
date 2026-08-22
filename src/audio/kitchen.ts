@@ -86,12 +86,38 @@ export class Kitchen {
       (key) => !scene.cache.audio.exists(key),
     );
 
+    // The bed is the one part of a paused run that does not stop by itself:
+    // `scene.sound` is the game-global manager, not a scene-scoped one, so the
+    // loop plays on over a stopped shop. Heard here rather than from the HUD
+    // that owns the switch — a scene's emitter still fires while it is paused,
+    // so the kitchen can listen to its own scene and nothing has to reach
+    // across. Everything else is already safe: `play` is only ever called from
+    // that scene's update, so no cue can start while it is paused.
+    const hush = (): void => {
+      this.hush();
+    };
+    const resume = (): void => {
+      this.resume();
+    };
+
+    scene.events.on('pause', hush);
+    scene.events.on('resume', resume);
+
     // A fresh Kitchen is built for every run, so the last one's bed has to be
     // taken down with the scene that owned it — otherwise a restart leaves two
     // playing, a little louder each time. `shutdown` covers every way out of a
     // run, the game-over branch included, which is why it is here rather than
     // hung off that one event.
+    //
+    // The two above have to come off with it, and that is not Phaser doing it
+    // for us: `Systems.shutdown` clears only its own transition events, and
+    // `removeAllListeners` is in `destroy`, which a restarted scene never
+    // reaches. Left on, each run would add another pair to the same emitter —
+    // the hazard `ui/responsive.ts` names for the scale manager, one object
+    // further in.
     scene.events.once('shutdown', () => {
+      scene.events.off('pause', hush);
+      scene.events.off('resume', resume);
       this.close();
     });
   }
@@ -110,6 +136,27 @@ export class Kitchen {
   private close(): void {
     this.bed?.destroy();
     this.bed = undefined;
+  }
+
+  /**
+   * Holds the room tone, and lets it back in.
+   *
+   * The bed's own transport, deliberately, rather than `scene.sound.mute` —
+   * which `ui/muteTab.ts` owns and reads back from a local mirror, so a second
+   * writer on that boolean means a pause comes back unmuting a player who had
+   * asked for silence. Held rather than closed, because a bed destroyed and
+   * reopened restarts the loop at its head, which is a seam at exactly the
+   * moment the player is listening for the game coming back.
+   *
+   * A cue already in the air is left to finish: a few hundred milliseconds, and
+   * cutting one mid-shape is more audible than letting it end.
+   */
+  private hush(): void {
+    this.bed?.pause();
+  }
+
+  private resume(): void {
+    this.bed?.resume();
   }
 
   /**

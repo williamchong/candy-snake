@@ -16,8 +16,10 @@ import { AMBIENCE_KEY, CUES, CueKey } from './tones';
  */
 const bench = (baked = true) => {
   const played: Array<{ key: string; delay: number; rate: number }> = [];
-  const beds: Array<{ key: string; loop: boolean; alive: boolean }> = [];
+  const beds: Array<{ key: string; loop: boolean; alive: boolean; held: boolean }> = [];
   const shutdown: Array<() => void> = [];
+  /** Everything still subscribed, by event — so a leak is countable. */
+  const listeners: Record<string, Array<() => void>> = {};
   let now = 0;
 
   const scene = {
@@ -30,6 +32,12 @@ const bench = (baked = true) => {
       once: (event: string, run: () => void) => {
         if (event === 'shutdown') shutdown.push(run);
       },
+      on: (event: string, run: () => void) => {
+        (listeners[event] ??= []).push(run);
+      },
+      off: (event: string, run: () => void) => {
+        listeners[event] = (listeners[event] ?? []).filter((one) => one !== run);
+      },
     },
     cache: { audio: { exists: () => baked } },
     sound: {
@@ -38,7 +46,7 @@ const bench = (baked = true) => {
         return true;
       },
       add: (key: string, config: { loop: boolean }) => {
-        const bed = { key, loop: config.loop, alive: false };
+        const bed = { key, loop: config.loop, alive: false, held: false };
         beds.push(bed);
         return {
           play: () => {
@@ -47,16 +55,30 @@ const bench = (baked = true) => {
           destroy: () => {
             bed.alive = false;
           },
+          pause: () => {
+            bed.held = true;
+          },
+          resume: () => {
+            bed.held = false;
+          },
         };
       },
     },
   };
 
+  const fire = (event: string) => (listeners[event] ?? []).forEach((run) => run());
+
   return {
     kitchen: new Kitchen(scene as unknown as Phaser.Scene),
     played,
     beds,
+    scene,
     shutDown: () => shutdown.forEach((run) => run()),
+    // Driven through the scene the way Phaser drives it, rather than by calling
+    // the methods: what is worth checking is that the kitchen is *listening*.
+    pause: () => fire('pause'),
+    unpause: () => fire('resume'),
+    subscribed: (event: string) => (listeners[event] ?? []).length,
     wait: (ms: number) => {
       now += ms;
     },
@@ -147,7 +169,9 @@ describe('the bed', () => {
     const { kitchen, beds } = bench();
     kitchen.open();
 
-    expect(beds).toStrictEqual([{ key: AMBIENCE_KEY, loop: true, alive: true }]);
+    expect(beds).toStrictEqual([
+      { key: AMBIENCE_KEY, loop: true, alive: true, held: false },
+    ]);
   });
 
   it('opens once however often it is asked', () => {
@@ -188,5 +212,54 @@ describe('the bed', () => {
     kitchen.open();
 
     expect(beds).toHaveLength(0);
+  });
+
+  it('holds the room tone while the game is paused, and lets it back in', () => {
+    // The one part of a paused run that does not stop by itself: `scene.sound`
+    // is the game-global manager, so the loop outlives the paused scene's
+    // update and has to be told. Held rather than destroyed — a bed closed and
+    // reopened restarts the loop from its head, which is audible as a seam at
+    // exactly the moment the player is listening for the game coming back.
+    //
+    // Driven through the scene rather than by calling the methods, because what
+    // can actually break is the kitchen not being subscribed at all.
+    const { kitchen, beds, pause, unpause } = bench();
+    kitchen.open();
+
+    pause();
+    expect(beds[0]?.held).toBe(true);
+    expect(beds[0]?.alive).toBe(true);
+
+    unpause();
+    expect(beds[0]?.held).toBe(false);
+    expect(beds).toHaveLength(1);
+  });
+
+  it('has nothing to hold when there is no bed to hold', () => {
+    // Pause reaches the kitchen through a scene event, which fires whether or
+    // not the shop was ever opened — on a silent build there is no bed at all.
+    const { pause, unpause } = bench(false);
+
+    expect(() => {
+      pause();
+      unpause();
+    }).not.toThrow();
+  });
+
+  it('stops listening for the pause when the scene goes', () => {
+    // Phaser does not do this for us: `Systems.shutdown` clears only its own
+    // transition events, and `removeAllListeners` lives in `destroy`, which a
+    // restarted scene never reaches. A fresh Kitchen per run against an emitter
+    // that outlives them all is a pair of listeners added every time — benign
+    // while `pause` is idempotent, and unbounded regardless.
+    const { shutDown, subscribed } = bench();
+
+    expect(subscribed('pause')).toBe(1);
+    expect(subscribed('resume')).toBe(1);
+
+    shutDown();
+
+    expect(subscribed('pause')).toBe(0);
+    expect(subscribed('resume')).toBe(0);
   });
 });

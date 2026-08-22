@@ -40,6 +40,8 @@ export const TextureKey = {
   Pip: 'pip',
   Speaker: 'speaker',
   SpeakerMuted: 'speaker-muted',
+  Paused: 'paused',
+  Running: 'running',
 } as const;
 export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 
@@ -343,6 +345,44 @@ const SPEAKER = shade(
 const SPEAKER_MUTED = shade(speakerCone);
 
 /**
+ * The pause tab's icon, in the same two states and for the same reasons: chrome
+ * tinted by value, and a silhouette rather than a letter because design §11
+ * keeps prose out of the HUD.
+ *
+ * Where the speaker had to argue its way to a pair that reads, this one is the
+ * idiom everybody already knows and — unlike the slash the speaker could not
+ * use — both halves of it survive being one flat tint, because each is a solid
+ * shape on empty ground rather than a shape cut out of another. Bars mean it is
+ * stopped and the triangle means it is running, which is the *state* rather than
+ * the verb: the tab reads as a thing showing what the kitchen is doing, like the
+ * speaker beside it, not as a button captioned with what it will do next.
+ *
+ * Both are held inside the same box so the tab does not appear to change size
+ * when it swaps, and both are short of the rim so `shade` has somewhere to put
+ * the soft edge.
+ */
+/** The box both glyphs are struck inside, named on one axis so it is one box. */
+const GLYPH_NEAR = 3;
+const GLYPH_FAR = TEXTURE_SIZE - 1 - GLYPH_NEAR;
+const BAR_WIDTH = 3;
+
+const PAUSED = shade(
+  (x, y) =>
+    within(y, GLYPH_NEAR, GLYPH_FAR) &&
+    (within(x, GLYPH_NEAR + 1, GLYPH_NEAR + BAR_WIDTH) ||
+      within(x, GLYPH_FAR - BAR_WIDTH, GLYPH_FAR - 1)),
+);
+
+/**
+ * Struck as a wedge rather than plotted, for the reason `shade` gives: the two
+ * sloping edges are exactly what a hand draws at slightly different angles.
+ */
+const RUNNING = shade(
+  (x, y) =>
+    within(x, GLYPH_NEAR + 1, GLYPH_FAR) && Math.abs(y - MID) <= (GLYPH_FAR - x) * 0.72,
+);
+
+/**
  * The chopping block: a slab of three planks that fills its cell edge to edge,
  * so a run of them reads as one bench. The planks run *down* the cell, along
  * the bench's own length — grain across the run would read as three separate
@@ -543,6 +583,8 @@ const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.Block]: upscale(BLOCK),
   [TextureKey.Speaker]: SPEAKER,
   [TextureKey.SpeakerMuted]: SPEAKER_MUTED,
+  [TextureKey.Paused]: PAUSED,
+  [TextureKey.Running]: RUNNING,
   [TextureKey.Floor]: FLOOR,
   [TextureKey.Customer]: exact(CUSTOMER),
   [TextureKey.CustomerStride]: exact(CUSTOMER_STRIDE),

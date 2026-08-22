@@ -2469,6 +2469,126 @@ window still fills, and the smoke driver boots clean. The tutorial is longer by
 one level on every run, which is the cost, and it is the level that finally
 explains the meter on the hearts' row.
 
+### What the pause pass settled — the last line of §10, and the band that was full
+
+Not a sitting and not a sweep: a gap between the documents and the game. Design
+§10 has listed **P / Esc** and a pause button since it was written, §11 counts
+pause among the HUD's parts, and architecture §6 says how to build it —
+`scene.pause` on GameScene only, UIScene stays interactive. Grepping `src/` for
+it returned nothing. Every other item on §10's list was in; this was the one
+that was not, and a phone game with no pause loses the run to a phone call.
+
+**The mechanism was already written down, and the second half of it turned out
+to be load-bearing.** "UIScene stays interactive" reads like a convenience and is
+a requirement: a paused Phaser scene has its input *and* keyboard plugins
+switched off, so a P bound by GameScene would stop the game and then never hear
+the key that restarts it. UIScene holds the switch. Core is untouched — it is
+advanced by the scene, so a scene that is not stepped is a game that is not
+running, and there is no `paused` field anywhere in `core/`.
+
+**Nor is there one in the HUD, which the review had to say twice.** The first
+cut gave the tab a `paused` boolean, copying the shape of `muteTab.ts`. That
+mirror exists for a specific reason — Phaser's mute getter reads a value its
+setter only *schedules*, so it lies on a suspended context — and none of it
+applies to `isPaused`, which is an enum compare. Worse, it made the widget name
+a scene, the only `ui/ → scenes/` import in the repo, in a codebase whose own
+`render/drawn.ts` says that layer "must not reach up". So the tab is handed
+`paused` the way the cheat sheet is handed `unlocked`, and the scene manager
+stays the only copy of the answer.
+
+**Three things do not stop by themselves, and each is owned where it lives.**
+
+- **The room tone.** `scene.sound` is the *game-global* manager, so the bed
+  outlives the paused scene's update and loops over a stopped shop. `Kitchen`
+  holds it over the bed's own transport — deliberately not `scene.sound.mute`,
+  which `muteTab.ts` owns and reads from a local mirror, because two writers on
+  that boolean means a pause comes back unmuting a player who asked for silence.
+  It subscribes to its own scene's `pause`/`resume`, beside the `shutdown` hook
+  it already had: an emitter still fires while its scene is paused, so the object
+  that owns the bed can own its own listeners and GameScene needs no line at all.
+- **The HUD's own animation**, for the structural reason that the scene holding
+  the switch is the scene that is still running. `UIScene.update` returns early
+  while the game is paused. The first cut instead handed the queue `delta = 0`,
+  which was the same bug the pass had just diagnosed, one layer up: it fixed the
+  thing that was named and missed `rushDoor.ts`, which bobs off `scene.time.now`
+  and is not a tween, so the doorway crowd would have kept shuffling in front of
+  a stopped kitchen. The freeze test did not catch it either — the rush starts at
+  the one-minute mark and the test pauses within seconds. One guard says it once
+  and covers the widget nobody has written yet.
+- **A cue already in the air** is left to finish. A few hundred milliseconds, and
+  cutting a cue mid-shape is more audible than letting it end.
+
+**And one leak, which is a Phaser fact worth writing down.** `Systems.shutdown`
+clears only its own four transition events; `removeAllListeners` is in `destroy`,
+which a scene reused across runs never reaches. So a plain `on` against a scene's
+emitter accumulates a handler per run — invisible here, because holding an
+already-held bed does nothing, and unbounded regardless. Phaser's own
+`KeyboardPlugin` unsubscribes itself in `shutdown` for exactly this reason. The
+kitchen now does too, and `kitchen.test.ts` counts the subscriptions across a
+shutdown rather than trusting the reading.
+
+**Where it goes was the only real decision, and the smallest phone made it.** A
+third rung on the landscape stack was the obvious answer and does not survive
+measurement. Each rung costs the wheel 52 px of column, and on 568×320:
+
+| tabs in the stack | wheel panel's floor | children's feet | verdict |
+| ----------------- | ------------------- | --------------- | ------- |
+| 2 (shipped)       | 200                 | 182             | clears  |
+| 3                 | **148**             | 182             | the wheel climbs across the queue |
+
+That is `layout.test.ts`'s existing "keeps the cheat sheet clear of the rack and
+the queue" going red — the wheel paying for a control, on the frame least able to
+afford it. **So pause goes sideways instead of up.** The stack never grows,
+`sheetFloor` is the same arithmetic it was, and the proof that the wheel paid
+nothing is that every existing sheet and wheel assertion passes *unmodified*. The
+band it moves into has the room the column did not: 171 px on that same phone,
+against the 96 two tabs need.
+
+**Upright there was no room at all, and that only showed up in a test.** The plan
+said a second rung under the sheet's tab. On 320×568 the band above the board is
+78 px and the wheel at its floor is 73 of them, so the rung landed on the
+kitchen — caught immediately by asserting the new tab against the board on all
+eight viewports, which is the whole reason that assertion is written per frame
+rather than once. Every band up there is full: score, tab, wheel, tab, hearts.
+Pause takes the far end of the rack's own row instead, `clamp`ed the way design
+§10 already clamps the landscape queue — it asks for the frame's gutter, gives
+that up to clear the rack, and will not give up being on screen. Every portrait
+frame gets its 8 px except 320×568, which goes flush at 0..44 and touches the
+rack exactly. Recorded rather than fixed: `overlaps` is strict, a thumb still has
+its 44 px, and the alternative was moving the rack.
+
+**What it looks like, and the one place §11 was consulted rather than amended.**
+The board frosts over at half alpha — lighter rather than darker, because the
+room is pastel and a black wash reads as an error dialog — with the stopped mark
+over it at four cells, sized off `board.scale` so it is the same share of the
+kitchen on every screen. The first cut was 0.72 and hid the board; a player
+pauses mid-run and has to *re-read* the kitchen to start again, so the frost says
+stopped without saying gone. The HUD is deliberately outside it: the rack and the
+queue are what the pause was useful for. And there is no prose anywhere in it —
+the tab carries bars or a wedge, the state rather than the verb, the same bargain
+the mute tab makes with its speaker. §11's "the only text on the play screen is
+the score" needed no amendment.
+
+**Measured.** All 824 tests pass, 52 of them new — most of that from folding the
+three per-tab families into one table over controls × viewports, so the D-pad
+lands as a row rather than as nine more copied blocks. The five viewports boot
+clean under the smoke driver, and because that driver cannot see motion the
+freeze was read off the screen instead: two screenshots 1.2 s apart are
+byte-identical while paused and differ either side of it, on every one of the
+five — a stronger claim than a frozen board, since it is also the children and
+the meter that stopped. Both keys, a tap on the tab and a tap on the frosted
+board all toggle it, in both orientations, and it survives three runs with a
+death and a restart between them.
+
+**One thing the screen could not be asked.** A frost test only proves the things
+that *were* moving have stopped, which is why the doorway crowd got past it. The
+rush is a minute into a run and every check here pauses inside the first few
+seconds; the guard that covers it is structural rather than measured, and that is
+the honest status of it.
+
+**What is left of §10.** The optional virtual D-pad and its left-handed mirror,
+which is the whole of the section still unbuilt, and the README now says so.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

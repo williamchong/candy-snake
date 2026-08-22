@@ -85,6 +85,27 @@ const tabRect = (frame: Frame): Rect => around(frame.hud.sheet.tab, TAB_SIZE, TA
 /** The mute tab's, the same size and measured the same way. */
 const muteRect = (frame: Frame): Rect => around(frame.hud.mute, TAB_SIZE, TAB_SIZE);
 
+/** The pause tab's. Same again — every control is one thumb (design §10). */
+const pauseRect = (frame: Frame): Rect => around(frame.hud.pause, TAB_SIZE, TAB_SIZE);
+
+/**
+ * The HUD's controls, as the two things a test asks of one: the box it occupies
+ * and the centre a thumb aims at. A table rather than three copies of each
+ * assertion, so the D-pad (design §10) is one row and not another nine tests —
+ * and so a control cannot arrive holding only some of the guarantees.
+ */
+const TABS: ReadonlyArray<
+  readonly [string, (frame: Frame) => Rect, (frame: Frame) => Vec2]
+> = [
+  ['cheat-sheet', tabRect, (frame) => frame.hud.sheet.tab],
+  ['mute', muteRect, (frame) => frame.hud.mute],
+  ['pause', pauseRect, (frame) => frame.hud.pause],
+];
+
+const TAB_CASES = TABS.flatMap(([tab, rect, at]) =>
+  VIEWPORTS.map(([name, view]) => [tab, name, rect, at, view] as const),
+);
+
 /** The rack, as the box it actually occupies rather than as a run of slots. */
 const shelfRect = (frame: Frame): Rect => {
   const { at, slot, axis } = frame.hud.shelf;
@@ -467,43 +488,72 @@ describe('layout', () => {
     );
   });
 
-  it.each(VIEWPORTS)('keeps the mute tab a thumb wide on %s', (_name, view) => {
-    // Design §12's toggle is the game's only way to silence itself on a phone,
-    // where design §10's M key does not exist — so it is held to design §10's
-    // touch floor exactly as the sheet's tab is.
-    const mute = muteRect(layout(view));
-
-    expect(mute.right - mute.left).toBeGreaterThanOrEqual(44);
-    expect(mute.bottom - mute.top).toBeGreaterThanOrEqual(44);
-    expect(onScreen(mute, view)).toBe(true);
-  });
-
-  it.each(VIEWPORTS)('keeps the two tabs off each other on %s', (_name, view) => {
+  it.each(VIEWPORTS)('keeps the three tabs off each other on %s', (_name, view) => {
     // Two 44px targets that overlap are one target and a coin toss: the player
-    // means to mute and puts the wheel away instead.
+    // means to mute and puts the wheel away instead. Asserted over every pair
+    // rather than the one that used to exist, so a fourth control cannot be
+    // added against only some of the others.
     const frame = layout(view);
+    const tabs = TABS.map(([, rect]) => rect(frame));
 
-    expect(overlaps(muteRect(frame), tabRect(frame))).toBe(false);
+    for (const [i, one] of tabs.entries()) {
+      for (const other of tabs.slice(i + 1)) expect(overlaps(one, other)).toBe(false);
+    }
   });
 
-  it.each(VIEWPORTS)('keeps the mute tab clear of the kitchen on %s', (_name, view) => {
-    // The same rule the sheet is held to. A control over the grid is a control
-    // the player's thumb finds while steering.
-    const frame = layout(view);
+  it.each(TAB_CASES)(
+    'keeps the %s tab a thumb wide on %s',
+    (_tab, _name, rect, _at, view) => {
+      // Design §10's touch floor, which the HUD's controls are the only things in
+      // the game held to — a phone has none of the keys the three have on desktop.
+      // Asserting the constant against itself would prove nothing; what can go
+      // wrong is a 44px target hanging off the edge of a small phone.
+      const box = rect(layout(view));
 
-    expect(overlaps(muteRect(frame), boardRect(frame))).toBe(false);
-    expect(overlaps(muteRect(frame), shelfRect(frame))).toBe(false);
-    expect(overlaps(muteRect(frame), sheetRect(frame))).toBe(false);
-  });
+      expect(box.right - box.left).toBeGreaterThanOrEqual(44);
+      expect(box.bottom - box.top).toBeGreaterThanOrEqual(44);
+      expect(onScreen(box, view)).toBe(true);
+    },
+  );
 
-  it.each(VIEWPORTS)('knows what landed on the mute tab on %s', (_name, view) => {
-    // The swipe's dead zone covers both tabs through the one predicate, so a
-    // tab added without being taught to it would eat the gesture *and* steer.
-    const frame = layout(view);
-    const { mute } = frame.hud;
+  it.each(TAB_CASES)(
+    'keeps the %s tab clear of the kitchen on %s',
+    (_tab, _name, rect, _at, view) => {
+      // A control over the grid is a control the player's thumb finds while
+      // steering. The rack matters as much as the board for the pause tab,
+      // which sits along the row the rack runs down in landscape.
+      const frame = layout(view);
 
-    expect(hitsTab(frame, mute.x, mute.y)).toBe(true);
-    expect(hitsTab(frame, mute.x, mute.y - TAB_SIZE / 2)).toBe(true);
+      expect(overlaps(rect(frame), boardRect(frame))).toBe(false);
+      expect(overlaps(rect(frame), shelfRect(frame))).toBe(false);
+      expect(overlaps(rect(frame), sheetRect(frame))).toBe(false);
+    },
+  );
+
+  it.each(TAB_CASES)(
+    'knows what landed on the %s tab on %s',
+    (_tab, _name, _rect, at, view) => {
+      // The swipe's dead zone covers every tab through the one predicate, so a
+      // tab added without being taught to it would eat the gesture *and* steer.
+      const frame = layout(view);
+      const centre = at(frame);
+
+      expect(hitsTab(frame, centre.x, centre.y)).toBe(true);
+      expect(hitsTab(frame, centre.x, centre.y - TAB_SIZE / 2)).toBe(true);
+    },
+  );
+
+  it('costs the mixing wheel nothing to have gained a third tab', () => {
+    // The reason pause went sideways along the bottom row rather than up as a
+    // third rung. A rung would have moved `sheetFloor`, and on 568×320 that
+    // takes the panel's own floor back across the children standing at 182.
+    // Measured on the frame this was chosen against, and stated as the panel
+    // clearing the queue by the margin the two-tab stack already left it.
+    const frame = layout({ width: 568, height: 320 });
+    const panel = sheetRect(frame);
+
+    expect(panel.bottom).toBeGreaterThan(frame.hud.queue.front.y);
+    expect(panel.bottom).toBeLessThanOrEqual(muteRect(frame).top);
   });
 
   it.each(VIEWPORTS)('keeps the cheat-sheet tab a thumb wide on %s', (_name, view) => {

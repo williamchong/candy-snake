@@ -12,6 +12,7 @@ import { ComboMeter } from '../ui/comboMeter';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
 import { MuteTab } from '../ui/muteTab';
+import { PauseTab } from '../ui/pauseTab';
 import { SCORE_SIZE } from '../ui/layout';
 import { onFrame } from '../ui/responsive';
 import { RushDoor } from '../ui/rushDoor';
@@ -53,6 +54,7 @@ export class UIScene extends Phaser.Scene {
   private shelf!: ShelfStrip;
   private sheet!: CheatSheet;
   private mute!: MuteTab;
+  private pause!: PauseTab;
   private combo!: ComboMeter;
   /**
    * Hearts last drawn. Reset in `create`, not at the field: Phaser reuses the
@@ -115,6 +117,26 @@ export class UIScene extends Phaser.Scene {
       this.mute.toggle();
     });
 
+    // The switch that stops the run, and it has to be held on this side of the
+    // pair: a paused scene's keyboard and pointer plugins are both inactive, so
+    // GameScene could stop itself and never hear the key that started it again
+    // (architecture §6). Both of design §10's keys reach the one toggle, as do
+    // the tab and the frosted board — the widget only draws it.
+    const togglePause = (): void => {
+      this.setPaused(!this.scene.isPaused(SceneKey.Game));
+    };
+
+    this.pause = new PauseTab(this, togglePause);
+    bindHotkey(this, [HotKey.Pause, HotKey.Escape], togglePause);
+
+    // A run left frozen with the switch destroyed would be unrecoverable. Not
+    // reachable today — the only thing that stops this scene is the game over
+    // that GameScene has to be running to reach — but it is one line, and it is
+    // the convention `ui/responsive.ts` and `audio/kitchen.ts` already keep.
+    this.events.once('shutdown', () => {
+      this.scene.resume(SceneKey.Game);
+    });
+
     // Everything above is built at the origin and put somewhere by the layout
     // pass, which runs once here and again whenever the device changes shape.
     //
@@ -138,8 +160,32 @@ export class UIScene extends Phaser.Scene {
       this.door.applyFrame(frame);
       this.sheet.applyFrame(frame);
       this.mute.applyFrame(frame);
+      this.pause.applyFrame(frame);
       this.combo.applyFrame(frame);
     });
+  }
+
+  /**
+   * Stops the run, or starts it again. Here rather than in the tab because the
+   * scene manager owns the answer and this is the scene that may name another
+   * one — a widget under `ui/` reaching into `scenes/` is the direction the
+   * layers are built to refuse.
+   *
+   * The HUD's own tweens go with it. They belong to this scene, so pausing the
+   * other one leaves them running; every one of them is a one-shot — a fading
+   * combo meter, a candy tossed off the rack — so the manager can be stopped
+   * wholesale without anyone having to know which are in the air.
+   */
+  private setPaused(paused: boolean): void {
+    if (paused) {
+      this.scene.pause(SceneKey.Game);
+      this.tweens.pauseAll();
+    } else {
+      this.scene.resume(SceneKey.Game);
+      this.tweens.resumeAll();
+    }
+
+    this.pause.render(paused);
   }
 
   /**
@@ -150,6 +196,15 @@ export class UIScene extends Phaser.Scene {
    */
   update(_time: number, delta: number): void {
     const { state } = this.core;
+
+    // Nothing below this moves while the kitchen is stopped. Core state cannot
+    // change with GameScene paused, and everything else here runs on the
+    // *display's* clock — the children walking up, the doorway crowd bobbing
+    // before a rush — which is exactly what a pause has to stop, and which this
+    // scene would otherwise keep animating because it is the half still
+    // running. Returning says that once, rather than each widget being handed a
+    // flag and a later one being forgotten.
+    if (this.scene.isPaused(SceneKey.Game)) return;
 
     this.scoreText.setText(`${state.score}`);
 

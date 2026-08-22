@@ -33,17 +33,31 @@ export const bindKeyboard = (scene: Phaser.Scene, queue: DirectionQueue): void =
 export const HotKey = {
   CheatSheet: 'C',
   Mute: 'M',
+  /** Phaser's own name for Escape is `ESC`, and the comment above is why. */
+  Pause: 'P',
+  Escape: 'ESC',
 } as const;
 
 export type HotKey = (typeof HotKey)[keyof typeof HotKey];
 
 /**
- * Binds one of them. Separate from `bindKeyboard` because a hotkey is bound by
- * whichever scene owns the thing it toggles, and that is not always the scene
- * that owns the queue: every running scene has its own keyboard plugin and all
- * of them see the key, so the HUD can take its own without asking GameScene
- * for anything.
+ * Binds one of them, or several to the one action — design §10 gives pause both
+ * P and Escape, and a player who reaches for either means the same thing.
+ *
+ * Separate from `bindKeyboard` because a hotkey is bound by whichever scene owns
+ * the thing it toggles, and that is not always the scene that owns the queue:
+ * every running scene has its own keyboard plugin and all of them see the key,
+ * so the HUD can take its own without asking GameScene for anything. Pause is
+ * the case that turns this from a convenience into a requirement — a paused
+ * scene's keyboard plugin is inactive, so a key bound by GameScene could stop
+ * the game and never start it again.
  */
-export const bindHotkey = (scene: Phaser.Scene, key: HotKey, run: () => void): void => {
-  scene.input.keyboard?.on(`keydown-${key}`, run);
+export const bindHotkey = (
+  scene: Phaser.Scene,
+  keys: HotKey | readonly HotKey[],
+  run: () => void,
+): void => {
+  for (const key of typeof keys === 'string' ? [keys] : keys) {
+    scene.input.keyboard?.on(`keydown-${key}`, run);
+  }
 };

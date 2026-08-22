@@ -20,10 +20,13 @@ a self-hit cracks and knocks the kitchen, and a served child gets confetti.
 The game makes a noise now: eleven cues generated at boot rather than loaded,
 hung off the same events the effects are, with the serve chime climbing your
 streak — and a mute tab beside the mixing wheel, or **M**, for when it should
-not, over a room tone that loops without a seam. Scores and the settings survive
-the reload: the top ten sit on the menu, and the score screen says what the run
-did and where it landed. Audio was the last item on the design's polish list;
-what is still unbuilt is the pause and the optional controls of design §10. The
+not, over a room tone that loops without a seam. The run stops now, too —
+**P** or **Esc**, or a third tab for the thumb that has neither: the kitchen
+frosts over, the room goes quiet, and the HUD stays bright so you can read what
+is still on the rack before tapping the board to carry on. Scores and the
+settings survive the reload: the top ten sit on the menu, and the score screen
+says what the run did and where it landed. What is still unbuilt is the optional
+virtual D-pad of design §10. The
 [implementation plan](docs/implementation-plan.md) records how each phase went.
 
 ## Develop

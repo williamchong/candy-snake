@@ -99,6 +99,19 @@ export interface HudFrame {
     readonly door: number;
   };
   /**
+   * Where the pause control sits (design §10's third HUD button, at the same
+   * 44 px `TAB_SIZE` floor as the other two). Just a centre, like the mute tab.
+   *
+   * It is the one tab that does not join the landscape stack. Each rung there
+   * costs the wheel 52 px of column, and a third takes the panel back across the
+   * children's feet on the smallest phone sideways — so this one goes *beside*
+   * the sheet's tab instead, into a band that is 171 px wide where two tabs need
+   * 96. Upright both shoulders are already spoken for, so it takes a second rung
+   * under the sheet's, which is the shoulder the score sits on rather than the
+   * hearts.
+   */
+  readonly pause: Vec2;
+  /**
    * The cheat sheet: where its tab sits, the box the wheel fills when it is
    * open, and how big one jar in that wheel is drawn. The tab is one fixed size
    * at every viewport — design §10's 44 px touch floor is geometry, so it is
@@ -467,14 +480,24 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   // Its span is measured from the rack's far edge rather than from the board,
   // so clearing the rack and clearing the board are both structural — a wider
   // window moves the rack and the panel follows it.
-  // The two tabs stack in the corner rather than sitting side by side: the band
-  // between the rack and the frame edge is the wheel's whole width, and at the
-  // wheel's floor it is narrower than two tabs. Stacking spends the column's
-  // height instead, which `wheelRun` is already willing to give up — its floor
-  // outranks the band it is handed.
+  // The sheet's tab and the mute tab stack in the corner rather than sitting
+  // side by side: the band between the rack and the frame edge is the wheel's
+  // whole width, and at the wheel's floor it is narrower than two tabs. Stacking
+  // spends the column's height instead, which `wheelRun` is already willing to
+  // give up — its floor outranks the band it is handed.
+  //
+  // The pause tab is where that stops being true, and it is measured rather than
+  // argued. A third rung costs another 52 px of column, which on the smallest
+  // phone sideways (568×320) puts the panel's floor at 148 px against children
+  // standing at 182 — the wheel climbing across the queue it is supposed to
+  // clear. So pause goes sideways along the bottom row instead: the stack never
+  // grows, `sheetFloor` is the same arithmetic it was, and the wheel pays
+  // nothing for it. What pays is the band, which has it to give — 171 px on that
+  // same phone against the 96 two tabs need.
   const sheetRight = insets.left + availW - GUTTER;
   const tabX = Math.round(sheetRight - TAB_SIZE / 2);
   const tabY = Math.round(frameFloor - TAB_SIZE / 2);
+  const pauseX = Math.round(tabX - TAB_SIZE - TAB_GAP);
   const muteY = Math.round(tabY - TAB_SIZE - TAB_GAP);
   const sheetFloor = muteY - TAB_SIZE / 2 - GUTTER / 2;
   const wheel = wheelRun(
@@ -514,6 +537,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
         door: view.width - DOOR_INSET,
       },
       mute: { x: tabX, y: muteY },
+      pause: { x: pauseX, y: tabY },
       sheet: {
         tab: { x: tabX, y: tabY },
         panel: {
@@ -579,6 +603,31 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
     x: midX,
     y: Math.round(sheetBottom - wheel.height / 2),
   };
+  // The band the pair rides, named once because both of them read it.
+  const tabTop = Math.round(insets.top + TAB_SIZE / 2);
+  const sheetTabX = Math.round(sheetAt.x - wheel.width / 2 - GUTTER / 4 - TAB_SIZE / 2);
+
+  // Pause does not join them. Upright the band above the board is the tightest
+  // space in the game — on the smallest phone the wheel at its floor is 73 px of
+  // a 78 px band, and both shoulders beside it are already the sheet's and the
+  // mute's — so a third tab up here can only go under one of them, and under is
+  // the kitchen. It takes the far end of the rack's own row instead, which is
+  // the strip's one piece of slack and the corner furthest from the window.
+  //
+  // Clamped rather than placed, the way design §10 already clamps the queue on a
+  // short frame: it wants the frame's gutter, it will give that up to keep clear
+  // of the rack, and it will not give up being on screen.
+  const shelfAtX = right - shelf.slot / 2 - (SHELF_SLOTS - 1) * shelf.pitch;
+  const pauseAt = {
+    x: Math.round(
+      clamp(
+        insets.left + GUTTER / 2 + TAB_SIZE / 2,
+        insets.left + TAB_SIZE / 2,
+        shelfAtX - shelf.slot / 2 - TAB_SIZE / 2,
+      ),
+    ),
+    y: stripTop + SHELF_ROW,
+  };
 
   return {
     orientation: 'portrait',
@@ -619,10 +668,7 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
       shelf: {
         // Right-aligned under the bench's own wall, so the candy's path still
         // reads toward one side once the column has become a strip (design §10).
-        at: {
-          x: right - shelf.slot / 2 - (SHELF_SLOTS - 1) * shelf.pitch,
-          y: stripTop + SHELF_ROW,
-        },
+        at: { x: shelfAtX, y: stripTop + SHELF_ROW },
         ...shelf,
         axis: 'row',
       },
@@ -640,13 +686,11 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
       // thumbs' worth of reach rather than one.
       mute: {
         x: Math.round(sheetAt.x + wheel.width / 2 + GUTTER / 4 + TAB_SIZE / 2),
-        y: Math.round(insets.top + TAB_SIZE / 2),
+        y: tabTop,
       },
+      pause: pauseAt,
       sheet: {
-        tab: {
-          x: Math.round(sheetAt.x - wheel.width / 2 - GUTTER / 4 - TAB_SIZE / 2),
-          y: Math.round(insets.top + TAB_SIZE / 2),
-        },
+        tab: { x: sheetTabX, y: tabTop },
         panel: { at: sheetAt, width: wheel.width, height: wheel.height },
         radius: wheel.radius,
         node: wheel.node,
@@ -749,7 +793,9 @@ const hits = (tab: Vec2, x: number, y: number): boolean =>
  * that named the tab would be one every new tab has to be threaded through.
  */
 export const hitsTab = (frame: Frame, x: number, y: number): boolean =>
-  hits(frame.hud.sheet.tab, x, y) || hits(frame.hud.mute, x, y);
+  hits(frame.hud.sheet.tab, x, y) ||
+  hits(frame.hud.mute, x, y) ||
+  hits(frame.hud.pause, x, y);
 
 /**
  * The middle of what the player can actually see — what a full-screen message

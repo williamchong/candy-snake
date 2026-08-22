@@ -66,6 +66,15 @@ export const PANEL_ALPHA = 0.88;
  */
 export const HudDepth = {
   /**
+   * The dimmed kitchen behind a paused game. Below every HUD layer, including
+   * the doorway — UIScene draws above GameScene entirely, so the bottom of this
+   * table is already above the whole board. That is what lets one rectangle
+   * take the kitchen down without touching the HUD: the score, the hearts, the
+   * queue and the rack all sit above it and stay legible while the game is
+   * stopped, which is the point of stopping it.
+   */
+  PauseScrim: -2,
+  /**
    * The crowd gathering in the doorway before a rush (design §7). Behind
    * everything, because they are a room back and through a wall — and because
    * on the narrowest landscape frame the standing line already reaches the
@@ -135,6 +144,17 @@ export const HudDepth = {
    */
   ComboTrack: 15,
   ComboPip: 16,
+  /**
+   * The pause tab. Two layers like the other two, and for the same reason.
+   */
+  PauseTab: 17,
+  PauseTabIcon: 18,
+  /**
+   * The bars drawn over the dimmed kitchen. Top of the table on purpose: it is
+   * the one mark that says the game is stopped, and design §11 spends no words
+   * saying it, so nothing may draw over the thing carrying that on its own.
+   */
+  PauseGlyph: 19,
 } as const;
 
 export interface Drawn {

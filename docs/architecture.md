@@ -193,7 +193,33 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   `-served`, `-left`) straight to `UIScene.play`, because *who* is waiting is
   state but walking on and walking off are moments — and which of the two a
   child just had is not recoverable from a queue they are no longer in.
-- Pause = `scene.pause` on GameScene only; UIScene stays interactive.
+- Pause = `scene.pause` on GameScene only; UIScene stays interactive. Built in
+  the pause pass, and the second half of that line turned out to be a
+  *requirement* rather than a convenience: a paused scene's input and keyboard
+  plugins are both inactive, so a key or a tab owned by GameScene could stop the
+  game and then never hear the press that started it again. **UIScene owns the
+  switch** and calls `pause`/`resume` on its own `ScenePlugin`; core is
+  untouched, because a scene that is not stepped is a game that is not running,
+  and there is no `paused` anywhere in `core/`.
+- Nothing keeps a copy of whether the game is stopped. The scene manager is
+  asked (`scene.isPaused`), because a mirror of it is a thing that can disagree
+  — and the widget under `ui/` is handed the answer the way the cheat sheet is
+  handed `unlocked`, since a file there naming a scene would reach up into
+  `scenes/` the way `render/` may not reach into `ui/`.
+- Two things do not stop by themselves, and each is owned where it lives:
+  - **The room tone.** `scene.sound` is the game-global manager, not a
+    scene-scoped one, so the bed plays on over a stopped shop. `Kitchen`
+    subscribes to its own scene's `pause`/`resume` beside the `shutdown` hook it
+    already had — an emitter still fires while its scene is paused. Those
+    listeners are removed on shutdown, and that is not optional: Phaser's
+    `Systems.shutdown` clears only its own transition events, so on a scene
+    reused across runs a plain `on` accumulates a pair per run.
+  - **The HUD's own animation**, because the scene holding the switch is by
+    definition still running. `UIScene.update` returns early while the game is
+    paused: core state cannot change, and everything else there — children
+    walking up, the doorway crowd bobbing before a rush — runs on the display's
+    clock. One guard rather than a flag threaded into each widget, so the next
+    one added cannot be forgotten.
 
 ## 7. Rendering & audio approach
 
