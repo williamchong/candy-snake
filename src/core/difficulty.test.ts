@@ -7,6 +7,8 @@ import {
   RUSH_FROM_MS,
   RUSH_PERIOD_MS,
   RUSH_QUEUE_FLOOR,
+  RUSH_FULL_QUEUE_FLOOR,
+  RUSH_FULL_MS,
   RUSH_FLOOR_FROM,
   rushFloorAt,
   SETTLED_MS,
@@ -254,14 +256,20 @@ describe('the difficulty curve', () => {
         rushAt(from + (RUSH_PERIOD_MS / samples) * step, 0),
       );
 
-    it('leaves the window alone until the maker is up to speed', () => {
-      // The opening minute is the speed ease-in (see `SETTLED_MS`), and a tide
-      // laid over a strand still being brought up to pace would be two things
-      // moving at once with no way to tell which one bit. Past that the tide
-      // runs for the whole of the rest of the game — the ninth sitting's
-      // report of staleness came at 400 points, which is inside ramp-minute
-      // one, so a shape that waited for the three-minute mark was a shape most
-      // runs barely met.
+    /** How many seconds of one period are spent where `keep` holds. */
+    const seconds = (from: number, keep: (intensity: number) => boolean): number =>
+      (period(from, 600).filter(keep).length * (RUSH_PERIOD_MS / 600)) / 1_000;
+
+    it('leaves the window alone until the preview mark', () => {
+      // Forty seconds of ramp — score 571 — and then the tide runs for the whole
+      // of the rest of the game. The mark used to be `SETTLED_MS`, where the
+      // speed ease-in finishes, on the reasoning that a tide laid over a strand
+      // still being brought up to pace is two things moving at once with no way
+      // to tell which one bit. It came down because the staleness reports keep
+      // arriving inside the stretch the tide was still waiting out — 400 points
+      // at the ninth sitting, 1063 at the tide pass — and the last third of the
+      // ease-in is a cheaper thing to muddy than the first minute of the game is
+      // to leave flat (`RUSH_FROM_MS`).
       for (let ms = 0; ms <= RUSH_FROM_MS; ms += 5_000) {
         expect(rushAt(ms, 0)).toBe(0);
         expect(arrivalRateAt(ms)).toBe(1);
@@ -307,10 +315,17 @@ describe('the difficulty curve', () => {
 
       expect(Math.min(...settled)).toBe(0);
       expect(Math.max(...settled)).toBe(1);
-      // Half the cycle is lull, which is the half a ladder gets built in.
+      // A third of the cycle is lull at the very least, which is what a ladder
+      // gets built in. It used to be asserted at a half, and that was the
+      // preview column read as though it were the whole table: the grown column
+      // spends 22 s of the 60 in the lull rather than 30, having sold the other
+      // eight to the peak. The floor under it is the ladder and it is pinned in
+      // seconds by `lengthens the peak as the tide grows` — this end only has to
+      // know that a lull is still most of the way to half the cycle wherever it
+      // is read.
       expect(
         settled.filter((intensity) => intensity === 0).length,
-      ).toBeGreaterThanOrEqual(settled.length / 2 - 1);
+      ).toBeGreaterThanOrEqual(settled.length / 3);
     });
 
     it('keeps the tide running past the backstop', () => {
@@ -339,54 +354,200 @@ describe('the difficulty curve', () => {
       expect(lull).toBeGreaterThan(LAST.arrivalIntervalMs);
     });
 
+    /** Every floor the window is held at across one period, in order met. */
+    const floorsOver = (from: number): number[] => [
+      ...new Set(
+        Array.from({ length: 600 }, (_unused, step) =>
+          rushFloorAt(from + (RUSH_PERIOD_MS / 600) * step, 0),
+        ),
+      ),
+    ];
+
     it('holds the window at a pair once the doorway reads as a crowd', () => {
       // The half of the tide a fast maker cannot serve away. A rate is
       // outrunnable — `arrivalGapMs` asks 6.4-8.0 s for a second child through
       // the early ramp, against a bench round trip of two or three — so the
       // rush was invisible to exactly the makers it was built for. The floor is
       // the part that cannot be outrun.
-      expect(rushFloorAt(0)).toBe(0);
-      expect(rushFloorAt(RUSH_FLOOR_FROM)).toBe(RUSH_QUEUE_FLOOR);
-      expect(rushFloorAt(1)).toBe(RUSH_QUEUE_FLOOR);
-      // A lull insists on nothing: the half-cycle a ladder gets built in is
-      // still the maker's own.
-      expect(rushFloorAt(RUSH_FLOOR_FROM - 0.001)).toBe(0);
+      //
+      // Read over whole cycles rather than off intensities, because the floor
+      // takes the ramp position now: intensity and growth are both functions of
+      // it, and a test that fed them separately could assert a state no run
+      // reaches (a full-strength crest at growth 0 is not a thing that happens).
+      expect(floorsOver(RUSH_FROM_MS + RUSH_PERIOD_MS).sort()).toEqual([
+        0,
+        RUSH_QUEUE_FLOOR,
+      ]);
+      // A lull insists on nothing, and on more than a token stretch of the
+      // cycle: the time a ladder gets built in is still the maker's own, at
+      // either size of tide. (That a floor of 0 occurs at all is already in the
+      // set above; this is how much of the cycle it holds for.)
+      const unheld = (from: number): number => seconds(from, (i) => i < RUSH_FLOOR_FROM);
+
+      expect(unheld(RUSH_FROM_MS + RUSH_PERIOD_MS)).toBeGreaterThan(20);
+      expect(unheld(LAST.atMs + RUSH_PERIOD_MS * 3)).toBeGreaterThan(20);
+    });
+
+    it('holds it at three once the tide has grown, and not before', () => {
+      // The other half of *longer and with more children*. Growth and intensity
+      // are different questions and the floor is the one place both are asked:
+      // a preview tide crests at 1 exactly like a full one, so intensity alone
+      // cannot tell them apart, and a floor keyed on it would have put three
+      // children at the window in the run's first minute.
+      expect(floorsOver(LAST.atMs + RUSH_PERIOD_MS * 3).sort()).toEqual([
+        0,
+        RUSH_FULL_QUEUE_FLOOR,
+      ]);
+      // Not before: through the preview and the whole of the growth the window
+      // is held at a pair, and the third child arrives with the Rush row rather
+      // than partway up to it.
+      expect(rushFloorAt(RUSH_FULL_MS - 1, 0)).toBeLessThan(RUSH_FULL_QUEUE_FLOOR);
+      expect(rushFloorAt(RUSH_FULL_MS + RUSH_PERIOD_MS * 0.8, 0)).toBe(
+        RUSH_FULL_QUEUE_FLOOR,
+      );
+    });
+
+    it('lengthens the peak as the tide grows, and takes it out of the lull', () => {
+      // The period is fixed, so a longer peak is a shorter lull and there is
+      // nowhere else for the seconds to come from. What this pins is that the
+      // trade lands where the table says: 12 s of plateau against 20 s, and a
+      // lull that pays for it without going under what a ladder costs.
+      const grown = LAST.atMs + RUSH_PERIOD_MS * 3;
+      const peak = (from: number): number => seconds(from, (i) => i === 1);
+
+      // A cycle read past the Rush row, where the tide is full.
+      expect(peak(grown)).toBeGreaterThan(19);
+      expect(peak(grown)).toBeLessThan(21);
+      // One read while it is still growing is strictly shorter — and strictly
+      // longer than the preview's twelve, which is what "grows" has to mean.
+      const growing = peak(RUSH_FROM_MS + RUSH_PERIOD_MS);
+      expect(growing).toBeLessThan(peak(grown));
+      expect(growing).toBeGreaterThan(12);
+
+      // The lull is the constraint, not a leftover: 22 s against the 8.6 s a
+      // six-rung ladder takes at the Rush row's 125 ms still leaves room for
+      // two, which is the claim the 30 s column makes and the reason the peak
+      // did not simply take the whole of it.
+      expect(seconds(grown, (i) => i === 0)).toBeGreaterThan(2 * 8.6);
+    });
+
+    it('asks the window for more over a cycle as it grows', () => {
+      // The non-stochastic half of "the rush got bigger", and the one worth
+      // reaching for first: a longer peak against a shorter lull is more demand
+      // per cycle by construction, with no seeds in it and nothing to re-roll.
+      // Measured over one period at 10 ms, the mean arrival rate goes **1.5275
+      // at the preview shape → 1.7475 grown**, 14% more demand a minute.
+      //
+      // What the sweep then has to say separately — and does, in the plan's
+      // preview-tide sitting — is that a maker with stock in hand serves much of
+      // that surplus off the rack, so 14% more arrivals is not 14% harder.
+      const meanRate = (from: number): number => {
+        const samples = 600;
+        let total = 0;
+        for (let step = 0; step < samples; step += 1) {
+          total += arrivalRateAt(from + (RUSH_PERIOD_MS / samples) * step);
+        }
+
+        return total / samples;
+      };
+      const grown = meanRate(LAST.atMs + RUSH_PERIOD_MS * 3);
+
+      expect(grown).toBeGreaterThan(1.7);
+      expect(grown).toBeLessThan(1.8);
+      // And strictly more than the same cycle read while it is still growing,
+      // which is what makes it a growth rather than a step at one anchor.
+      expect(grown).toBeGreaterThan(meanRate(RUSH_FROM_MS + RUSH_PERIOD_MS));
+    });
+
+    it('keeps the swell nine seconds long however big the tide gets', () => {
+      // The warning is sized against a whole ladder built from nothing, so a
+      // rush that grew its peak by starting it sooner would be an ambush rather
+      // than a bigger rush. Both columns of `RUSH_SHAPE` hold it at nine.
+      //
+      // The **rise** is measured on its own rather than every frame between 0
+      // and 1, and the difference matters: swell and ebb together are 18 s in
+      // both columns, so a shape that cut the warning to 6 s and let the ebb run
+      // 12 would pass a test that only counted the pair. That is precisely the
+      // ambush this exists to forbid. Sampled from the foot of a lull, the cycle
+      // runs lull → swell → peak, so the rise is the gap between the last
+      // unstarted frame and the first full-strength one.
+      const rise = (fromLullFoot: number): number => {
+        const cycle = period(fromLullFoot, 600);
+        const crest = cycle.findIndex((intensity) => intensity === 1);
+        const foot = cycle.lastIndexOf(0, crest);
+
+        return ((crest - foot) * (RUSH_PERIOD_MS / 600)) / 1_000;
+      };
+      // Phase 0 of a cycle is half a period past the entry point, which is where
+      // `RUSH_OPENS_AT` puts a run — so a lull foot is at the half-period marks.
+      const grown = rise(LAST.atMs + RUSH_PERIOD_MS * 3.5);
+
+      expect(grown).toBeGreaterThan(8.5);
+      expect(grown).toBeLessThan(9.5);
+      // And the same at a cycle read while the tide is still growing, within a
+      // sample: its anchors are sliding under it as it runs.
+      expect(
+        Math.abs(grown - rise(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.5)),
+      ).toBeLessThanOrEqual(0.5);
     });
 
     it('engages that floor inside the very first tide, not a cycle later', () => {
       // The margin this pins is thinner than it looks and nothing else guards
       // it. `rushSwing` is still winding in across the whole first pass, so the
-      // first crest delivers **0.300** against a `RUSH_FLOOR_FROM` of 1/3: the
-      // first tide crosses the threshold 1 s into the peak plateau rather than
-      // at the crest. Nudge `RUSH_OPENS_AT`, `RUSH_SWING_PERIODS` or
-      // `RUSH_CROWD` and a run's first held window slips a whole cycle — 60 s
-      // of ramp — with every other assertion in this file still green.
+      // shape's first crest delivers **0.284** against a `RUSH_FLOOR_FROM` of
+      // 1/3: the first tide crosses the threshold 1.5 s into the peak plateau
+      // rather than at the crest. Nudge `RUSH_OPENS_AT`, `RUSH_SWING_PERIODS`,
+      // `RUSH_CROWD` or either column of `RUSH_SHAPE` and a run's first held
+      // window slips a whole cycle — 60 s of ramp — with every other assertion
+      // in this file still green.
       const firstTide = Array.from({ length: 300 }, (_unused, step) =>
         rushAt(RUSH_FROM_MS + step * 100, 0),
       );
+      const firstFloors = Array.from({ length: 300 }, (_unused, step) =>
+        rushFloorAt(RUSH_FROM_MS + step * 100, 0),
+      );
 
       expect(Math.max(...firstTide)).toBeGreaterThanOrEqual(RUSH_FLOOR_FROM);
-      expect(
-        firstTide.some((intensity) => rushFloorAt(intensity) === RUSH_QUEUE_FLOOR),
-      ).toBe(true);
+      expect(firstFloors.some((floor) => floor === RUSH_QUEUE_FLOOR)).toBe(true);
     });
 
-    it('puts the reported score inside a running tide', () => {
+    it('puts a whole tide behind the reported score, not ahead of it', () => {
       // The report this pass answers arrived at 1063 points, which is ramp
-      // position 74 410 ms. Under the old phase that was the dead middle of the
-      // opening lull — intensity 0.00, one child at the window. It now sits on
-      // the first peak plateau with the floor on.
+      // position 74 410 ms. The tide pass pinned that this *instant* was a peak;
+      // moving the start to the preview shifts every phase by a third of a
+      // period and it is a lull again. That is not the regression it reads as,
+      // and the reason is worth keeping: a third of every cycle is lull at the
+      // very least, so no fixed score can be promised a peak, and a test that
+      // demands one pins the phase rather than the mechanism.
+      //
+      // What the report was about is a chair that had never seen two children at
+      // once, so that is what is asserted instead — by the reported score the run
+      // has already been *through* a held window and out the other side.
       const reported = 74_410;
+      const step = 100;
+      const floors = Array.from(
+        { length: Math.ceil((reported - RUSH_FROM_MS) / step) },
+        (_unused, at) => rushFloorAt(RUSH_FROM_MS + at * step, 0),
+      );
+      const firstHeld = floors.findIndex((floor) => floor > 0) * step;
+      const held = floors.filter((floor) => floor > 0).length * step;
 
-      expect(reported).toBeGreaterThan(RUSH_FROM_MS);
-      expect(rushFloorAt(rushAt(reported, 0))).toBe(RUSH_QUEUE_FLOOR);
+      // The first held frame lands at ramp 50 s — score 714 against the 1063
+      // that was reported, so the window was held a whole cycle before it.
+      expect(RUSH_FROM_MS + firstHeld).toBe(50_000);
+      expect(reported - (RUSH_FROM_MS + firstHeld)).toBeGreaterThan(RUSH_PERIOD_MS / 3);
+      // And a whole peak plateau's worth of it, rather than a moment at a crest.
+      expect(held).toBeGreaterThan(10_000);
     });
 
     it('never asks the window for more than the table allows', () => {
       // The floor says how empty the window may get, never how full: every row
-      // of the ramp has room for it, so it can never fight `maxQueue`.
+      // of the ramp has room for it, so it can never fight `maxQueue`. Asserted
+      // against the *grown* floor, which is the binding one — three of the
+      // table's four places at the Rush row, and three of three back at the
+      // handover, so it binds under the table everywhere on the curve.
       for (const anchor of RAMP) {
-        expect(anchor.maxQueue).toBeGreaterThanOrEqual(RUSH_QUEUE_FLOOR);
+        expect(anchor.maxQueue).toBeGreaterThanOrEqual(RUSH_FULL_QUEUE_FLOOR);
       }
     });
 

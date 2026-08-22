@@ -185,17 +185,17 @@ export class Game {
 
   /**
    * How hard the rush is running right now, 0…1 — the tide `core/difficulty.ts`
-   * runs from the moment the maker is up to speed (design §7).
+   * runs from the preview mark to the end of the run (design §7).
    *
    * It is read in two places, and they are the promise and the delivery. The
    * HUD draws the door filling up *before* the children reach the window, which
    * is the half that makes a rush something to play against rather than
-   * something to survive; and `admitCustomer` holds the window at
-   * `rushFloorAt(this.rush)`, which is the half that makes the promise good
-   * against a maker fast enough to serve a mere rate away. The rest of the
-   * tide's effect is still inside `stage.arrivalIntervalMs`. A swell is
-   * continuous, so it is drawn from state every frame the way the patience bars
-   * are, rather than announced as a one-shot (architecture §7).
+   * something to survive; and `admitCustomer` holds the window at `rushFloor`
+   * below, which is the half that makes the promise good against a maker fast
+   * enough to serve a mere rate away. The rest of the tide's effect is still
+   * inside `stage.arrivalIntervalMs`. A swell is continuous, so it is drawn from
+   * state every frame the way the patience bars are, rather than announced as a
+   * one-shot (architecture §7).
    *
    * A pinned stage has no tide, for the same reason it has no ramp.
    */
@@ -203,6 +203,28 @@ export class Game {
     if (this.config.stage !== undefined) return 0;
 
     return rushAt(this.endlessMs, this.endlessScore);
+  }
+
+  /**
+   * How many children the tide insists on having at the window right now — the
+   * delivery half of the promise `rush` draws (`rushFloorAt`).
+   *
+   * It is a getter beside `rush` rather than a call inside `admitCustomer` so
+   * that the two halves of the tide are read the same way and guarded the same
+   * way; and it goes to the table with the (clock, score) pair rather than with
+   * `this.rush`, because the floor needs to know how far along the ramp the
+   * *cycle* stands as well as how hard it is running — a preview tide and a full
+   * one both crest at 1, and only the ramp position tells them apart.
+   *
+   * Public for the sweep that pins the mechanism (`simulation.test.ts`), which
+   * cannot ask for the floor in force any other way: the ramp position it would
+   * have to rebuild it from is private, and a test that rebuilt it would be
+   * measuring its own arithmetic.
+   */
+  get rushFloor(): number {
+    if (this.config.stage !== undefined) return 0;
+
+    return rushFloorAt(this.endlessMs, this.endlessScore);
   }
 
   /**
@@ -687,11 +709,11 @@ export class Game {
     // floor can only ever say how empty the window may get and never how full:
     // no rush can admit past the row the table names. Folding it into `window`
     // alongside the other endless-vs-tutorial differences would read tidier and
-    // is measurably worse — the guard short-circuits first, so `this.rush` is
-    // paid on 0.33 steps in 1 here against 1 in 1 there, and it is cheapest
+    // is measurably worse — the guard short-circuits first, so `this.rushFloor`
+    // is paid on 0.33 steps in 1 here against 1 in 1 there, and it is cheapest
     // exactly when the window is full, which is when a tide is running.
     const belowFloor =
-      level === undefined && this.state.customers.length < rushFloorAt(this.rush);
+      level === undefined && this.state.customers.length < this.rushFloor;
     const due = this.waitMs >= this.arrivalGapMs(window.intervalMs, window.maxQueue);
     if (!due && !belowFloor) return;
     // Only an arrival the clock actually paid for spends it. A child the tide

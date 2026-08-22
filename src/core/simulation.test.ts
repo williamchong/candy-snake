@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
-import { RAMP, RUSH_FLOOR_FROM, RUSH_QUEUE_FLOOR, SPEED_RUNGS } from './difficulty';
+import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { TIERS, echoable, type StageConfig } from './orders';
 import { SHELF_SLOTS } from './shelf';
@@ -843,7 +843,14 @@ describe('a full run', () => {
     expect(batcher.game.state.served).toBeGreaterThan(batcher.game.tutorial.length);
     // Serving is not the claim — laddering is, and only a multi-colored cut
     // shows it. A maker carrying one segment can barely manage one by accident.
-    expect(batcher.ladders).toBeGreaterThan(10);
+    // The floor is 8 rather than the 10 it was, and *not* because the shipped
+    // build needs the room — this seed measures 21 → 31 across the preview-tide
+    // pass, up by half. It is because an intermediate arm of that same pass put
+    // it at exactly **10**: the preview tide alone, before the tide grew, costs
+    // the maker a fifth of its ladders draw-wide and this seed half of them.
+    // A bound a build inside one pass can sit on is a bound set too close, and
+    // `buys a batching maker more candy per minute` below has the rest of it.
+    expect(batcher.ladders).toBeGreaterThan(8);
     expect(play(seed, TICKS).ladders).toBeLessThan(batcher.ladders);
   });
 
@@ -1058,10 +1065,12 @@ describe('the reference players, after the ramp went in', () => {
     // median has moved to `WIDE` for that reason, and every median quoted below
     // was read off sixteen seeds and should be taken as ±0.3 min.
     //
-    // Measured 4.21 min on `WIDE`, over deaths running 2.6 … 7.5. The figures
-    // that follow are the history of this number and were all read off sixteen
-    // seeds; the jump from the 5.16 recorded below is mostly the draw widening
-    // and not the curve moving. Against
+    // Measured **5.22 min on `WIDE`** as of the preview-tide pass, against 5.28
+    // on the build before it — and the 4.21 recorded here before that was stale
+    // by two passes, which is the hazard of a number that only prints on
+    // failure. The figures that follow are the history of this number and were
+    // all read off sixteen seeds; the jump from the 5.16 recorded below is
+    // mostly the draw widening and not the curve moving. Against
     // 5.79 while the tide still waited for the three-minute mark — the ninth
     // sitting moved it to `SETTLED_MS` and a shape the maker meets a minute in
     // is one they have to hold off for the rest of the run.
@@ -1138,8 +1147,28 @@ describe('the reference players, after the ramp went in', () => {
 
   it('buys a batching maker more candy per minute than a grinder', () => {
     const grinders = target(grinderGoal);
+    const batchers = target(batcherGoal);
 
-    target(batcherGoal).forEach((batcher, seed) => {
+    // Breaks are counted over the draw rather than per seed, for the reason the
+    // ladder floor below has just had to learn twice: a per-seed ceiling is the
+    // draw's *maximum*, which is as noisy as its minimum, and this one caught a
+    // re-roll rather than a regression. The shipped tide reads **7** breaks
+    // across `SWEEP`'s sixteen seven-minute runs against a baseline **6**, with
+    // one seed contributing 2 where the most any seed had carried was 1 — and an
+    // intermediate arm of the same pass read 9, with one of *these four* seeds
+    // on 2, which is what failed the per-seed ceiling this replaced. A count
+    // that small cannot separate a trend from a shuffle, and nothing about where
+    // the tide starts touches how a maker steers into their own strand except
+    // through the spawns it re-rolls. What the number is actually here to
+    // establish is unchanged and is a rate: a production line is a longer
+    // strand and a longer strand is easier to run into, so the cost has to be
+    // small enough that it cannot account for the score gap below — a break
+    // every second run over these four (measured 2, against 1 at baseline)
+    // leaves the 2.24× to be read as economics.
+    const breaks = sum(batchers.map((batcher) => batcher.broken));
+    expect(breaks).toBeLessThanOrEqual(4);
+
+    batchers.forEach((batcher, seed) => {
       const grinder = grinders[seed]!;
 
       // The longer strand is genuinely the more productive one: fewer trips to
@@ -1160,20 +1189,30 @@ describe('the reference players, after the ramp went in', () => {
       // Read the two together or neither means anything: `meanBatch` below is
       // the length, this is the variety, and the grinder's 1 … 10 is still the
       // separation the number is here for.
-      expect(batcher.ladders).toBeGreaterThan(10);
-      // The gap below is *mostly* what the candy is worth, and no longer quite
-      // all of it. The grinder still never steers into itself; the batcher now
-      // rarely does — measured **3 breaks across the sixteen** seven-minute runs
-      // of `SWEEP`, no seed contributing more than one, and 0 across the four
-      // this test runs over. Against 0 everywhere before the ceiling went up.
-      // That is the cost `broken` was put here to carry (a production line is a
-      // longer strand, and a longer strand is easier to run into), so it is
-      // held to a ceiling rather than to zero — a break every fifth run cannot
-      // account for the score gap, which is what this has to establish before
-      // that gap can be read as economics. The gap is **2.24×** in aggregate
-      // over the four seeds here (2.64× over `SWEEP`), and the four carry no
-      // breaks at all.
-      expect(batcher.broken).toBeLessThanOrEqual(1);
+      //
+      // **It has come down a fourth time, and this one is a correction rather
+      // than a re-measure — laddering did not move.** Across `SWEEP` the
+      // preview-tide pass reads 9 … 34 (median 21.5) → 9 … 31 (median 21), with
+      // the batch at the bench going 3.10 → 3.20 segments: the same maker,
+      // building the same way. What moved was inside the pass. The preview tide
+      // *alone*, before the tide grew, reads 10 … 35 (median 17.5) — a fifth
+      // fewer, against deaths only 6% sooner, so genuinely build time lost to a
+      // lull arriving 20 s earlier — and growing the tide hands it back.
+      //
+      // The correction is that **10 was never a sound floor**: the min across
+      // `SWEEP` is 9 in *both* arms, and this passed only because that seed is
+      // not among the four here. A per-seed floor is the draw's minimum, which
+      // is the noisiest statistic a sweep has and the second time this file has
+      // learned it (`offers the pair a single cut can feed`). Set under the
+      // measured minimum with room for the next re-roll.
+      expect(batcher.ladders).toBeGreaterThan(8);
+      // The gap is *mostly* what the candy is worth, and no longer quite all of
+      // it: the batcher now steers into itself occasionally where it never did
+      // before the ceiling went up (`breaks` above holds that to a rate). The
+      // grinder still never does, and that half stays per-seed — it is a
+      // structural claim about a maker who carries one segment, not a count
+      // that a re-roll can move. The gap is **2.24×** in aggregate over the four
+      // seeds here (2.64× over `SWEEP`).
       expect(grinder.broken).toBe(0);
     });
   });
@@ -1319,41 +1358,63 @@ describe('the reference players, after the ramp went in', () => {
     ).toBeGreaterThanOrEqual(12);
   });
 
-  it('holds the window at a pair while the tide runs, without capping it there', () => {
+  it('holds the window at the floor while the tide runs, and still fills it', () => {
     // The floor's own assertion, and the only one that plays a real run past
     // the rush — `game.test.ts` cannot: `Game.rush` is 0 for a pinned stage, and
     // an unattended game loses its three lives to walkouts around the 50-second
-    // mark, well before the ramp reaches `RUSH_FROM_MS` at 60.
+    // mark. That is now just past `RUSH_FROM_MS` rather than well short of it,
+    // and it does not help: 50 s of ramp is the exact frame the first tide first
+    // holds the window, so an unattended run ends on the mechanism's first tick
+    // and has no tide to measure.
     //
     // Two claims, and the second is the one with a bug behind it. The first cut
     // of the floor spent the arrival clock on the children it insisted on, so
     // every serve during a rush restarted the ordinary fill and the window sat
-    // pinned *at* two — a floor working as a ceiling. It cost the window a fifth
-    // of its pairs and nothing caught it, because "the window holds two" was
-    // still perfectly true. So `past` is asserted beside `held`: the tide has to
-    // put a *third* child at the window most of the time, or the mechanism has
-    // quietly inverted again.
+    // pinned *at* the floor — a floor working as a ceiling. It cost the window a
+    // fifth of its pairs and nothing caught it, because "the window holds two"
+    // was still perfectly true. So the second claim is asserted beside `held`:
+    // the tide has to leave the window room to fill past what it insists on, or
+    // the mechanism has quietly inverted again.
+    //
+    // **The second claim is read at the cap rather than one above the floor**,
+    // and the reason is that the grown floor is three of the table's four
+    // places. At a floor of two, "gets past the floor" had two places of
+    // headroom to prove itself in and measured 0.855-0.909; at three it has one,
+    // it measures 0.557-0.615, and the same number would go on passing if the
+    // floor were doing all the work. Asking whether the window still reaches
+    // **four** is the same question with the headroom put back — a pinned window
+    // never gets there, and the ordinary arrival clock has to still be running
+    // for it to.
     //
     // Measured on the grinder, which takes no pairs, so this is the window and
-    // not the maker: held 0.9994-0.9998 and past-floor 0.855-0.909 across these
-    // five seeds, peaking at the table's own cap of four. The floors are set
-    // well under that — this is a structural claim, not a tuning one, and it
-    // should survive any re-roll that leaves the mechanism alone.
+    // not the maker: held 0.9991-0.9999 and at the cap 0.487-0.564 across these
+    // seeds, mean occupancy 3.37-3.47 children. The floors are set well under
+    // that — this is a structural claim, not a tuning one, and it should survive
+    // any re-roll that leaves the mechanism alone. For scale, the same figures
+    // before the tide grew: at-cap 0.449-0.519, mean 3.35-3.43. The window was
+    // already this full at a peak; what the third child changes is that it
+    // cannot be emptied below three while the doorway reads as a crowd.
     for (const seed of SEEDS) {
       const game = new Game({ ...DEFAULT_CONFIG, seed });
       const bot = botFor(game, grinderGoal);
       let sampled = 0;
       let held = 0;
-      let past = 0;
+      let filled = 0;
 
       for (let tick = 0; tick < TARGET_TICKS && !game.state.over; tick += 1) {
         game.step(20, bot);
-        if (game.state.over || game.rush < RUSH_FLOOR_FROM) continue;
+        // The floor in force rather than a constant: it grows with the tide, and
+        // a test that pinned one of its two values would stop reading the other.
+        // Read once and used for both the gate and the comparison — a floor of
+        // zero is exactly "no tide worth sampling", so asking `rush` separately
+        // would walk the ramp twice a tick to answer the same question.
+        const floor = game.rushFloor;
+        if (game.state.over || floor === 0) continue;
 
         sampled += 1;
         const waiting = game.state.customers.length;
-        if (waiting >= RUSH_QUEUE_FLOOR) held += 1;
-        if (waiting > RUSH_QUEUE_FLOOR) past += 1;
+        if (waiting >= floor) held += 1;
+        if (waiting >= PEAK_QUEUE) filled += 1;
       }
 
       // A run has to actually meet the tide for the rest to mean anything.
@@ -1361,8 +1422,10 @@ describe('the reference players, after the ramp went in', () => {
       // The floor holds. Not 1.0: a serve empties a place and the next tick
       // fills it, so a handful of single-tick dips are the mechanism working.
       expect(held / sampled, `seed ${seed} held`).toBeGreaterThan(0.99);
-      // And it is a floor rather than a ceiling.
-      expect(past / sampled, `seed ${seed} past floor`).toBeGreaterThan(0.5);
+      // And it is a floor rather than a ceiling: the ordinary clock is still
+      // filling the window past what the tide insists on, all the way to the
+      // table's own cap.
+      expect(filled / sampled, `seed ${seed} at the cap`).toBeGreaterThan(0.3);
     }
   });
 

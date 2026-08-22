@@ -30,7 +30,7 @@ import type { Frame } from './layout';
  * further across the line the waiting children are already on.
  *
  * Read from `core/difficulty.ts` rather than kept here, because the rule that
- * holds the window at a pair is written in this number's units: the floor
+ * holds the window open is written in this number's units: the floor
  * engages at `1 / RUSH_CROWD`, which is the intensity at which the first figure
  * below is fully drawn. Two copies and a fourth figure would move the promise
  * without moving the delivery — the doorway would read as occupied a swell
