@@ -2725,6 +2725,155 @@ tide has to overturn the baseline for it to pass at all.
 with the floor engaged, against 0.00 and a single child before. The first rush a
 run meets lands at score ~1000 rather than 1414.
 
+### What the preview-tide pass measured — the rush arrives early and grows
+
+Not a sitting: one report from the chair, in two halves. *The rush can run for
+longer and with more children, so it feels like a real rush* — and *a minor
+version at ~500–600 points as a refresher and preview, at about the difficulty
+the rush has now*. Read together they describe one change with two ends: the
+tide the player already gets becomes the **preview**, met early, and it **grows**
+into something bigger by the time the table's own Rush row lands.
+
+**A third question came with them and the answer is no: the strand does not
+speed up during a rush.** Two of this document's own findings say so. The
+queue-coupling pass settled that speed must not key off how full the window is —
+it doubles one feedback path instead of adding one, and faster-when-busy
+compounds falling behind — and the speed ladder pass spent real effort teaching
+the game to *announce* its top rung, so the player stops bracing for an
+acceleration that is not coming. A rush that borrowed an extra rung would make
+that announcement a lie. It is also not reliably harder: a faster strand fetches
+and cuts faster too. The rush's difficulty belongs in the window.
+
+**What shipped, as two knobs and one new axis.** `RUSH_FROM_MS` stops aliasing
+`SETTLED_MS` and becomes 40 s of ramp — score 571, inside the band that was
+asked for — and `RUSH_SHAPE` gains a second column, read through the same
+`spanAt` the anchor table is: where each point of the tide sits at the preview,
+and where it has slid to once `rushGrowth` reaches 1 at the Rush row. The peak
+plateau grows 12 s → 20 s and the lull pays for it, 30 s → 22 s. The floor grows
+with it, two children → three (`RUSH_FULL_QUEUE_FLOOR`).
+
+Three things are deliberately held still, and each would look like a free win:
+
+- **The swell stays 9 s** in both columns. It is the telegraph, sized against a
+  ladder built from nothing (~69 moves, 8.6 s at the Rush row's speed). A bigger
+  rush that shortened its own warning is an ambush.
+- **The period stays 60 s.** Growing it is the obvious way to buy peak seconds
+  without spending lull ones, and it breaks replay: phase is
+  `(pos − from) / period`, so a period that changed under a running cycle would
+  move the phase discontinuously — a tide could jump from peak to lull mid-swell.
+- **The anchor table is untouched**, for the fourth pass running, which is what
+  keeps these sweeps comparable at all.
+
+**The lull is what capped the peak.** 22 s against the 8.6 s a six-rung ladder
+costs still leaves room for two, which is the same claim the 30 s column makes.
+24 s of peak was the first draft and it leaves 18 s — a 5% margin on the number
+this document calls the point of the whole mechanism.
+
+**The cheap check first, because it has no seeds in it.** Mean arrival rate over
+one period, sampled at 10 ms: **1.5275 at the preview shape → 1.7475 grown**, 14%
+more demand a minute, and the preview figure is the *same number to four decimals*
+the tide pass recorded — which is the proof that the preview column really is the
+old tide rather than something near it. Peak/lull measure 12 s/30 s and 20 s/22 s
+exactly, and the growth is smooth across the cycles between (peak 15.7 s at the
+second, 19.0 s at the third).
+
+**Then the sweep, both arms, on the same 64- and 16-seed draws.**
+
+| | baseline | preview only | shipped |
+| --- | --- | --- | --- |
+| batcher median death (`WIDE`) | 5.28 min | 4.95 min | **5.22 min** |
+| closed out (`SWEEP`) | 16/16 | 16/16 | 16/16 |
+| batcher ladders (`SWEEP`) | 9 … 34, med 21.5 | 10 … 35, med 17.5 | 9 … 31, med **21.0** |
+| batch at the bench (`SWEEP` median) | 3.10 | — | 3.20 |
+| breaks over `SWEEP` | 6 | 9 | 7 |
+| window mean over a tide | 3.35 … 3.43 | — | 3.37 … 3.47 |
+| window at the cap of four | 45 … 52% | — | 49 … 56% |
+
+**The middle column is the interesting one, and it is a warning.** The preview
+alone is the harder arm: it takes the median down 6% and a *fifth* of the
+batcher's ladders, which is more than the shorter runs account for — the lull
+arriving 20 s sooner costs real build time. Growing the tide then gives most of
+that back. The cause is the mechanism this document has now recorded twice:
+`admitCustomer` ends in `serveFromShelf`, so a child the tide insists on can be
+served the tick they arrive. To a maker with a stocked rack a fuller window is
+*throughput*, not pressure, and the same trap took the floor's first cut from
+"harder" to 12/64 on the grinder. What the sweep can honestly say about this
+pass is that the curve did not move (5.28 → 5.22, inside the 4–6 target) while
+the shape of a tide did. Put beside the 14% above, that is the clipping finding
+stated twice: the tide asks for 14% more and the window is not free to deliver
+it.
+
+**And the pass found where this road ends.** Measured over every frame the
+doorway reads as a crowd, the window already sits at the table's cap of **four
+about half the time** — before this change as well as after. Both levers the tide has, the arrival rate and the floor, are
+clipped by `maxQueue` long before they run out of room to grow, which is the
+measured answer to the other half of the original question: *should max queue be
+longer?* Yes, and it is the only lever left — but it is a **layout job first**.
+`ui/layout.ts` gives each child a quarter of the board's width and `COMBO_PIPS`
+derives from the same cap of four, so a fifth place is a per-viewport re-sweep
+of the screen and a re-derivation of the combo meter, not a number in this
+table.
+
+**Two assertions in `simulation.test.ts` were corrected rather than relaxed, and
+both for the same reason the file has met twice before.**
+
+- `batcher.ladders > 10` was a **per-seed floor**, which is the draw's minimum
+  and the noisiest statistic a sweep has. It failed on the preview — and the
+  measurement showed the *baseline* min across `SWEEP` was already **9**. It had
+  been passing only because that seed is not among the four the test runs. Now
+  8, set under the measured minimum, with the draw-wide distribution recorded
+  beside it.
+- `batcher.broken <= 1` was a per-seed **ceiling**, the same statistic upside
+  down: 6 breaks across sixteen seven-minute runs became **7** shipped, and 9 on
+  the preview-only arm — which is the arm that failed it, with one of the four
+  seeds the test runs carrying 2. A count that small cannot separate a trend from
+  a shuffle, and nothing about where the tide starts touches how a maker steers
+  into their own strand except through the spawns it re-rolls. It is now a total
+  over the draw, which is the rate the number was always there to establish.
+
+**And one that was about to start passing for the wrong reason.** `holds the
+window at a pair while the tide runs, without capping it there` asserted the
+window gets *past* the floor more than half the time — the guard against the
+floor silently becoming a ceiling. At a floor of three against a cap of four
+that has one place of headroom left, and it would go on passing precisely when
+the floor was doing all the work. It now asks whether the window still reaches
+**four** (measured 49–56%, against 45–52% before), which is the same question
+with the headroom put back: a pinned window never gets there.
+
+**What the review pass tightened afterwards**, since three of these are the kind
+of thing that only shows up when someone reads the diff cold:
+
+- **Half the numbers first written into the test comments were the middle
+  column's.** They were measured on the preview-only arm and then quoted as
+  though they described the shipped build — the seed-1 ladder count reads 21 → 31
+  shipped and was written up as 21 → 10. Every figure in this sitting and in the
+  comments has since been re-measured on one run of the shipped build against one
+  run of the baseline. The lesson is narrow and worth keeping: **a staged pass
+  produces numbers for stages that never ship**, and prose written mid-pass has to
+  be re-read against the end of it.
+- **`rushFloorAt` took `(intensity, growth)` and now takes `(clock, score)` like
+  `rushAt` does.** Both terms are functions of one ramp position, so the old
+  signature admitted pairs no run can be in — a full-strength crest at growth 0 —
+  and the tests were asserting some of them. One argument pair, one walk up the
+  ramp, and the docblock no longer has to warn against mixing the two up.
+- **`RUSH_OPENS_AT` is derived rather than written.** It was `0.5`, and its
+  docblock called that "the top of the lull and the foot of the first swell" —
+  true only because the preview column's lull happens to end there. It now reads
+  `RUSH_SHAPE[1]!.at`, so retuning the preview lull cannot silently move a run's
+  entry point into the middle of a lull with every test still green.
+- **The swell test was passing for a shape it exists to forbid.** It counted
+  every frame between 0 and 1, i.e. swell *plus* ebb, so a 6 s warning against a
+  12 s ebb would have passed. It now measures the rise alone, and was checked by
+  making the shape bad on purpose (6 s reads 6.2 and fails).
+- **The closure in `rushShape` was measured rather than assumed.** `spanAt`'s
+  docblock warns about polymorphic callbacks, and the growth term makes `keyOf`
+  capture a variable — which looks like exactly that hazard. It is not: 19.6 ns
+  against 19.2 for a variant with no function object at all, and 622 scavenges
+  against 614 over 40M calls. The obvious "fix" — hoisting `keyOf` over a
+  module-level `let` — measures **57.9 ns against 39.7** on `stageAt`, because
+  writing module scope from a hot function is what defeats V8's inlining. It is
+  recorded in the docblock so the next reader does not helpfully repair it.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

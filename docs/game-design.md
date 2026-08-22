@@ -612,40 +612,79 @@ seven colors it is left to coincidence.
   nothing they ask for comes through this draw at all — including level 4's
   pair, which is authored rather than rolled.
 
-### The rush (from the 1-minute mark)
+### The rush (a preview from score ~570, full size from the 3-minute row)
 
 The bullet above names the hole and **the rush is what goes in it**, asked for
 from the chair twice: once the maker is up to speed the window stops being a
 steady drip and becomes a **tide**, so the ramp carries a shape to read rather
 than only numbers getting smaller. `core/difficulty.ts` holds it.
 
-One period is a minute: half of it a lull, then a nine-second swell, a peak of
-about twelve seconds, and an ebb. A run **joins that cycle at the swell's foot**
-rather than at the top of the lull, so the first thing it meets once the tide
-switches on is the tide rising. It moves the Arrival column and holds a **floor
-under the window** while it runs, and nothing else — the standing line is drawn
-for four children and a fifth walks off the frame, so a deeper queue is a layout
-job first. The shape is one pure term over ramp position with no rng in it, so a
-seeded run still replays exactly; the floor reads the window it is holding, so it
-is state rather than curve, and it lives in `Game` rather than in the table.
+One period is a minute, at every size. What changes with the size is what the
+minute is spent on:
 
-- **It starts at the Settled row, not the Rush row.** It was built for the
+|                | preview (ramp 40 s, score ~570) | full (ramp 3 min, the Rush row) |
+| -------------- | ------------------------------- | ------------------------------- |
+| lull           | 30 s                            | 22 s                            |
+| swell          | 9 s                             | 9 s                             |
+| peak           | 12 s                            | **20 s**                        |
+| ebb            | 9 s                             | 9 s                             |
+| window held at | 2 children                      | **3 children**                  |
+
+A run **joins that cycle at the swell's foot** rather than at the top of the
+lull, so the first thing it meets once the tide switches on is the tide rising,
+and the two columns are interpolated between across the ramp the way `RAMP`'s
+own rows are — the tide the player is shown early is the tide they get later,
+grown. It moves the Arrival column and holds a **floor under the window** while
+it runs, and nothing else — the standing line is drawn for four children and a
+fifth walks off the frame, so a deeper queue is a layout job first. The shape is
+one pure term over ramp position with no rng in it, so a seeded run still
+replays exactly; the floor reads the window it is holding, so it is state rather
+than curve, and it lives in `Game` rather than in the table.
+
+- **It previews before the maker is up to speed, and grows to full size at the
+  Rush row.** Both halves are asked for from the chair: *a minor version as a
+  refresher and preview*, and *longer, with more children, so it feels like a
+  real rush*. The preview is the tide exactly as it was — 12 s of peak, a pair
+  at the window — met at score ~570 instead of ~860, which is the first time it
+  lands inside the stretch the staleness reports keep coming from. Everything
+  after it is one growth term: the peak buys 8 s off the lull, and the floor
+  takes a third child. Measured with no rng in it, that is **14% more demand a
+  minute** at full size — mean arrival rate over a cycle 1.5275 → 1.7475.
+  **The swell does not grow**, because it is the warning
+  and a bigger rush that shortened its own telegraph would be an ambush; **the
+  period does not grow**, because a period that changed under a running cycle
+  would move the phase discontinuously and a seeded run would stop replaying.
+- **What the preview costs is the ease-in.** The last 20 s of the speed ramp now
+  runs under the first swell, which this document had ruled out on the grounds
+  that a tide over a strand still being brought up to pace is two things moving
+  at once. It is paid deliberately: the overlap is two rungs of eight, the tide
+  spends it at about a third of its strength, and the alternative is leaving the
+  first minute of the endless game flat for a fourth report running. Measured,
+  the preview alone takes the batching maker's median death 5.28 → 4.95 min and
+  a fifth of its ladders — the lull it builds in now arrives 20 s sooner.
+
+- **It started at the Rush row, then at the Settled one.** It was built for the
   stretch *past* the last lever, on the reasoning that a tide before then would
   be one more number moving among four. The next report of staleness arrived at
   **400 points**, which the reference bots put at ramp-minute 0.5–0.6 — inside
   the first minute, and nowhere near the mark the tide was waiting for. A shape
   a player only meets in the last third of a run is not a shape the run has, so
-  the tide now runs from the moment the speed ease-in finishes to the end. The
-  minute before it is left flat on purpose: that is the ease-in, and a tide laid
-  over a strand still being brought up to pace is two things moving at once.
-  Measured, this moves the batching maker's median death 5.79 → **4.66 min**,
-  still inside the 4–6 target, 16/16 closed out either way.
+  the tide moved to the moment the speed ease-in finishes. Measured, that moved
+  the batching maker's median death 5.79 → **4.66 min**, still inside the 4–6
+  target, 16/16 closed out either way. The minute before it was then left flat
+  on purpose — the ease-in — until the fourth report, which is the bullet above:
+  the last third of that minute now carries the preview.
 
 - **The lull is the point as much as the peak is.** A nested ladder is a bundle
   aimed at several orders at once, and it takes longer to build than it does to
   sell; against a flat interval there is never a moment to build one. Half a
   minute of slack, with a visible reason to spend it, is the first thing this
-  game has offered a maker who wants to build ahead of the window.
+  game has offered a maker who wants to build ahead of the window. It is also
+  what caps the grown peak: the lull is what the peak grows *out of*, and 22 s
+  against the 8.6 s a six-rung ladder costs at the Rush row's speed still leaves
+  room for two. That is the constraint the 20 s plateau was set against — the
+  peak stopped where the lull stopped affording it, rather than at a round
+  number.
 - **A run joins the cycle at the swell, and that is the third staleness report
   answered by moving where the tide sits.** Joining at phase 0 meant the first
   thing past the anchor was the whole lull — thirty seconds of nothing, with the
@@ -682,18 +721,40 @@ is state rather than curve, and it lives in `Game` rather than in the table.
   table's cap of four. One consequence to know before retuning: a child the tide
   insists on can be served off the rack in the same tick they arrive, so during a
   rush a stocked shelf empties as fast as the maker can cut rather than as fast
-  as the window fills. That is the rush being the moment you cash your stock, and
-  it is why the floor is two and not the whole queue.
+  as the window fills. That is the rush being the moment you cash your stock.
+- **The full-size tide holds three, and that is the last place the window has to
+  give.** The preview's pair grows to three of the table's four as the tide does
+  — the *more children* half of what was asked for, and the half a rate cannot
+  deliver on its own. It is also the end of that road, and the measurement says
+  so plainly: measured over every frame the doorway reads as a crowd, the window
+  already sits at the cap of four **about half the time** — before this change
+  as well as after — so both the arrival rate and the floor are clipped by Max
+  queue long before they run out of room to grow. **A deeper rush than this needs a
+  deeper queue, and that is a layout job** — the standing line is drawn for four
+  (`ui/layout.ts` gives each child a quarter of the board's width) and the combo
+  meter's four pips are derived from the same cap. Nothing above four is a
+  balance change; it is a re-sweep of the screen.
+- **A fuller window is not automatically a harder game, and the sweep keeps
+  saying so.** A child the tide insists on can be served off the rack the tick
+  they arrive, so to a maker with stock in hand the third child is throughput
+  rather than pressure: measured, growing the tide gives back most of what the
+  preview took (median death 4.95 → 5.22 min, against a 5.28 baseline). The
+  harness cannot show the cost that lands on a person — three patience bars
+  running at once, for 20 s at a stretch — so what the sweep is asked for is
+  that the curve did not move, and it did not. The same caution applies to
+  anything that deepens the window in future: measure the *rate* it is served
+  at, not the number of children standing there.
 - **It has to be seen coming, and it is drawn rather than written** (§11):
   children gather in the shop doorway through the swell, cut by the frame edge,
   behind the line. The nine seconds is sized against a whole ladder built from
   nothing — ~69 moves, 8.6 s at the Rush row's speed — and not against a trip to
   the bench, which is two. That is the difference between a rush and an ambush:
   the warning has to be long enough to *start* the thing it is warning you to
-  start, and a batch is the thing. At the Settled row, where the tide now
-  begins, the same ladder is 9.9 s against a 9 s swell; the swell stays where it
-  is, because the **lull** is the half a ladder is actually built in and the
-  swell only has to be long enough to start one.
+  start, and a batch is the thing. Where the tide now previews the strand is
+  slower still and the same ladder costs more than the 9 s swell; the swell
+  stays where it is at every size of tide, because the **lull** is where a
+  ladder is actually built and the swell only has to be long enough to start
+  one.
 - **The trough is shallower than the table, but only just, and the asymmetry is
   measured rather than chosen.** A rate-neutral tide is not a difficulty-neutral
   one: arrivals stop at Max queue, so surplus rate at a peak is clipped the
