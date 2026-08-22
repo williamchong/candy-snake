@@ -2198,6 +2198,100 @@ a count corroborated by the sweep rather than read off a table.
   the next serve restarts the run. `CustomerView` and `RushDoor` step by hand
   for a reason this widget does not have: several children sharing one phase.
 
+### What the pair-cap sweep measured — the open finding names the wrong thing
+
+Not a sitting: one question, asked because a proposal needed it. The proposal was
+a fourth opening level teaching the combo — one cut, two candies — and the
+objection to it was that the record says batching loses, so the tutorial would be
+teaching the strategy the game punishes. That objection assumes the two-segment
+batch is punished. Nothing here had ever asked.
+
+**The instrument is a segment budget on the planner.** `planLadder` gains a
+`cap`: the most segments a plan may ask for at all, spent in the order the plan
+already values — children at the window first, speculation after. At
+`Infinity` it is the maker this file has always run, and it reproduces the combo
+pass's shipped row **exactly** (6 649 against the grinder's 12 892), which is the
+control saying the plumbing moved nothing. **No game code was touched in this
+pass at all**, so for once there is no re-roll caveat: every arm below is the
+same build, played differently.
+
+| arm       | score | died /16 | median | batch | ladders | chop/min | staled | served |
+| --------- | ----- | -------- | ------ | ----- | ------- | -------- | ------ | ------ |
+| grinder   | 12892 | 7/16     | 9.31   | 1.06  | 5       | 16.1     | 10     | 138    |
+| cap 1     | 3625  | 16/16    | 3.56   | 1.07  | 2       | 14.0     | 1      | 44     |
+| cap 2     | 9028  | 16/16    | 5.38   | 1.91  | 29      | 19.9     | 15     | 91     |
+| cap 3     | 8939  | 16/16    | 5.30   | 2.57  | 32      | 22.8     | 33     | 88     |
+| cap 4     | 6977  | 16/16    | 4.55   | 2.86  | 24      | 22.7     | 33     | 69     |
+| cap 6     | 5257  | 16/16    | 4.22   | 3.01  | 21      | 23.1     | 42     | 55     |
+| uncapped  | 6649  | 16/16    | 4.89   | 3.02  | 23      | 23.4     | 42     | 67     |
+
+Read the medians with care: each is taken over the runs that *died*, so the
+grinder's is over 7 seeds and the capped arms' over all 16. They say when a run
+ended, not how often.
+
+**There is an interior optimum, and the uncapped maker is past it.** Length pays
+up to two or three segments and then costs: cap 2 outscores the uncapped plan on
+**14 of 16** seeds. That alone is worth having — the bot the open finding has
+been measured on for six sittings is over-building.
+
+**But the cap sweep is not a clean instrument, and cap 1 is what says so.** At a
+cap of one the planner carries the grinder's own 1.06 segments and scores
+**3 625 against 12 892** — a third, at identical strand length. The ladder bot's
+deficit was never all length. Most of it is *who the strand is built for*: the
+grinder walks at the child standing in front of it, which is a mouth that is
+certainly there, while the planner walks at whichever ladder covers the most
+expected demand and can re-plan onto a different one mid-build. Every
+batcher-against-grinder reading this harness has ever taken varies both at once
+and attributes the difference to the length. That is the **fifth** time a number
+here has answered a different question from the one its name implies, and the
+first time the number in question is the open finding itself.
+
+**So the arm that answers the proposal holds targeting still.** `pairGrinderGoal`
+is the grinder exactly — front child, its jars, the bench — with one difference:
+when a second child is waiting on the *same* color it lays two cubes before
+crossing, so one cut feeds both. That is the whole of what the tutorial level
+would teach, and the cheapest batch the game has.
+
+| arm     | draw | score | died  | median | batch | chop/min | staled | served |
+| ------- | ---- | ----- | ----- | ------ | ----- | -------- | ------ | ------ |
+| grinder | WIDE | 13080 | 26/64 | 9.11   | 1.06  | 16.2     | 10     | 139    |
+| pair    | WIDE | 15967 | 21/64 | 7.97   | 1.36  | 19.1     | 16     | 158    |
+
+**Ahead of the grinder on 14 of 16 across `SWEEP` and 54 of 64 across `WIDE`**,
+and ahead of the uncapped maker on 16 of 16. It serves more, chops more, stales
+barely more, breaks the strand not once in 64 runs, and loses a life on five
+fewer seeds than the grinder does.
+
+**The open finding is not that batching is punished. It is that *building ahead
+of the window* is punished.** One cut feeding two children is already the best
+way to play this game the harness knows. The two claims have been quoted as one
+sentence since Phase 5, and the levers proposed against the finding have mostly
+been aimed at the half that was never broken.
+
+Two assertions ship with this, both pinning what was measured: the pair maker
+beats the grinder on at least 12 of 16, and the planner at the grinder's own
+strand length scores less than the grinder on every seed. The second is there so
+that length and targeting cannot quietly be read as one variable again. The open
+finding's own assertion is **untouched and still passes** — the uncapped batcher
+still loses on 14 of 16 — and should now be read as the narrower claim it always
+measured.
+
+**What this does to the order of attack.**
+
+- **The combo tutorial level's objection is void.** It would teach the winning
+  move, not a trap. It is no longer blocked on the balance work, and what is
+  left against it is its own cost — the tutorial's one-order model, and
+  `bestCombo` reading 2 on every run (design §11).
+- **Correlated demand keeps its target but changes its argument.** It was
+  proposed to raise sell-through on long ladders. What the pair arm says is that
+  its real job is to make the pair *available more often*: the maker above only
+  lays a second cube when two waiting children happen to want the same color,
+  and demand spread uncorrelated over seven colors is what makes that rare.
+  Measure it as pair frequency, not as ladder sell-through.
+- **A lever nobody has proposed is now the obvious one:** the planner's
+  targeting. If the maker who plans ahead simply committed to the ladder it
+  started, it would be a different bot — and possibly not a losing one.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
