@@ -198,12 +198,17 @@ export const RUSH_FROM_MS = SETTLED_MS;
  * first sitting asked for in the one shape that is not a permanently harder
  * game.
  *
- * It moves `arrivalIntervalMs` and **nothing else**. `ui/layout.ts` sizes the
- * standing line for four children and `CustomerQueue.standingX` clamps nothing,
- * so a fifth walks off the frame: a deeper queue is a layout job first.
+ * It moves `arrivalIntervalMs` and holds `rushFloorAt`'s floor under the window,
+ * and nothing else. `ui/layout.ts` sizes the standing line for four children and
+ * `CustomerQueue.standingX` clamps nothing, so a fifth walks off the frame: a
+ * deeper queue is a layout job first, which is why the floor is two and the cap
+ * stays the table's.
  *
- * And it is one pure term over ramp position with no rng in it, so a seeded run
- * still replays exactly and the shape is unit-tested like the rest of the table.
+ * The shape is one pure term over ramp position with no rng in it, so a seeded
+ * run still replays exactly and it is unit-tested like the rest of the table.
+ * The floor is a pure term over that shape; what makes it *state* rather than
+ * curve is only where it binds — `Game.admitCustomer`, against the window it is
+ * holding — so nothing in this file has to know how many children are waiting.
  */
 
 /** One tide, from the start of a lull to the end of the ebb. */
@@ -337,24 +342,96 @@ export const spanAt = <T>(
   return { from, to, t: (at - keyOf(from)) / (keyOf(to) - keyOf(from)) };
 };
 
+/**
+ * Where on `RUSH_SHAPE` a run *enters* the cycle — half a period in, which is
+ * the top of the lull and the foot of the first swell.
+ *
+ * The table is unchanged and the tide still runs lull → swell → peak → ebb
+ * forever; this only moves where the run joins it. Entering at 0 meant the very
+ * first thing a run met after the tide switched on was thirty seconds of
+ * nothing, and the swell that followed was the *second* half of the first
+ * period — 39 s of ramp, which at 70 ms a point is score 860 → 1414 spent being
+ * told the rush had started and shown nothing at all.
+ *
+ * That is the third staleness report in this file, and the second to be answered
+ * by moving where the tide sits rather than by changing its shape: the ninth
+ * sitting brought `RUSH_FROM_MS` down from the three-minute row to the settled
+ * one, and this brings the first swell down from 39 s past that anchor to 9.
+ * The period, the shape and the peak rate are all untouched, and **from the
+ * second cycle on the mean arrival rate is untouched too** — measured over one
+ * cycle at 10 ms, 1.5275 either side of this change, exactly. The first cycle is
+ * the exception and it is worth stating plainly rather than rounding off, since
+ * it is the only one this constant moves: its mean rate falls **1.4081 → 1.2513**,
+ * about 11%. Entering at the swell skips that cycle's lull, but it also spends
+ * the cycle's second half in an ebb the old entry point spent at a peak, and the
+ * shortened `RUSH_SWING_PERIODS` only claws part of it back (the offset alone
+ * reads 1.1194).
+ *
+ * So the honest description is a legibility change everywhere and a slightly
+ * *lighter* first cycle, against which the queue floor is the counterweight —
+ * and the pair of them is what the sweep is asked about: 64 seeds, batcher
+ * median death 5.31 min either side, which is the invariant that actually
+ * matters. A claim of "neutral" per cycle would have been the wrong thing to
+ * ask it to confirm.
+ *
+ * It also retires the hazard `rushSwing` was written against: a run entering at
+ * the lull met `CALM_RATE` — an interval slightly *easier* than the table's — at
+ * the exact moment the rush was added to make the game less flat. Entering at
+ * the swell's foot, the first thing the tide does is tighten.
+ */
+const RUSH_OPENS_AT = 0.5;
+
 /** The tide's own shape, before the ease-in below is applied to it. */
 const rushShape = (rampPosMs: number): number => {
-  const phase = ((rampPosMs - RUSH_FROM_MS) % RUSH_PERIOD_MS) / RUSH_PERIOD_MS;
+  // One `%` and no wrap back into range: both callers return before this on
+  // `rampPosMs <= RUSH_FROM_MS`, so the operand cannot be negative, and
+  // `spanAt`'s docblock is entitled to say the phase never leaves [0,1).
+  const phase = ((rampPosMs - RUSH_FROM_MS) / RUSH_PERIOD_MS + RUSH_OPENS_AT) % 1;
   const { from, to, t } = spanAt(RUSH_SHAPE, (point) => point.at, phase);
 
   return lerp(from.intensity, to.intensity, t);
 };
 
 /**
- * How far the tide has come in: 0 at the Settled row, 1 a period later.
+ * How long the tide takes to come fully in, as a fraction of its own period.
  *
- * It comes in over its own first period rather than switching on, so that the
- * anchor it starts from is still the row as written and the run does not step
- * to an easier interval at the exact moment the rush was added to make it less
- * flat. The whole table is written to move smoothly (design §7).
+ * It used to be a whole period, and that was sized against a hazard
+ * `RUSH_OPENS_AT` has since retired: a run entering the cycle at the lull met
+ * `CALM_RATE` first, so the tide switching straight on would have handed the
+ * player an interval slightly easier than the table's at the exact moment it was
+ * added to make the game harder. Easing in over a period hid that.
+ *
+ * Entering at the swell's foot there is nothing to hide — the shape itself now
+ * starts at 0 and climbs, which is the smooth start the ease-in was standing in
+ * for. Left at a whole period the two would compound: the first swell would peak
+ * 9 s in against a swing only 15% wound on, delivering 0.15 of a tide to a
+ * player who had just been shown a doorway. A rush you can see and cannot feel
+ * is the complaint this pass exists to answer, so the ease-in is cut to half a
+ * period — which is the distance from the entry point through the swell, the
+ * peak and the ebb, i.e. exactly the run's **first pass over the tide**. Not the
+ * 9 s to the first crest: winding the swing in that fast would put a full-force
+ * peak on a player twelve seconds after the rush first existed. What it means
+ * in delivered terms, measured: the first crest reads **0.300** and the first
+ * full-strength peak is in the second cycle, at +69 s.
+ *
+ * That 0.300 is the number to look at before retuning any of this. The floor
+ * engages at `RUSH_FLOOR_FROM` (1/3), so the first tide crosses it 1 s into the
+ * peak plateau rather than at the crest — a 10% margin, and a nudge to this
+ * constant, to `RUSH_OPENS_AT` or to `RUSH_CROWD` can push a run's first held
+ * window a whole cycle later without anything else looking wrong.
+ * `difficulty.test.ts` pins that the first tide reaches the floor at all.
+ */
+const RUSH_SWING_PERIODS = 1 - RUSH_OPENS_AT;
+
+/**
+ * How far the tide has come in: 0 at the Settled row, 1 once
+ * `RUSH_SWING_PERIODS` of its period has passed.
  */
 const rushSwing = (rampPosMs: number): number =>
-  Math.min(Math.max((rampPosMs - RUSH_FROM_MS) / RUSH_PERIOD_MS, 0), 1);
+  Math.min(
+    Math.max((rampPosMs - RUSH_FROM_MS) / (RUSH_PERIOD_MS * RUSH_SWING_PERIODS), 0),
+    1,
+  );
 
 /**
  * How hard the tide is actually running at a point on the ramp — 0 through the
@@ -439,3 +516,73 @@ export const stageAt = (endlessMs: number, endlessScore: number): StageConfig =>
       SPEED_RUNGS[speedRungOf(lerp(from.moveIntervalMs, to.moveIntervalMs, t))]!,
   };
 };
+
+/**
+ * How many children the doorway telegraph draws at a full peak — the
+ * `ui/rushDoor.ts` crowd, named here because the floor below is a promise made
+ * in that widget's units and kept in the window's.
+ *
+ * The door fills one figure at a time: the *n*th is fully present at intensity
+ * `n / RUSH_CROWD`. So this is not a decoration the rule happens to agree with,
+ * it is the rule's own scale.
+ */
+export const RUSH_CROWD = 3;
+
+/**
+ * How many children a running tide insists on having at the window.
+ *
+ * The tide moved `arrivalIntervalMs` and nothing else, and a rate is the one
+ * thing a maker can outrun. `arrivalGapMs` is `intervalMs × (n + 1) / maxQueue`,
+ * so with one child waiting the early ramp asks 6.4–8.0 s for the next — against
+ * a bench round trip of two or three. A player who keeps up therefore empties
+ * the window faster than any interval refills it, and the tide is invisible to
+ * exactly the players it was built for: the third staleness report in this file
+ * arrived at 1063 points, which is ramp-minute 1.24, from a chair that had never
+ * seen two children at once.
+ *
+ * Clipping is why a rate alone cannot fix that. The plan already recorded one
+ * half of it — at a peak the surplus rate "is clipped by the window the moment
+ * it fills" — and this is the other half: below `maxQueue` the surplus is
+ * clipped by the *maker*, and the better they are the more of it they clip. A
+ * floor is the only form of the rush that a fast maker cannot serve away.
+ *
+ * It is also what makes the batch lever cashable. Design §9 pays for one cut
+ * that feeds two children and the whole point of a telegraphed rush is that "a
+ * maker who sees one coming has a reason to build a ladder into it" — but a
+ * ladder cannot be cashed into a window that only ever holds one child, so the
+ * lever the rush exists to offer was one the rush never actually opened.
+ */
+export const RUSH_QUEUE_FLOOR = 2;
+
+/**
+ * Where the floor engages: the intensity at which the doorway has its first
+ * figure fully drawn, which is the moment the telegraph stops being a hint and
+ * starts being a crowd.
+ *
+ * Tying it to the door's own arithmetic rather than picking a number is what
+ * keeps the promise and the delivery from drifting. A rush the player can see
+ * coming and then cannot feel is the complaint this whole mechanism is answering
+ * — so the frame where the doorway reads as occupied is the frame the window
+ * starts holding a pair.
+ */
+export const RUSH_FLOOR_FROM = 1 / RUSH_CROWD;
+
+/**
+ * How many children the window is held at, at a given tide intensity — 0 through
+ * the lull and the first flicker of a swell, `RUSH_QUEUE_FLOOR` once the doorway
+ * reads as a crowd.
+ *
+ * A step rather than a ramp, because the quantity is children: there is no
+ * fractional child to interpolate, and `maxQueue` is rounded for the same
+ * reason. `Game.admitCustomer` is where it binds, and it binds *under*
+ * `maxQueue` — the floor says how empty the window may get, never how full it
+ * may be, so it can never admit past the row the table names.
+ *
+ * Pure, and a function of the *delivered* intensity rather than of ramp
+ * position, which is what ties it to the ease-in: a tide still winding in has
+ * not yet reached `RUSH_FLOOR_FROM`, so an early half-strength swell holds no
+ * window at all. Past that threshold the floor is the same two children at any
+ * intensity — it is a step, not a ramp, and there is no third child in it.
+ */
+export const rushFloorAt = (intensity: number): number =>
+  intensity >= RUSH_FLOOR_FROM ? RUSH_QUEUE_FLOOR : 0;

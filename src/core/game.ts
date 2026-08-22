@@ -6,6 +6,7 @@ import {
   SPEED_RUNGS,
   rampMs,
   rushAt,
+  rushFloorAt,
   speedRungOf,
   stageAt,
 } from './difficulty';
@@ -186,10 +187,13 @@ export class Game {
    * How hard the rush is running right now, 0…1 — the tide `core/difficulty.ts`
    * runs from the moment the maker is up to speed (design §7).
    *
-   * Nothing in the rules reads it: the tide's whole effect is already inside
-   * `stage.arrivalIntervalMs`. It is here so the HUD can draw the door filling
-   * up *before* the children reach the window, which is the half that makes a
-   * rush something to play against rather than something to survive. A swell is
+   * It is read in two places, and they are the promise and the delivery. The
+   * HUD draws the door filling up *before* the children reach the window, which
+   * is the half that makes a rush something to play against rather than
+   * something to survive; and `admitCustomer` holds the window at
+   * `rushFloorAt(this.rush)`, which is the half that makes the promise good
+   * against a maker fast enough to serve a mere rate away. The rest of the
+   * tide's effect is still inside `stage.arrivalIntervalMs`. A swell is
    * continuous, so it is drawn from state every frame the way the patience bars
    * are, rather than announced as a one-shot (architecture §7).
    *
@@ -672,10 +676,36 @@ export class Game {
     if (this.state.customers.length >= window.maxQueue) return;
 
     this.waitMs += dtMs;
-    if (this.waitMs < this.arrivalGapMs(window.intervalMs, window.maxQueue)) return;
+    // What a running tide insists on having at the window, whatever the clock
+    // says (`rushFloorAt`). Under it the gap is not waited out at all: a rate is
+    // the one thing a maker can outrun, and the better they are the more of the
+    // rush they serve away before it is ever visible. Only the endless game has
+    // a tide — an opening level's window is the level's own to pace, and a
+    // tutorial must not be able to cost you the run (design §7).
+    //
+    // It sits *below* the `maxQueue` guard above rather than beside it, so the
+    // floor can only ever say how empty the window may get and never how full:
+    // no rush can admit past the row the table names. Folding it into `window`
+    // alongside the other endless-vs-tutorial differences would read tidier and
+    // is measurably worse — the guard short-circuits first, so `this.rush` is
+    // paid on 0.33 steps in 1 here against 1 in 1 there, and it is cheapest
+    // exactly when the window is full, which is when a tide is running.
+    const belowFloor =
+      level === undefined && this.state.customers.length < rushFloorAt(this.rush);
+    const due = this.waitMs >= this.arrivalGapMs(window.intervalMs, window.maxQueue);
+    if (!due && !belowFloor) return;
+    // Only an arrival the clock actually paid for spends it. A child the tide
+    // insisted on is *extra*, and taking the clock with them would restart the
+    // ordinary fill on every serve — which pins the window at the floor instead
+    // of letting the rush build past it, and a floor that is also a ceiling is
+    // the opposite of the mechanism. Measured: spending it costs the window a
+    // fifth of its pairs, because a duplicate order is far likelier among three
+    // or four children than among two (`simulation.test.ts`'s `pairOffered`),
+    // so the rush meant to make one cut feed two was making it feed one.
+    //
     // Before the serve below, which is the last opening level's way of ending:
     // clearing the clock after it would wipe the handover's own setting.
-    this.waitMs = 0;
+    if (due) this.waitMs = 0;
 
     const customer = createCustomer(
       this.nextCustomerId,

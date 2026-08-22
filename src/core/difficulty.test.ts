@@ -6,6 +6,9 @@ import {
   lerp,
   RUSH_FROM_MS,
   RUSH_PERIOD_MS,
+  RUSH_QUEUE_FLOOR,
+  RUSH_FLOOR_FROM,
+  rushFloorAt,
   SETTLED_MS,
   arrivalRateAt,
   rampMs,
@@ -265,13 +268,34 @@ describe('the difficulty curve', () => {
       }
     });
 
-    it('comes in over its own first period rather than switching on', () => {
-      // Otherwise the run would step to an easier interval at the exact moment
-      // the rush was added to stop it being flat.
+    it('opens on a swell rather than on a lull', () => {
+      // The whole of `RUSH_OPENS_AT`. A run used to join the cycle at phase 0
+      // and meet thirty seconds of nothing, so the first swell was the second
+      // half of the first period — 39 s past the anchor, which at 70 ms a point
+      // is score 860 → 1414 spent being told the rush had started and shown
+      // nothing. It now joins at the swell's foot and climbs from there.
       expect(arrivalRateAt(RUSH_FROM_MS)).toBe(1);
 
-      const early = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 0.75);
-      const settled = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 1.75);
+      // Nine seconds in — a fifth of the way to where the old shape's first
+      // swell even began — the tide is already biting.
+      expect(rushAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 0.15, 0)).toBeGreaterThan(0.25);
+      // And the flat stretch it replaced is gone: nothing in the opening
+      // half-period reads as the dead lull the report was about.
+      const opening = period(RUSH_FROM_MS, 60).slice(0, 30);
+      expect(Math.max(...opening)).toBeGreaterThan(0.5);
+    });
+
+    it('comes in over half a period rather than switching on', () => {
+      // Otherwise the run would step to an easier interval at the exact moment
+      // the rush was added to stop it being flat. Half rather than the whole
+      // period it used to be: opening on a swell (above) means the shape itself
+      // starts at 0 and climbs, so the ease-in no longer has to stand in for a
+      // smooth start — and left at a full period the two compounded, delivering
+      // 0.15 of a tide to a player who had just been shown a doorway.
+      expect(arrivalRateAt(RUSH_FROM_MS)).toBe(1);
+
+      const early = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 0.25);
+      const settled = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 1.25);
 
       // Same phase of the tide, one period apart: the later one swings harder.
       expect(early).toBeGreaterThan(1);
@@ -299,13 +323,71 @@ describe('the difficulty curve', () => {
     });
 
     it('fills the window faster at the peak and slower in the lull', () => {
-      const lull = stageAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2, 0).arrivalIntervalMs;
-      const peak = stageAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.75, 0).arrivalIntervalMs;
+      // The peak is sampled *earlier* on the ramp than the lull, which is the
+      // harder way round to assert this and so the honest one: the baseline
+      // interval shrinks as the ramp climbs, so the lull here starts from the
+      // tighter number and the tide still has to overturn it. Sampled the other
+      // way about, the ramp alone would carry the assertion and the tide could
+      // stop working without this noticing (`RUSH_OPENS_AT` moved which of
+      // these two phases is which, and it did exactly that for one run).
+      const peak = stageAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.25, 0).arrivalIntervalMs;
+      const lull = stageAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.75, 0).arrivalIntervalMs;
 
       expect(peak).toBeLessThan(lull);
       // A peak against an unchanged baseline is simply more game; the trough
       // has to be shallower for it to be a peak at all (design §7).
       expect(lull).toBeGreaterThan(LAST.arrivalIntervalMs);
+    });
+
+    it('holds the window at a pair once the doorway reads as a crowd', () => {
+      // The half of the tide a fast maker cannot serve away. A rate is
+      // outrunnable — `arrivalGapMs` asks 6.4-8.0 s for a second child through
+      // the early ramp, against a bench round trip of two or three — so the
+      // rush was invisible to exactly the makers it was built for. The floor is
+      // the part that cannot be outrun.
+      expect(rushFloorAt(0)).toBe(0);
+      expect(rushFloorAt(RUSH_FLOOR_FROM)).toBe(RUSH_QUEUE_FLOOR);
+      expect(rushFloorAt(1)).toBe(RUSH_QUEUE_FLOOR);
+      // A lull insists on nothing: the half-cycle a ladder gets built in is
+      // still the maker's own.
+      expect(rushFloorAt(RUSH_FLOOR_FROM - 0.001)).toBe(0);
+    });
+
+    it('engages that floor inside the very first tide, not a cycle later', () => {
+      // The margin this pins is thinner than it looks and nothing else guards
+      // it. `rushSwing` is still winding in across the whole first pass, so the
+      // first crest delivers **0.300** against a `RUSH_FLOOR_FROM` of 1/3: the
+      // first tide crosses the threshold 1 s into the peak plateau rather than
+      // at the crest. Nudge `RUSH_OPENS_AT`, `RUSH_SWING_PERIODS` or
+      // `RUSH_CROWD` and a run's first held window slips a whole cycle — 60 s
+      // of ramp — with every other assertion in this file still green.
+      const firstTide = Array.from({ length: 300 }, (_unused, step) =>
+        rushAt(RUSH_FROM_MS + step * 100, 0),
+      );
+
+      expect(Math.max(...firstTide)).toBeGreaterThanOrEqual(RUSH_FLOOR_FROM);
+      expect(
+        firstTide.some((intensity) => rushFloorAt(intensity) === RUSH_QUEUE_FLOOR),
+      ).toBe(true);
+    });
+
+    it('puts the reported score inside a running tide', () => {
+      // The report this pass answers arrived at 1063 points, which is ramp
+      // position 74 410 ms. Under the old phase that was the dead middle of the
+      // opening lull — intensity 0.00, one child at the window. It now sits on
+      // the first peak plateau with the floor on.
+      const reported = 74_410;
+
+      expect(reported).toBeGreaterThan(RUSH_FROM_MS);
+      expect(rushFloorAt(rushAt(reported, 0))).toBe(RUSH_QUEUE_FLOOR);
+    });
+
+    it('never asks the window for more than the table allows', () => {
+      // The floor says how empty the window may get, never how full: every row
+      // of the ramp has room for it, so it can never fight `maxQueue`.
+      for (const anchor of RAMP) {
+        expect(anchor.maxQueue).toBeGreaterThanOrEqual(RUSH_QUEUE_FLOOR);
+      }
     });
 
     it('leans on the peak, because the window caps a peak and not a lull', () => {
@@ -314,8 +396,8 @@ describe('the difficulty curve', () => {
       // at the peak is clipped the moment the window fills, while a longer lull
       // is recovery time paid to the maker in full. Balanced to cancel on paper
       // the rush made the game *easier* — median death 5.8 → 6.6 min.
-      const lull = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2);
-      const peak = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.75);
+      const lull = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.75);
+      const peak = arrivalRateAt(RUSH_FROM_MS + RUSH_PERIOD_MS * 2.25);
 
       // Both directions still have to be real, or it is not a tide.
       expect(lull).toBeLessThan(1);

@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 
+import { RUSH_CROWD } from '../core/difficulty';
 import { CHILD_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { TextureKey } from '../render/textures';
 import { BODY_Y, CHILD_SCALE } from './customerView';
@@ -27,8 +28,15 @@ import type { Frame } from './layout';
  * Enough to read as a crowd. More would not queue up outside the door — they
  * are placed back *into* the frame from the edge, so a fourth would stand
  * further across the line the waiting children are already on.
+ *
+ * Read from `core/difficulty.ts` rather than kept here, because the rule that
+ * holds the window at a pair is written in this number's units: the floor
+ * engages at `1 / RUSH_CROWD`, which is the intensity at which the first figure
+ * below is fully drawn. Two copies and a fourth figure would move the promise
+ * without moving the delivery — the doorway would read as occupied a swell
+ * before the window filled, which is the exact drift the floor exists to close.
  */
-const CROWD = 3;
+const CROWD = RUSH_CROWD;
 
 /**
  * How tightly they stand. Well under the queue's own pitch on purpose: a line
