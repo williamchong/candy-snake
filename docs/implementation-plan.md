@@ -2589,6 +2589,142 @@ the honest status of it.
 **What is left of §10.** The optional virtual D-pad and its left-handed mirror,
 which is the whole of the section still unbuilt, and the README now says so.
 
+### What the tide pass measured — the rush was on, and showed nothing
+
+Not a sitting: one report from the chair with a screenshot attached — *1063
+points, never more than one child at the window, and no rush*. The first thing
+the harness had to settle was whether that was a bug, and it was not. At 1063
+the ramp stands at 74 410 ms, which is phase 0.24 of the tide's first period:
+`RUSH_SHAPE` holds intensity at 0 for the first half of every cycle, so the run
+had crossed `RUSH_FROM_MS` 14 seconds earlier and was sitting in the lull. The
+first swell was still 350 points away, and would arrive at 65% strength because
+`rushSwing` spends a whole period easing in. **Working as specified, and the
+specification was the problem** — which is the third staleness report in this
+file, after 400 points at the ninth sitting and the flat-speed one before it.
+
+**Two other things were asked in the same breath and both are recorded as
+closed rather than built.** *Can the ramp key on score instead of time?* It
+already does — `rampMs` is `max(clock, score × 70)` and has been since the
+score-ramp pass — and dropping the clock term cannot help, because `max(a, b)`
+is never below `b`: removing it can only move the ramp position down. It also
+reopens the stall the floor exists to catch, since a maker who serves just
+enough to hold their lives would stop ramping entirely, against design §1.
+*Does the speed ladder follow score too?* Also already true: `stageAt` derives
+`moveIntervalMs` from `rampMs`, verified with the clock pinned at zero, where
+the interval still walks 200 → 187 → 174.9 → 143 on score alone.
+
+**The dead stretch was in two places and they compounded.** Half of every period
+is lull by design, and the ease-in scales the whole tide down across the first
+one. Together they gave a run 860 → 1414 points of a rush that was on and
+invisible. So the run now joins the cycle at the swell's foot (`RUSH_OPENS_AT`)
+instead of the top of the lull. The table, the period, the shape and the peak
+rate are untouched, and **from the second cycle on the mean arrival rate is
+untouched too — 1.5275 either side, exactly.**
+
+The first cycle is the exception, and the first draft of this entry claimed it
+was not. Measured at 10 ms across cycle one the mean rate falls **1.4081 →
+1.2513**, about 11%: entering at the swell skips that cycle's lull, but it also
+spends the second half in an ebb the old entry spent at a peak, and the shortened
+ease-in only claws part of it back (the offset alone reads 1.1194). So the tide's
+opening minute is slightly *lighter*, not neutral — which matters because the
+sweep had been pointed at the wrong invariant. What it should be asked, and what
+holds, is the pair of this and the floor together: **batcher median death 5.31
+min on both sides, to two decimals.**
+
+**Opening on a swell retired the ease-in's reason, which is why it also had to
+be cut.** `rushSwing` was a whole period because a run entering at the lull met
+`CALM_RATE` first — an interval slightly *easier* than the table's, at the exact
+moment the rush was added to make the game harder — and easing in hid that step.
+Entering at the swell there is no step to hide, since the shape itself starts at
+0 and climbs. Left at a full period the two compound the other way: the first
+swell would peak nine seconds in against a swing 15% wound on, delivering 0.15
+of a tide to a player who had just been shown a doorway full of children. Halved.
+
+**Then the half a rate cannot buy: the window now has a floor.** This was the
+report's other half, and it is the more interesting one. `arrivalGapMs` is
+`interval × (waiting + 1) / maxQueue`, so with one child waiting the early ramp
+asks 6.4–8.0 s for the next, against a bench round trip of two or three. **A
+maker who keeps up empties the window faster than any interval can refill it**,
+so the tide's whole effect was legible only to players already in trouble. The
+plan had recorded one half of this — surplus rate at a peak "is clipped by the
+window the moment it fills" — and this is the other: below `maxQueue` the
+surplus is clipped by the *maker*, and the better they are the more they clip.
+So while the doorway reads as a crowd the window is held at two children
+(`rushFloorAt`), which is the one form of a rush that cannot be served away.
+
+**It is also the lever that makes the batch cashable, which is nearly the point.**
+Design §9 pays for one cut feeding two, and the rush exists so "a maker who sees
+one coming has a reason to build a ladder into it" — but a ladder cannot be
+cashed into a window that only ever holds one child. The rush was offering a
+lever it never opened.
+
+**The first cut of the floor was a ceiling, and only the sweep said so.** It
+spent the arrival clock on floor-driven admits, so every serve during a rush
+restarted the ordinary fill and the window sat pinned *at* two instead of
+building past it. Measured, that cost the window a fifth of its pairs — a
+duplicate order is far likelier among three or four children than among two — so
+a mechanism justified as "makes one cut feed two" was making it feed one. A
+child the tide insists on is now **extra**: only an arrival the clock actually
+paid for spends it. Done right the window sits *above* the floor 86-91% of a
+tide and still reaches the table's cap of four, which is what
+`holds the window at a pair while the tide runs, without capping it there` now
+pins — `game.test.ts` cannot, because `Game.rush` is 0 for a pinned stage and an
+unattended game loses its lives to walkouts around 50 s, before the ramp reaches
+the tide at 60.
+
+**And one consequence of the floor that is a mechanism rather than a number.**
+`admitCustomer` ends in `serveFromShelf`, so a child the tide insists on can be
+served off the rack in the same tick they arrive — which drops the window below
+the floor again and admits another next tick. During a rush a stocked shelf
+therefore empties as fast as the maker can cut rather than as fast as the window
+fills: the window is production-limited, not rate-limited, for those two places.
+That is the rush being the moment a maker cashes their stock, which is the
+behaviour the lull was always meant to set up, and it is the reason the floor is
+two rather than the whole queue. Recorded rather than changed — the median above
+was measured with it in.
+
+**Measured, both arms, 64 seeds.** The whole pass is balance-neutral on the
+statistic the ramp is aimed at and moves the ones it was meant to:
+
+| | baseline | shipped |
+| --- | --- | --- |
+| batcher median death | 5.31 min | **5.31 min** |
+| batcher closed out | 64/64 | 64/64 |
+| grinder closed out | 18/64 | 21/64 |
+| window duplicate rate (`WIDE` mean) | 0.574 | 0.572 |
+| solo planner ≥ grinder | 1/64 | **0/64** |
+
+The floor *alone*, before the phase offset went in, read 12/64 on the grinder —
+it had made the game easier, which is the same trap the tide itself fell into
+the first time it was tuned (§7's 0.8/1.5 pair). The offset put that back: more
+children at the window is more throughput for a maker fast enough to clear them,
+and a swell that arrives while they are still clearing is what stops it being a
+gift. Worth knowing before either number is retuned alone.
+
+**One assertion changed shape, and it is a correction rather than a
+relaxation.** `offers the pair a single cut can feed` was a *per-seed* floor at
+0.45 over `SWEEP`. A per-seed floor is the draw's minimum, which is the noisiest
+statistic a sweep has, and measured across `WIDE` **the baseline already put two
+seeds of sixty-four under it** — it passed only because neither was in `SWEEP`.
+Any change that re-rolls a pickup spawn reshuffles which seeds land where, so it
+was going to fail on the next such change whatever that change was, and it would
+have read as the window losing its pairs. It now asserts the mean the comment
+was always claiming, with a floor set under the measured minimum. That is the
+third statistic this file has learned the width of a draw about, after a
+proportion needing sixteen and a median needing sixty-four.
+
+**And two tests were passing for the wrong reason afterwards, which is worse
+than failing.** `fills the window faster at the peak and slower in the lull`
+sampled phases 2.0 and 2.75; the offset makes both of those lulls, and it went
+on passing only because the *baseline* interval shrinks as the ramp climbs, so
+the ramp alone was carrying the assertion. Re-sampled so the peak is read
+earlier on the ramp than the lull — the harder way round, and the only way the
+tide has to overturn the baseline for it to pass at all.
+
+**What the report would see now.** At the same 1063 points the tide reads 0.48
+with the floor engaged, against 0.00 and a single child before. The first rush a
+run meets lands at score ~1000 rather than 1414.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

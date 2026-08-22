@@ -620,10 +620,14 @@ steady drip and becomes a **tide**, so the ramp carries a shape to read rather
 than only numbers getting smaller. `core/difficulty.ts` holds it.
 
 One period is a minute: half of it a lull, then a nine-second swell, a peak of
-about twelve seconds, and an ebb. It **moves the Arrival column and nothing
-else** — the standing line is drawn for four children and a fifth walks off the
-frame, so a deeper queue is a layout job first — and it is one pure term over
-ramp position with no rng in it, so a seeded run still replays exactly.
+about twelve seconds, and an ebb. A run **joins that cycle at the swell's foot**
+rather than at the top of the lull, so the first thing it meets once the tide
+switches on is the tide rising. It moves the Arrival column and holds a **floor
+under the window** while it runs, and nothing else — the standing line is drawn
+for four children and a fifth walks off the frame, so a deeper queue is a layout
+job first. The shape is one pure term over ramp position with no rng in it, so a
+seeded run still replays exactly; the floor reads the window it is holding, so it
+is state rather than curve, and it lives in `Game` rather than in the table.
 
 - **It starts at the Settled row, not the Rush row.** It was built for the
   stretch *past* the last lever, on the reasoning that a tide before then would
@@ -642,6 +646,44 @@ ramp position with no rng in it, so a seeded run still replays exactly.
   sell; against a flat interval there is never a moment to build one. Half a
   minute of slack, with a visible reason to spend it, is the first thing this
   game has offered a maker who wants to build ahead of the window.
+- **A run joins the cycle at the swell, and that is the third staleness report
+  answered by moving where the tide sits.** Joining at phase 0 meant the first
+  thing past the anchor was the whole lull — thirty seconds of nothing, with the
+  first swell 39 s in, which at 70 ms a point is **score 860 → 1414 spent being
+  told the rush had started and shown nothing**. The report came at 1063 points,
+  from a chair that had never seen two children at once. The table, the period,
+  the peak rate are all untouched, and from the second cycle on the mean arrival
+  rate is untouched too — 1.5275 either side, exactly. The **first** cycle is the
+  one exception and is worth stating rather than rounding off: its mean rate
+  falls 1.4081 → 1.2513, about 11%, because entering at the swell skips that
+  cycle's lull but also spends its second half in an ebb the old entry spent at a
+  peak. So the tide's opening minute is slightly *lighter*, the queue floor below
+  is the counterweight, and the pair is what the sweep was asked about: the
+  batching maker's median death reads **5.31 min either side**, to two decimals. It also retires the reason the tide eased in
+  over a whole period: that ease-in was hiding a step to the *easier* lull rate
+  at the moment the rush switched on, and a run that joins at the swell has no
+  such step. Cut to half a period, or the two compound and the first swell
+  arrives at 0.15 strength.
+- **A rate is the one thing a maker can outrun, so the tide also holds a floor.**
+  Arrivals scale as `interval × (waiting + 1) / Max queue`, which asks 6.4–8.0 s
+  for a second child through the early ramp against a bench round trip of two or
+  three — so a maker who keeps up empties the window faster than any interval
+  refills it, and the tide was invisible to exactly the players it was built for.
+  While the doorway reads as a crowd the window is held at **two children**. It
+  binds under Max queue, never over it, so no rush admits past the row the table
+  names; and it is what makes the batch lever cashable at all, since one cut
+  feeding two children (§9) needs two children to feed. Measured across 64 seeds
+  it moves the batching median 5.31 → 5.31 and takes the window's duplicate-order
+  rate from 0.574 to 0.572 — the mechanism is what changed, not the arithmetic.
+  Held at the floor *without* letting the ordinary arrival clock keep running it
+  is a **ceiling**: measured, that cost the window a fifth of its pairs, because
+  a duplicate is far likelier among three or four children than among two. Done
+  right the window sits *above* the floor 86–91% of a tide and still reaches the
+  table's cap of four. One consequence to know before retuning: a child the tide
+  insists on can be served off the rack in the same tick they arrive, so during a
+  rush a stocked shelf empties as fast as the maker can cut rather than as fast
+  as the window fills. That is the rush being the moment you cash your stock, and
+  it is why the floor is two and not the whole queue.
 - **It has to be seen coming, and it is drawn rather than written** (§11):
   children gather in the shop doorway through the swell, cut by the frame edge,
   behind the line. The nine seconds is sized against a whole ladder built from
