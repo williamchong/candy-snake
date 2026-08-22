@@ -2387,6 +2387,67 @@ The nested-set variant — echoing a *superset* of a waiting want, so the window
 asks for a ladder rather than a pair — stays untested and drops down the list.
 The pair-cap sweep is the reason: the ladder is the shape that loses.
 
+### What the combo-level pass built — the tutorial teaches the thing that wins
+
+The fourth opening level, and the last of the three stages this run of work was
+planned as. The two sweeps above are its justification: the pair-cap sweep says
+one cut feeding two children beats the grinder on 54 seeds of 64, and the twin
+pass says the window now offers that shape 58% of the time. Nothing taught it.
+Design §9 has scored the combo since Phase 5 and §11 draws a meter for it, and a
+player met both without ever being shown what produces them.
+
+**The level is the mix again, for two children.** `rollTutorial` closes with the
+same secondary level 3 taught, wanted twice over — so the only new thing in it is
+the *count*, and the two jars that unlocked the recipe wheel are still its stock,
+which is what stops the wheel blinking out for the last of the four. The board
+lays a second cube once the first is on the strand and never a third.
+
+**What it cost, structurally.** A level was one order everywhere, and four
+things had said so by construction rather than by a rule:
+
+- `TutorialLevel` gains `children`, and `GameState` a `tutorialServes` beside
+  `tutorialIndex` — how far through a level the maker is had nowhere to live.
+- `admitCustomer`'s tutorial window was the literal `maxQueue: 1`; it is now the
+  children the level has left to send, so the last of them opens two places.
+- A serve *was* the end of a level. It is now counted against the level.
+- `stocksSugar` rationed by "the strand is empty"; it rations by what the level's
+  remaining orders still need, which reduces to the old rule at one child.
+
+**And one thing the simulation refused.** The first cut of this held the jars
+back until the strand was as long as the level wanted — the pair as the only
+move the level offers, which is exactly the authoring §7 is built on. It
+soft-locks. A maker who does not build to length carries one cube, finds no jar
+on the floor, takes it to the block, and the raw candy nobody ordered goes on the
+rack while the level starts over; the reference grinder does precisely that,
+forever, and the sweep came back with the grinder staling 116 candies and never
+reaching the endless game at all. Design §7 promises nothing can stall. So level
+4 **offers** its lesson instead of forcing it: the jars come out on the first
+cube as they always have, and what the level does is show the pair — two children
+holding up the same bubble, a second cube on the floor the moment there is room.
+A maker who chops one candy at a time still finishes it, just without the combo.
+
+That is the one caveat this pass could not design away, and it was in the
+evaluation before it was in the code.
+
+**Two smaller consequences, both of them things that had been true by accident.**
+
+- `bestCombo` now reads 2 on every run, so the game-over screen's "best batch fed
+  N" would have been reporting that the game was played — the exact failure the
+  rule was written against when the floor was 1. The floor moves to what the
+  levels *teach*, off one exported constant so the level and the line that
+  reports on it cannot drift.
+- The simulation's own invariant "no cube on the floor once the level has stopped
+  asking" was only ever true because every level asked for one, and the cube was
+  always claimed before the rule could flip. Level 4 can leave one lying there
+  when the maker chops the first segment. What the rule protects is the floor
+  against a pile of cubes, so that is what it says now.
+
+**Measured, nothing else moved.** All 771 tests pass, the four-level tutorial
+included: the batching maker's median death is unchanged inside 4–6 minutes, the
+window still fills, and the smoke driver boots clean. The tutorial is longer by
+one level on every run, which is the cost, and it is the level that finally
+explains the meter on the hearts' row.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
