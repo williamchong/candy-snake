@@ -36,11 +36,18 @@ const tiers = (counts: Record<ColorTier, number>): string =>
  * The best batch, if there was one, as a clause on the streak's line rather
  * than a line of its own — this screen centres its rows without fitting them to
  * the frame's *height*, and a ninth row puts the fullest run past a small phone
- * held sideways. Hung off the streak safely: a combo above 1 takes two serves,
- * which is a streak of at least two, so the line it joins is always there.
+ * held sideways. Hung off the streak safely: a batch worth reporting takes at
+ * least two serves, which is a streak of at least two, so the line it joins is
+ * always there.
  *
  * Nothing below 2, because every serve straight off the block scores 1 — a run
  * reporting "best combo 1" would be reporting that it was played.
+ *
+ * Level 4 teaches a batch of two but does not force one (design §7): a maker
+ * who chops one candy at a time finishes it having fed each child separately.
+ * Measured on the reference grinder, 193 tutorials in 200 end at a combo of 1,
+ * so 2 is still something a run earned rather than something it was handed —
+ * this floor was briefly raised on the opposite assumption and it was wrong.
  */
 const bestBatch = ({ bestCombo }: RunSummary): string =>
   bestCombo > 1 ? `  ·  best batch fed ${bestCombo}` : '';

@@ -367,15 +367,15 @@ secondary (mix required).
 
 ### Opening levels (built-in tutorial)
 
-Every run — not only the first — starts with three scripted levels. Each is a
-single customer, and the board is stocked with exactly what that order needs
-and nothing else:
+Every run — not only the first — starts with four scripted levels. The board is
+stocked with exactly what that level's order needs and nothing else:
 
-| Level | Order                   | On the board                   | What it teaches                       |
-| ----- | ----------------------- | ------------------------------ | ------------------------------------- |
-| 1     | Raw                     | sugar, no jars                 | pull sugar, chop at the block         |
-| 2     | One primary             | sugar, **then** that jar       | cross the sugar *first*, then the jar |
-| 3     | That primary + one more | sugar, **then** those two jars | two dyes blend into one color         |
+| Level | Order                   | On the board                    | What it teaches                       |
+| ----- | ----------------------- | ------------------------------- | ------------------------------------- |
+| 1     | Raw                     | sugar, no jars                  | pull sugar, chop at the block         |
+| 2     | One primary             | sugar, **then** that jar        | cross the sugar *first*, then the jar |
+| 3     | That primary + one more | sugar, **then** those two jars  | two dyes blend into one color         |
+| 4     | **Two children**, both wanting that same mix | a second sugar once the first is on the strand | one cut can feed two children (§9) |
 
 A restricted board teaches better than any text can, and it restricts *when* as
 well as *what*:
@@ -416,14 +416,30 @@ Difficulty here is authored by removing options.
   cost the run, and a bar that drained toward nothing would be a lie about the
   rules. They pay base points with no patience bonus (§9) and do build the
   streak.
-- **One cube at a time.** A level asks for one candy, so the floor carries one
+- **Only the cubes the level's orders need.** A level of one candy carries one
   sugar cube and does not lay another until that one has come back through the
-  block. Restocking the moment the first is pulled would offer a second segment
-  the level never asked for — the same "remove the options" rule the jar stock
-  is authored by. (The endless game keeps §8.1's floor of one cube on the map
-  at all times.)
-- A level ends when its customer is served; the next child walks up a second
-  later — and so does the endless game's first, which inherits that beat rather
+  block; restocking the moment the first is pulled would offer a segment the
+  level never asked for, which is the same "remove the options" rule the jar
+  stock is authored by. Level 4 asks for two candies, so it lays a second cube
+  once the first is on the strand — and a third never. (The endless game keeps
+  §8.1's floor of one cube on the map at all times.)
+- **Level 4 offers its lesson rather than forcing it**, which is the one place
+  the "remove the options" rule stops short, and deliberately. Holding the jars
+  back until *both* cubes were on the strand would make the pair the only move
+  the level has — and it strands a maker who does not build to length: carry one
+  cube, find no jar, take it to the block, and the raw candy nobody ordered goes
+  on the rack while the level starts over. Nothing in the opening levels may be
+  able to stall, so the jars come out on the first cube as they always have. What
+  the level does instead is *show* the pair: two children holding up the same
+  bubble, and a second cube on the floor the moment there is room for it. A maker
+  who chops one candy at a time still finishes the level — one child fed, the
+  cube for the other laid on the empty strand — they simply do not get the combo.
+- **It is the only level that pays a combo**, and that is what it is for: the
+  meter (§11) and the bonus (§9) are otherwise things a player meets without ever
+  having been shown what makes them happen.
+- A level ends when its last customer is served; the next child walks up a second
+  later — halved for level 4, whose two places at the window share the beat, so
+  its second child follows the first in rather than trailing a whole one — and so does the endless game's first, which inherits that beat rather
   than opening on the handover's own empty-window gap (4s at Mixing — a third
   of its 12s interval, the window being empty of all three slots — which would
   read as the game having ended rather than started). Nothing can
@@ -432,12 +448,13 @@ Difficulty here is authored by removing options.
   it came to need it. The level-2 lesson is not taught by retry — retry was
   tried, and a playtester met it by driving at the jar again rather than by
   learning from it. It is taught by not offering the wrong move.
-- These three levels **are** the teaching, on their own: no captions, no
-  toasts, no words anywhere on the screen. What the player is shown is a board
-  holding exactly one useful move and a child holding up what they want, which
-  is a thing to try rather than a thing to read.
+- These four levels **are** the teaching, on their own: no modal, no toasts, and
+  nothing to dismiss. What the player is shown is a board holding exactly one
+  useful move and a child holding up what they want, which is a thing to try
+  rather than a thing to read. Each carries a one-line caption over the kitchen
+  naming its lesson, and that is the whole of the prose.
 
-The endless ramp below starts only once level 3 is served, and it starts at the
+The endless ramp below starts only once level 4 is served, and it starts at the
 **Mixing** row rather than Warm-up: the opening levels have already taught raw,
 primary and secondary, so dropping back to 100% raw orders would read as going
 backwards. (Warm-up's row is kept in the table as the shape of what the ramp
@@ -448,7 +465,7 @@ along — keeps both slow and strong players on curve):
 
 The curve is anchored on the rows below and interpolated between them, so every
 knob moves smoothly rather than stepping at a stage boundary. Time here is
-counted from the **handover** — the moment the third opening level is served —
+counted from the **handover** — the moment the last opening level is served —
 not from the start of the run, so a player who takes their time learning does
 not find the rush already waiting. `core/difficulty.ts` holds the table.
 
@@ -725,6 +742,10 @@ a batch while it is still on the block:
 - **A crumble.** Debris from a self-hit (§6) serves nobody, so its count
   never leaves zero.
 
+The opening levels are where it is taught: the last of them puts two children at
+the window wanting the same candy, so one cut feeds both and the bonus is paid
+for the first time somewhere it cannot cost anything (§7).
+
 The counter tops out at 4 in practice, which is the window's own ceiling
 (§7's max queue): a longer batch can be chopped, but there is nobody left to
 hand it to.
@@ -802,11 +823,14 @@ High scores (top 10, with date) persist in `localStorage`.
   carried it, so the end of the run is the only place the best one can be told,
   and this screen centres its rows without fitting them to the frame's height.
   Nothing is said below 2 — every serve straight off the block feeds one child,
-  so "best batch fed 1" would report only that the game was played.
-- **First-run teaching:** no modal tutorial, no toasts, and no captions. The
-  three lessons — pull sugar and chop, sugar before the jar, two dyes make one
-  color — are the three opening levels of §7, taught by what the board does and
-  does not hold. Levels that always run cannot be missed or dismissed, which is
+  so "best batch fed 1" would report only that the game was played. Level 4
+  teaches a batch of two but does not force one, so 2 stays something a run
+  earned: measured on the reference grinder, 193 tutorials in 200 end having fed
+  its two children separately.
+- **First-run teaching:** no modal tutorial, no toasts. The four lessons — pull
+  sugar and chop, sugar before the jar, two dyes make one color, one cut feeds
+  two children — are the four opening levels of §7, taught by what the board does
+  and does not hold. Levels that always run cannot be missed or dismissed, which is
   what the persisted seen-once flags were working around.
 
 ## 12. Audio & juice (polish targets)

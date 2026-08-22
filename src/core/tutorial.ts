@@ -3,23 +3,39 @@ import type { Rng } from './rng';
 import { RAW, type ColorMask, type GameState } from './types';
 
 /**
- * The three opening levels, which every run starts with (design §7). Each is
- * one customer, and the board is stocked with exactly what that order needs and
- * nothing else:
+ * The four opening levels, which every run starts with (design §7). The board
+ * is stocked with exactly what the level's order needs and nothing else:
  *
  * 1. raw — one sugar, no jars: pull sugar, chop at the block.
  * 2. a primary — that jar only: cross the sugar *first*, then the jar.
  * 3. a secondary — those two jars: two dyes blend into one color.
+ * 4. that secondary again, for **two** children — two sugars, then the jars:
+ *    one cut feeds them both.
  *
  * A restricted board teaches better than any text can, and it restricts *when*
  * as well as *what*: in level 2 the only jar on the floor is the one the order
  * wants, so "wrong dye" is not a mistake the player is able to make, and it is
  * on the floor only while it still has something to do (`stocksDyes`) — not
  * before the first cube is on the strand, and not once the candy has turned.
- * Difficulty here is authored by removing options.
+ * Difficulty here is authored by removing options — with one deliberate
+ * exception, which is level 4. Holding its jars back until *both* cubes were on
+ * the strand would make the pair the only move it offers, and it strands a maker
+ * who does not build to length: carry one cube, find no jar on the floor, take
+ * it to the block, and the raw candy nobody ordered goes on the rack while the
+ * level starts over, forever. The reference grinder does exactly that. Nothing
+ * in the opening levels may be able to stall (design §7), so the last level
+ * *offers* its lesson — two children holding up the same bubble, and a second
+ * cube on the floor as soon as there is room for it — where the three before it
+ * remove the alternative.
  */
 export interface TutorialLevel {
   readonly want: ColorMask;
+  /**
+   * How many children ask for it. One for the three levels that teach a color,
+   * two for the level that teaches the batch — the same order twice over, so
+   * that one cut can feed both (design §9).
+   */
+  readonly children: number;
   /** The only dye jars this level permits; `stocksDyes` decides when they go out. */
   readonly stock: readonly Primary[];
 }
@@ -44,12 +60,28 @@ export const TUTORIAL_HEADLINES: readonly string[] = [
   'Eat sugar and chop it into candy',
   'Dye the sugar to make colored candy',
   'Mix two dyes to make a new color',
+  'Chop two candies at once for two children',
 ];
 
-const level = (want: ColorMask): TutorialLevel => ({ want, stock: primariesOf(want) });
+/**
+ * The batch the last opening level teaches — how many children it puts at the
+ * window wanting the same candy.
+ *
+ * What it is *not* is the batch every run has fed: the level offers the pair and
+ * does not force it (see the module docblock), and measured on the reference
+ * grinder 193 tutorials in 200 end having fed the two children separately. The
+ * game-over screen's floor is therefore still 1 and not this.
+ */
+export const TAUGHT_COMBO = 2;
+
+const level = (want: ColorMask, children = 1): TutorialLevel => ({
+  want,
+  children,
+  stock: primariesOf(want),
+});
 
 /**
- * Rolls the three orders from the run's seed, so the tutorial teaches the rule
+ * Rolls the four levels from the run's seed, so the tutorial teaches the rule
  * rather than a memorised answer.
  *
  * Level 3 deliberately **extends** level 2's primary instead of drawing a fresh
@@ -63,7 +95,12 @@ export const rollTutorial = (rng: Rng): TutorialLevel[] => {
   const rest = PRIMARIES.filter((primary) => primary !== first);
   const second = rest[rng.int(rest.length)] ?? PRIMARIES[1];
 
-  return [level(RAW), level(first), level(first | second)];
+  return [
+    level(RAW),
+    level(first),
+    level(first | second),
+    level(first | second, TAUGHT_COMBO),
+  ];
 };
 
 /**
@@ -87,6 +124,22 @@ export const stockedPrimaries = (level: TutorialLevel | undefined): readonly Pri
  */
 export const mixingUnlocked = (level: TutorialLevel | undefined): boolean =>
   stockedPrimaries(level).length > 1;
+
+/**
+ * Children this level still has to send, and so orders it still has to fill.
+ * The window opens this many places (`Game.admitCustomer`) and the floor owes
+ * this many candies, which is one fact and is why it is not spelled twice.
+ */
+export const ordersLeft = (
+  level: TutorialLevel,
+  state: Pick<GameState, 'tutorialServes'>,
+): number => level.children - state.tutorialServes;
+
+/** The same, less what is already on the strand: the sugar rule is this above zero. */
+const shortfall = (
+  level: TutorialLevel,
+  state: Pick<GameState, 'snake' | 'tutorialServes'>,
+): number => ordersLeft(level, state) - state.snake.body.length;
 
 /**
  * The jars the spawner lays *at this moment*: the level's own stock, narrowed
@@ -130,17 +183,18 @@ export const stocksDyes = (
 
 /**
  * Whether the board should be carrying a sugar cube. The endless game always
- * is (design §8.1), but an opening level puts out exactly one and does not
- * replace it until the maker's hands are empty again.
+ * is (design §8.1), but an opening level puts out only what its remaining
+ * orders still need, and does not replace a cube until the last one has come
+ * back through the block.
  *
- * Each of the three levels is one candy, so one cube is the whole of what it
- * asks for — and a floor that restocks the moment the first is pulled offers a
- * second the level never wanted, which is the same "remove the options" rule
- * the jar stock is authored by. The strand is empty when nothing is on it and
- * nothing cut from it is still being drawn in.
+ * A level is a fixed number of candies, so that count is the whole of what it
+ * asks for — and a floor that restocks past it offers a segment the level never
+ * wanted, which is the same "remove the options" rule the jar stock is authored
+ * by. The strand has stopped moving when nothing cut from it is still being
+ * drawn in.
  */
 export const stocksSugar = (
   level: TutorialLevel | undefined,
-  state: Pick<GameState, 'snake' | 'severed'>,
+  state: Pick<GameState, 'snake' | 'severed' | 'tutorialServes'>,
 ): boolean =>
-  level === undefined || (state.snake.body.length === 0 && state.severed.length === 0);
+  level === undefined || (state.severed.length === 0 && shortfall(level, state) > 0);

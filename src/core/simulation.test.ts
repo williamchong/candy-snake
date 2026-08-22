@@ -6,7 +6,7 @@ import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { TIERS, TWIN_CHANCE, echoable, type StageConfig } from './orders';
 import { SHELF_SLOTS } from './shelf';
-import { stockedPrimaries, stocksSugar } from './tutorial';
+import { ordersLeft, stockedPrimaries, stocksSugar } from './tutorial';
 import {
   Dir,
   OPPOSITE,
@@ -203,6 +203,10 @@ const frontGoal = (state: GameState, wanted: number): Vec2 => {
 
   // Every cube goes down before the first jar — one taken after a jar stays
   // raw, so a pair would come off the block one candy short of a pair (§4).
+  // That holds while `wanted` is stable for the trip. `pairGrinderGoal` reads it
+  // fresh each move, so a second child arriving after the jars are crossed sends
+  // this maker back for a cube that misses them — noise in the pair arm rather
+  // than a rule, and cheaper to say than to latch.
   if (carried.length < wanted) {
     const sugar = nearestSugar(state);
     if (sugar !== undefined) return sugar;
@@ -582,7 +586,8 @@ const violationsIn = (game: Game, tick: number): string[] => {
   // The live cap, not a fixed row: the ramp widens the window as it climbs
   // (design §7), so the only thing that can be asserted is that the queue never
   // outgrows whatever difficulty is asking for right now.
-  const cap = inTutorial ? 1 : game.stage.maxQueue;
+  const level = game.openingLevel;
+  const cap = level === undefined ? game.stage.maxQueue : ordersLeft(level, state);
   if (state.customers.length > cap) {
     broken.push(at(`${state.customers.length} children waiting, cap ${cap}`));
   }
@@ -613,12 +618,20 @@ const violationsIn = (game: Game, tick: number): string[] => {
     }
   }
 
-  // Design §8.1's floor, narrowed by design §7: an opening level hands out one
-  // cube and waits for it to come back as a candy before laying another.
-  const wantsSugar = stocksSugar(game.openingLevel, state);
-  const onMap = state.pickups.some((pickup) => pickup.kind === 'sugar');
-  if (wantsSugar && !onMap) broken.push(at('no sugar on the map'));
-  if (!wantsSugar && onMap) broken.push(at('a second cube laid out mid-level'));
+  // Design §8.1's floor, narrowed by design §7: an opening level hands out only
+  // the cubes its orders still need, and never more than one at a time.
+  //
+  // The second half used to read "no cube on the floor once the level has
+  // stopped asking", which held only while every level asked for exactly one:
+  // the cube was always picked up before the rule could flip. Level 4 asks for
+  // two, so a cube can be lying there unclaimed when the maker chops the first
+  // segment and `severed` closes the tap. What the rule is actually protecting
+  // is the floor against a pile of cubes, so that is what it now says.
+  const cubes = state.pickups.filter((pickup) => pickup.kind === 'sugar').length;
+  if (stocksSugar(game.openingLevel, state) && cubes === 0) {
+    broken.push(at('no sugar on the map'));
+  }
+  if (cubes > 1) broken.push(at(`${cubes} cubes on the floor`));
 
   return broken;
 };
@@ -844,10 +857,11 @@ describe('a full run', () => {
     const bot = botFor(game);
     const idle: TurnSource = { take: () => undefined };
 
-    for (let tick = 0; tick < TICKS && game.state.tutorialIndex < 3; tick += 1) {
+    const levels = game.tutorial.length;
+    for (let tick = 0; tick < TICKS && game.state.tutorialIndex < levels; tick += 1) {
       game.step(20, bot);
     }
-    expect(game.state.tutorialIndex).toBe(3);
+    expect(game.state.tutorialIndex).toBe(levels);
 
     // Three children, each with a clock now: walking away has to cost the run.
     for (let tick = 0; tick < TICKS && !game.state.over; tick += 1) {

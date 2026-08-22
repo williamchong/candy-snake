@@ -63,7 +63,7 @@ candy-snake/
     │   ├── spawner.ts         # sugar/dye spawn rules + pity timer
     │   ├── customers.ts       # arrival, patience, queue
     │   ├── orders.ts          # order generation by difficulty stage
-    │   ├── tutorial.ts        # the three opening levels + what they stock
+    │   ├── tutorial.ts        # the four opening levels + what they stock
     │   ├── shelf.ts           # candy cache, matching
     │   ├── scoring.ts         # points, streaks, patience bonus
     │   ├── difficulty.ts      # stage curve (time/serves → knobs)

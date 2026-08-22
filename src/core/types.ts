@@ -169,6 +169,14 @@ export interface GameState {
    */
   tutorialIndex: number;
   /**
+   * Children the opening level in hand has already been served, and 0 the rest
+   * of the time. A level is one *order* no longer — the last of them asks for
+   * two — so how far through it the maker is has to be readable somewhere, and
+   * the stocking rules (`tutorial.ts`) read it to know how much strand the level
+   * is still asking for.
+   */
+  tutorialServes: number;
+  /**
    * Grid moves elapsed — a simulation clock that does not depend on
    * `moveIntervalMs` (which difficulty varies from Phase 5). The view watches
    * it to skip redraws on the frames where nothing moved.

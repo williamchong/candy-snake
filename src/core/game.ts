@@ -33,6 +33,7 @@ import {
 import { ensurePickups, pickupIndexAt } from './spawner';
 import {
   TUTORIAL_ARRIVAL_GAP_MS,
+  ordersLeft,
   rollTutorial,
   stocksDyes,
   stocksSugar,
@@ -73,7 +74,7 @@ export const DEFAULT_CONFIG: GameConfig = {
  */
 export class Game {
   readonly state: GameState;
-  /** The run's three opening levels, rolled from the seed (design §7). */
+  /** The run's opening levels, rolled from the seed (design §7). */
   readonly tutorial: readonly TutorialLevel[];
 
   private readonly config: GameConfig;
@@ -94,13 +95,13 @@ export class Game {
    * Time on the endless ramp, which only starts once the opening levels are
    * done (design §7) — so a player who takes their time learning does not find
    * the rush already waiting for them. It is not `elapsedMs` minus a handover
-   * stamp, because there is nothing to stamp until the third child is served.
+   * stamp, because there is nothing to stamp until the last child is served.
    */
   private endlessMs = 0;
   /**
    * What the score read at the handover, so the points the ramp is driven by
    * can be taken as a difference below. Unlike `endlessMs` there *is* something
-   * to stamp here — `finishOpeningLevel` already has the "that was the third"
+   * to stamp here — `finishOpeningLevel` already has the "that was the last"
    * branch, and the serve that trips it has been paid by the time it runs — so
    * this is a stamp rather than a second running total that could drift from
    * `state.score`.
@@ -133,6 +134,7 @@ export class Game {
       servedByTier: noServes(),
       over: false,
       tutorialIndex: 0,
+      tutorialServes: 0,
       tick: 0,
       elapsedMs: 0,
     };
@@ -160,7 +162,7 @@ export class Game {
    * the curve or from a pinned row (design §7, `core/difficulty.ts`).
    *
    * Points count from the handover too, for the same reason the clock does:
-   * the three opening levels are taught, not earned, and crediting what they
+   * the opening levels are taught, not earned, and crediting what they
    * pay to the ramp would start the endless game part of the way up it.
    */
   get stage(): StageConfig {
@@ -189,7 +191,7 @@ export class Game {
   }
 
   /**
-   * Points that count toward the ramp. The three opening levels are taught
+   * Points that count toward the ramp. The opening levels are taught
    * rather than earned, and crediting what they pay would start the endless
    * game part of the way up the curve — see `stage`. A difference rather than
    * a running total of its own, so it cannot drift from `state.score`, which
@@ -620,8 +622,9 @@ export class Game {
    * Counting `length + 1` rather than `length` is what keeps a window with no
    * interval shut: `Infinity` times a positive share is still `Infinity`,
    * where times zero it would be `NaN` and let every child straight in. It is
-   * also what leaves the tutorial's own window untouched — one slot, empty, so
-   * the share is 1 and the gap is exactly the beat it always was.
+   * also what paces the tutorial's own window: the three levels that hold one
+   * child wait the whole beat, and level 4's two slots halve it, so its second
+   * child follows the first in rather than a full beat behind.
    */
   private arrivalGapMs(intervalMs: number, maxQueue: number): number {
     return (intervalMs * (this.state.customers.length + 1)) / maxQueue;
@@ -637,10 +640,9 @@ export class Game {
   private admitCustomer(dtMs: number, events: GameEvent[]): void {
     const level = this.openingLevel;
     const stage = this.stage;
-    // One child at a time while the tutorial runs, and no clock on them: each
-    // level is a single order, the next does not walk up until this one is
-    // served, and a tutorial that plays on every run must not be able to cost
-    // you the run (design §7).
+    // Nobody but the level's own children, and no clock on any of them: a
+    // tutorial that plays on every run must not be able to cost you the run
+    // (design §7).
     const window =
       level === undefined
         ? {
@@ -648,7 +650,13 @@ export class Game {
             intervalMs: stage.arrivalIntervalMs,
             patienceMs: stage.patienceMs as number | undefined,
           }
-        : { maxQueue: 1, intervalMs: TUTORIAL_ARRIVAL_GAP_MS, patienceMs: undefined };
+        : {
+            // Exactly the children this level has left to send, so the last of
+            // them opens two places at the window and the three before it one.
+            maxQueue: ordersLeft(level, this.state),
+            intervalMs: TUTORIAL_ARRIVAL_GAP_MS,
+            patienceMs: undefined,
+          };
 
     if (this.state.customers.length >= window.maxQueue) return;
 
@@ -728,9 +736,10 @@ export class Game {
    * a racked candy has no batch behind it to count, so "off the rack" and "no
    * batch" are one fact rather than two parameters that could disagree.
    *
-   * The opening levels never pay the bonus by construction rather than by a
-   * guard: their window holds one child (`maxQueue: 1`), so a batch
-   * direct-serves at most once.
+   * The first three opening levels never pay the bonus by construction rather
+   * than by a guard: their window holds one child, so a batch direct-serves at
+   * most once. The fourth pays it on purpose — teaching the combo is the whole
+   * of what that level is for (design §7).
    */
   private serveCustomer(index: number, events: GameEvent[], batchServes?: number): void {
     const customer = this.state.customers[index];
@@ -746,9 +755,13 @@ export class Game {
     this.state.bestStreak = Math.max(this.state.bestStreak, this.state.streak);
     this.state.bestCombo = Math.max(this.state.bestCombo, combo);
     this.state.servedByTier[colorInfo(customer.want).tier] += 1;
-    // While the tutorial runs the queue holds nothing but its own child, so a
-    // serve is exactly what finishes a level.
-    if (this.openingLevel !== undefined) this.finishOpeningLevel();
+    // While the tutorial runs the queue holds nobody but the level's own
+    // children, so counting serves against the level is what finishes it.
+    const level = this.openingLevel;
+    if (level !== undefined) {
+      this.state.tutorialServes += 1;
+      if (this.state.tutorialServes >= level.children) this.finishOpeningLevel();
+    }
 
     events.push({
       type: 'customer-served',
@@ -763,18 +776,19 @@ export class Game {
   /**
    * Closes an opening level, and hands the window over to the endless ramp on
    * the last of them — `openingLevel` is read again *after* the index moves,
-   * so it coming up empty is exactly "that was the third".
+   * so it coming up empty is exactly "that was the last one".
    *
    * The arrival clock has stood still all level: a queue with no room never
    * counts (see `admitCustomer`), so it reads 0 at every opening serve. Left
    * there, the window would stand empty for the handover's whole gap right
-   * after three levels paced a second apart. Crediting the wait already served
+   * after the levels' own beat. Crediting the wait already served
    * brings the first real child on that same beat instead. A window with no
    * interval to speak of has no wait to credit: `Infinity` would sit level
    * with the guard rather than under it, and admit a child at once.
    */
   private finishOpeningLevel(): void {
     this.state.tutorialIndex += 1;
+    this.state.tutorialServes = 0;
     if (this.openingLevel !== undefined) return;
 
     // The serve that got us here has already been paid (`serveCustomer` adds

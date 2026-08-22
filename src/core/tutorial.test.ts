@@ -8,6 +8,7 @@ import {
   stockedPrimaries,
   stocksDyes,
   stocksSugar,
+  TAUGHT_COMBO,
   TUTORIAL_HEADLINES,
   type TutorialLevel,
 } from './tutorial';
@@ -49,6 +50,28 @@ describe('rollTutorial', () => {
     expect(taught).toBeDefined();
     expect(third?.stock).toHaveLength(2);
     expect(third?.stock).toContain(taught);
+  });
+
+  it.each(SEEDS)(
+    'closes on a batch: the same mix, for two children (seed %d)',
+    (seed) => {
+      const levels = tutorialFor(seed);
+      const [, , third, fourth] = levels;
+
+      expect(levels).toHaveLength(4);
+      // The colour is one the player has just made, so the only new thing in the
+      // last level is the *count* — one cut, two children (design §9).
+      expect(fourth?.want).toBe(third?.want);
+      expect(fourth?.children).toBe(TAUGHT_COMBO);
+      expect(levels.slice(0, -1).map((level) => level.children)).toEqual([1, 1, 1]);
+    },
+  );
+
+  it.each(SEEDS)('keeps the wheel up over the batch level (seed %d)', (seed) => {
+    // It asks for the mix again, so the two jars that earned the wheel in level
+    // 3 are still the level's own stock — the wheel does not blink out for the
+    // last of the four.
+    expect(mixingUnlocked(tutorialFor(seed).at(-1))).toBe(true);
   });
 
   it('never widens the stocked set backwards, so no jar is ever taken away', () => {
@@ -102,20 +125,27 @@ describe('stockedPrimaries', () => {
   });
 
   it('opens the board up to every dye once the tutorial is over', () => {
-    expect(stockedPrimaries(tutorialFor(42)[3])).toEqual(PRIMARIES);
+    // `undefined` is what `Game.openingLevel` hands over once the levels are
+    // done — the subject is the endless board, not an index past the last level.
+    expect(stockedPrimaries(undefined)).toEqual(PRIMARIES);
   });
 });
 
 /**
  * A maker carrying `segments` of `color`, with `cut` raw ones on the way to
- * the block. Those two are named rather than positional: they vary
- * independently, and a third positional argument would be reached past a
- * placeholder that says nothing about itself.
+ * the block and `served` of the level's children already fed. Those are named
+ * rather than positional: they vary independently, and a third positional
+ * argument would be reached past a placeholder that says nothing about itself.
  */
 const strand = (
   segments: number,
-  { cut = 0, color = RAW }: { cut?: number; color?: ColorMask } = {},
-): Pick<GameState, 'snake' | 'severed'> => ({
+  {
+    cut = 0,
+    color = RAW,
+    served = 0,
+  }: { cut?: number; color?: ColorMask; served?: number } = {},
+): Pick<GameState, 'snake' | 'severed' | 'tutorialServes'> => ({
+  tutorialServes: served,
   snake: {
     head: { x: 0, y: 0 },
     dir: Dir.Right,
@@ -152,6 +182,25 @@ describe('stocksSugar', () => {
 
   it('waits for a cut batch to finish going through the block', () => {
     expect(stocksSugar(level, strand(0, { cut: 1 }))).toBe(false);
+  });
+
+  it('lays the batch level a second cube, and no third', () => {
+    const batch = tutorialFor(42).at(-1)!;
+
+    expect(stocksSugar(batch, strand(0))).toBe(true);
+    expect(stocksSugar(batch, strand(1))).toBe(true);
+    expect(stocksSugar(batch, strand(2))).toBe(false);
+  });
+
+  it('counts the batch level down as its children are fed', () => {
+    // A maker who chops the pair one candy at a time is not stalled: what the
+    // level still wants is its orders less the ones already served, so the cube
+    // for the second child arrives on an empty strand like any other.
+    const batch = tutorialFor(42).at(-1)!;
+
+    expect(stocksSugar(batch, strand(0, { served: 1 }))).toBe(true);
+    expect(stocksSugar(batch, strand(1, { served: 1 }))).toBe(false);
+    expect(stocksSugar(batch, strand(0, { served: 2 }))).toBe(false);
   });
 
   it('keeps the endless board stocked whatever the maker is carrying', () => {

@@ -54,6 +54,7 @@ const stateWith = (
   servedByTier: noServes(),
   over: false,
   tutorialIndex: 0,
+  tutorialServes: 0,
   tick: 0,
   elapsedMs: 0,
 });

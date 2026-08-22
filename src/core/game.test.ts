@@ -11,7 +11,7 @@ import { scoreServe } from './scoring';
 import { SHELF_SLOTS } from './shelf';
 import { snakeLength } from './snake';
 import { createDye, createSugar } from './spawner';
-import { TUTORIAL_ARRIVAL_GAP_MS } from './tutorial';
+import { TAUGHT_COMBO, TUTORIAL_ARRIVAL_GAP_MS } from './tutorial';
 import {
   Dir,
   RAW,
@@ -979,16 +979,38 @@ describe('Game opening levels', () => {
     run(game, passThrough(game));
   };
 
-  /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
-  const chopOne = (game: Game, want: ColorMask): void => {
-    layBatchAtBlock(game, [want]);
-    run(game, chopThrough([want]));
+  /** Cuts a batch loose at the block and draws it in, serving what matches. */
+  const chopBatch = (game: Game, wants: ColorMask[]): GameEvent[] => {
+    layBatchAtBlock(game, wants);
+    return run(game, chopThrough(wants));
   };
 
-  /** Chops one candy of `want`, then waits for the next child to walk up. */
-  const serveLevel = (game: Game, want: ColorMask): void => {
-    chopOne(game, want);
+  /** Cuts one candy of `want` loose at the block and draws it in, serving it. */
+  const chopOne = (game: Game, want: ColorMask): void => {
+    chopBatch(game, [want]);
+  };
+
+  /** What the level in hand asks for: its color, once per child (design §7). */
+  const orderOf = (game: Game): ColorMask[] => {
+    const level = game.openingLevel;
+    return level === undefined
+      ? []
+      : Array.from({ length: level.children }, () => level.want);
+  };
+
+  /** Chops the whole of the level in hand, then waits for the next to walk up. */
+  const serveLevel = (game: Game): void => {
+    chopBatch(game, orderOf(game));
     run(game, GAP_MOVES);
+  };
+
+  /**
+   * Plays out whole levels, defaulting to the lot. Counted off `game.tutorial`
+   * rather than written out, so a fifth level cannot leave a test quietly
+   * stopping one short of where its name says it goes.
+   */
+  const serveLevels = (game: Game, count = game.tutorial.length): void => {
+    for (let level = 0; level < count; level += 1) serveLevel(game);
   };
 
   it('has the first child at the window before the run has started', () => {
@@ -1041,7 +1063,7 @@ describe('Game opening levels', () => {
     const game = opening();
     const [, second, third] = game.tutorial;
 
-    serveLevel(game, RAW);
+    serveLevel(game);
     expect(game.state.tutorialIndex).toBe(1);
     expect(game.state.customers[0]?.want).toBe(second?.want);
     // Nothing but the cube, so crossing the jar first is not a move the level
@@ -1051,7 +1073,7 @@ describe('Game opening levels', () => {
     pullCube(game);
     expect(jarsOn(game)).toEqual([...(second?.stock ?? [])].sort());
 
-    serveLevel(game, second?.want ?? RAW);
+    serveLevel(game);
     expect(game.state.customers[0]?.want).toBe(third?.want);
     expect(jarsOn(game)).toEqual([]);
 
@@ -1063,7 +1085,7 @@ describe('Game opening levels', () => {
     const game = opening();
     const primary = game.tutorial[1]?.stock[0] ?? RED;
 
-    serveLevel(game, RAW);
+    serveLevel(game);
     pullCube(game);
     crossJar(game, primary);
 
@@ -1086,12 +1108,57 @@ describe('Game opening levels', () => {
     expect(game.state.tutorialIndex).toBe(2);
   });
 
+  it('teaches the batch by paying for it on the last level', () => {
+    const game = opening();
+
+    serveLevels(game, game.tutorial.length - 1);
+
+    // The level's two children walk up a beat apart, like every child before
+    // them — `serveLevel` waits out the first of those beats, so this is the
+    // second one.
+    run(game, GAP_MOVES);
+
+    // Both are at the window now, asking for the same thing — which is the
+    // shape one cut can feed twice (design §9).
+    const [batch] = game.tutorial.slice(-1);
+    expect(game.state.customers.map((customer) => customer.want)).toEqual([
+      batch?.want,
+      batch?.want,
+    ]);
+
+    const served = chopBatch(game, orderOf(game)).filter(
+      (event) => event.type === 'customer-served',
+    );
+
+    expect(served.map((event) => event.combo)).toEqual([1, 2]);
+    expect(game.state.bestCombo).toBe(TAUGHT_COMBO);
+    expect(game.state.tutorialIndex).toBe(game.tutorial.length);
+  });
+
+  it('does not close the batch level until both children are fed', () => {
+    const game = opening();
+
+    serveLevels(game, game.tutorial.length - 1);
+    const level = game.state.tutorialIndex;
+
+    // One candy at a time is a slower way through the level, not a stuck one:
+    // it feeds one child and the level goes on asking for the other.
+    chopOne(game, game.openingLevel?.want ?? RAW);
+
+    expect(game.state.tutorialIndex).toBe(level);
+    expect(game.state.customers).toHaveLength(1);
+    // And the floor puts out the cube for the one still waiting.
+    expect(game.state.pickups.filter((pickup) => pickup.kind === 'sugar')).toHaveLength(
+      1,
+    );
+  });
+
   it('leaves the tutorial’s own jars standing when it hands over', () => {
     const game = opening();
-    const [, second, third] = game.tutorial;
+    const [, , third] = game.tutorial;
 
-    serveLevel(game, RAW);
-    serveLevel(game, second?.want ?? RAW);
+    serveLevel(game);
+    serveLevel(game);
     pullCube(game);
 
     const laid = jarsOn(game);
@@ -1113,17 +1180,16 @@ describe('Game opening levels', () => {
 
   it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {
     const game = opening();
-    const [, second, third] = game.tutorial;
+    const last = game.tutorial.length - 1;
 
-    serveLevel(game, RAW);
-    serveLevel(game, second?.want ?? RAW);
-    // Not `serveLevel`: the wait after the third serve is the subject, so the
+    serveLevels(game, last);
+    // Not `serveLevel`: the wait after the last serve is the subject, so the
     // last chop is driven without it. The serving window runs after the move
     // loop, so that chop's own final step has already counted against the gap.
-    chopOne(game, third?.want ?? RAW);
+    chopBatch(game, orderOf(game));
     const left = GAP_MOVES - 1;
 
-    expect(game.state.tutorialIndex).toBe(3);
+    expect(game.state.tutorialIndex).toBe(game.tutorial.length);
     expect(game.state.customers).toEqual([]);
 
     run(game, left - 1);
@@ -1141,16 +1207,13 @@ describe('Game opening levels', () => {
     // comes round has none to credit — an interval it could be counted
     // against is the whole premise.
     const game = new Game({ ...DEFAULT_CONFIG, seed: 1, stage: CLOSED_WINDOW });
-    const [, second, third] = game.tutorial;
 
-    serveLevel(game, RAW);
-    serveLevel(game, second?.want ?? RAW);
-    serveLevel(game, third?.want ?? RAW);
+    serveLevels(game);
     // Short of a patience, so a child wrongly let in is still standing there
     // to be caught rather than having quietly timed out again.
     run(game, 60);
 
-    expect(game.state.tutorialIndex).toBe(3);
+    expect(game.state.tutorialIndex).toBe(game.tutorial.length);
     expect(game.state.customers).toEqual([]);
     expect(game.state.lives).toBe(STARTING_LIVES);
   });
