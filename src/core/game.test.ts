@@ -794,6 +794,27 @@ describe('Game serving window', () => {
     expect(served[0]?.points).toBe(scoreServe(served[0]!.customer, 0, 0));
   });
 
+  it('lets a child ask for what the window is already asking for', () => {
+    // `rollWant` hands the waiting window to `rollOrder` (design §7's twin), so
+    // a stage whose weights can only draw raw still puts out a red order while
+    // a red child is standing there. The queue is held at that one child so the
+    // window keeps a free slot to admit into.
+    const game = newGame({
+      stage: { ...MIXING_STAGE, mix: [100, 0, 0], arrivalIntervalMs: 1_000 },
+    });
+    const red = createCustomer(99, RED, undefined);
+    const asked = new Set<ColorMask>();
+
+    for (let at = 0; at < 120; at += 1) {
+      for (const event of game.step(700, NO_TURNS))
+        if (event.type === 'customer-arrived') asked.add(event.customer.want);
+      game.state.customers = [red];
+    }
+
+    expect(asked).toContain(RAW);
+    expect(asked).toContain(RED);
+  });
+
   it('leaves a child waiting when nothing on the rack matches', () => {
     const game = newGame({
       stage: { ...MIXING_STAGE, mix: [100, 0, 0], arrivalIntervalMs: 1_000 },

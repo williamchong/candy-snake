@@ -1,4 +1,4 @@
-import { PRIMARIES, type Primary } from './colors';
+import { BROWN, PRIMARIES, type Primary } from './colors';
 import type { Rng } from './rng';
 import { RAW, type ColorMask } from './types';
 
@@ -71,11 +71,65 @@ const pick = (colors: readonly ColorMask[], rng: Rng): ColorMask =>
   colors[rng.int(colors.length)] ?? RAW;
 
 /**
+ * How often a child asks for what a child already at the window is asking for
+ * (design §7). Zero is the uncorrelated window the game shipped with.
+ *
+ * The point is not variety, it is that **one cut can feed two children**: the
+ * combo (design §9) needs two mouths wanting the same candy at the same time,
+ * and demand drawn independently across seven colors makes that a coincidence.
+ * The pair-cap sweep measured a maker who takes that pair whenever it is
+ * offered and nothing else — it beats the grinder on 54 seeds of 64 — so this
+ * is the knob that decides how often the game offers it.
+ *
+ * It changes the **joint** distribution of the window and not the marginal one:
+ * an echo copies a want that was itself drawn from the stage's weights, so what
+ * the table says a stage asks for is still what it asks for on average, and
+ * `mix` keeps meaning exactly what design §7 says it means. What moves is how
+ * often two of those draws land together.
+ */
+export const TWIN_CHANCE = 0.25;
+
+/**
+ * The colors a child could echo: what the window is already asking for, minus
+ * brown.
+ *
+ * Brown is the over-mix mistake and no regular customer orders it (design §4).
+ * It reaches the window only through `Game`'s mercy path, which wants one
+ * already on the rack — so echoing it would put out an order that nothing in
+ * the kitchen is trying to make.
+ *
+ * Exported for the same reason `TIERS` is: the balancing sim's batching bot has
+ * to value a rung against what the next child is likely to ask for, and a
+ * second copy of this rule over there would be a place for the maker's belief
+ * and the game's behaviour to drift apart.
+ */
+export const echoable = (waiting: readonly ColorMask[]): readonly ColorMask[] =>
+  waiting.filter((want) => want !== BROWN);
+
+/**
  * Draws one order: a tier by the stage's weights, then a color uniformly
  * within that tier. A tier weighted 0 can never come up — the weights are the
  * only thing gating which colors a stage can ask for.
+ *
+ * `waiting` is the window as it stands, and `TWIN_CHANCE` of the time the draw
+ * echoes one of it instead. The roll is taken only when there is something to
+ * echo *and* the chance is above zero, so a run with the knob at zero draws the
+ * same stream it always did — a feature that is off costs nothing, which is
+ * what makes it a control rather than another arm.
  */
-export const rollOrder = (stage: StageConfig, rng: Rng): ColorMask => {
+export const rollOrder = (
+  stage: StageConfig,
+  rng: Rng,
+  waiting: readonly ColorMask[] = [],
+  twinChance: number = TWIN_CHANCE,
+): ColorMask => {
+  const echoes = twinChance > 0 ? echoable(waiting) : [];
+  if (echoes.length > 0 && rng.next() < twinChance) return pick(echoes, rng);
+
+  return rollTier(stage, rng);
+};
+
+const rollTier = (stage: StageConfig, rng: Rng): ColorMask => {
   const total = stage.mix.reduce((sum, weight) => sum + weight, 0);
   let roll = rng.next() * total;
 

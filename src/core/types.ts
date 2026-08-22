@@ -193,6 +193,13 @@ export interface GameConfig {
    * for tests and balancing sims, which want the endless game directly.
    */
   readonly openingLevels: boolean;
+  /**
+   * Overrides how often an arriving child echoes an order already at the window
+   * (`orders.ts`'s `TWIN_CHANCE`). Only the balancing sim wants this — a real
+   * run takes the shipped constant — and it is here for the same reason `stage`
+   * is: an arm of a sweep is one number different, not a different game.
+   */
+  readonly twinChance?: number;
 }
 
 export type GameEvent =

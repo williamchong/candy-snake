@@ -557,6 +557,32 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   arithmetic. See the implementation plan for those runs — including the one
   finding this table could not fix.
 
+### The window echoes itself
+
+Orders are not drawn independently. **A quarter of the time** (`orders.ts`'s
+`TWIN_CHANCE`), an arriving child asks for a color a child already at the window
+is asking for, instead of rolling one from the stage's weights.
+
+The reason is the combo (§9). One cut can feed several children, but only if
+several children want the same candy at the same moment — and that is a shape
+*demand* has to supply, not one the maker can build toward. Uncorrelated across
+seven colors it is left to coincidence.
+
+- **It changes the joint distribution and not the marginal one.** An echo copies
+  a want that was itself drawn from the weights, so the table's T1/T2/T3 column
+  still says what a stage asks for on average. What moves is how often two of
+  those draws land together — measured, a duplicate stands at the window 43% of
+  the time without the echo and 58% with it.
+- **Brown is never echoed.** It is the over-mix mistake and reaches the window
+  only through the mercy customer, who wants one already on the rack.
+- **It is not the fix for the batching finding.** Measured, it pays the maker who
+  takes a pair off the front of the queue, and the maker who builds a long
+  production line is still behind — see the implementation plan. The reason to
+  have it is that the combo the game already scores is a thing the window now
+  offers rather than a thing it occasionally allows.
+- The opening levels are untouched: their orders are scripted (§7 above), and
+  their window holds one child.
+
 ### The rush (from the 1-minute mark)
 
 The bullet above names the hole and **the rush is what goes in it**, asked for

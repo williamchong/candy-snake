@@ -697,7 +697,12 @@ export class Game {
       return BROWN;
     }
 
-    return rollOrder(stage, this.rng);
+    return rollOrder(
+      stage,
+      this.rng,
+      this.state.customers.map((customer) => customer.want),
+      this.config.twinChance,
+    );
   }
 
   /**

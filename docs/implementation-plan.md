@@ -2292,6 +2292,101 @@ measured.
   targeting. If the maker who plans ahead simply committed to the ladder it
   started, it would be a different bot — and possibly not a losing one.
 
+### What the twin pass measured — the pair was never rare, and the belief is half the gain
+
+The demand-shape candidate, built and swept. `rollOrder` takes the window it is
+drawing into, and `TWIN_CHANCE` of the time echoes a want already standing there
+instead of rolling one; the pair-cap sweep above is what pointed it at *equal*
+wants rather than at a nested set, since the maker that wins is the one that
+takes a pair off the front of the queue. Zero draws no rng at all, so the
+baseline arm is the shipped game rather than a re-roll of it.
+
+**The premise was wrong, and the first reading says so.** A pair was supposed to
+be a coincidence under demand spread over seven colors. Measured, a duplicate is
+already standing at the window **43% of the live ticks** — three or four slots
+against seven colors collide about as often as a birthday does in a room of
+twenty-three. The echo does not create the shape, it raises how often it is
+there.
+
+`SWEEP` (16 seeds), the three makers per arm:
+
+| twin | maker   | score | died  | median | pair on offer | ahead of grinder |
+| ---- | ------- | ----- | ----- | ------ | ------------- | ---------------- |
+| 0    | grinder | 12892 | 7/16  | 9.31   | 43.3%         | —                |
+| 0    | pair    | 16101 | 5/16  | 8.57   | 42.3%         | 14/16            |
+| 0    | batcher | 6649  | 16/16 | 4.89   | 26.9%         | 2/16             |
+| 0.20 | pair    | 17977 | 2/16  | 9.53   | 53.0%         | 16/16            |
+| 0.20 | batcher | 7995  | 16/16 | 5.43   | 43.4%         | 0/16             |
+| 0.35 | pair    | 16777 | 6/16  | 8.78   | 58.7%         | 13/16            |
+| 0.35 | batcher | 7915  | 16/16 | 5.76   | 46.9%         | 1/16             |
+| 0.50 | batcher | 12350 | 15/16 | 6.37   | 58.2%         | 7/16             |
+| 0.75 | pair    | 18996 | 0/16  | n/a    | 73.9%         | 16/16            |
+| 0.75 | batcher | 15767 | 14/16 | 7.40   | 65.1%         | 12/16            |
+
+**The open finding does invert — at a constant that breaks the death target.**
+At 0.75 the batching maker is ahead on 12 of 16, the first time this record has
+been able to write that. It is also an arm where the pair maker does not die at
+all inside ten minutes, the grinder's deaths fall from 7 of 16 to 4, and the
+batcher's median death goes 4.89 → 7.40. That is not the finding closed; it is
+the game made easier until batching stops being punished, and design §7 has a
+4–6 minute median it is aimed at.
+
+**And two thirds of that inversion is the bot, not the rule.** The planner values
+a speculative rung off `demandFor`, which had to learn the echo or it would plan
+for a demand shape the game had stopped having. Separating the two:
+
+| arm                      | score | ahead | died  | median |
+| ------------------------ | ----- | ----- | ----- | ------ |
+| game 0.0 / belief 0.0    | 6649  | 2/16  | 16/16 | 4.89   |
+| game 0.5 / belief 0.0    | 8321  | 3/16  | 16/16 | 5.51   |
+| game 0.5 / belief 0.5    | 12350 | 7/16  | 15/16 | 6.37   |
+| game 0.0 / belief 0.5    | 6423  | 2/16  | 16/16 | 4.65   |
+| game 0.75 / belief 0.0   | 8720  | 4/16  | 15/16 | 5.53   |
+| game 0.75 / belief 0.75  | 15767 | 12/16 | 14/16 | 7.40   |
+
+The rule alone at 0.75 is worth 8 720 and 4 of 16. The rest is the maker playing
+*to* it. That is a fair gain — a player learns the same thing in a sitting or two
+— but it has to be quoted as what it is, and the last row of the middle pair is
+the control that says the belief is not simply a better bot: believing in twins
+the game does not deal is worth **less** than not believing in them (6 423
+against 6 649).
+
+**Shipped at 0.25**, confirmed on `WIDE`:
+
+| twin | maker   | score | died  | median | pair on offer | best combo | staled |
+| ---- | ------- | ----- | ----- | ------ | ------------- | ---------- | ------ |
+| 0    | grinder | 13080 | 26/64 | 9.11   | 43.1%         | 1.80       | 10     |
+| 0.25 | grinder | 13244 | 20/64 | 8.87   | 58.1%         | 1.94       | 14     |
+| 0.25 | pair    | 16838 | 21/64 | 8.63   | 55.4%         | 2.52       | 24     |
+| 0.25 | batcher | 7968  | 64/64 | 5.29   | 44.2%         | 3.66       | 52     |
+
+The batching maker's median death stays inside the window (5.29 against a 4.34
+baseline), the grinder's score does not move (13 080 → 13 244), the tier shares
+the table asks for are unchanged by construction and pinned in `orders.test.ts`,
+and a pair stands at the window 58% of the time instead of 43%. **Every seeded
+assertion in the suite held across the change** — which is worth stating, since
+this moves an rng draw and every previous such change had to re-measure the
+whole table.
+
+**What it is and is not.** It is not the fix for the open finding: at a
+difficulty-neutral constant the maker who builds a production line is still
+behind on 15 of 16, and the arm that inverts that is an arm that makes the game
+easier for everybody. What it is, is the combo (design §9) becoming a thing the
+window *offers* rather than a coincidence it occasionally allows — `bestCombo`
+climbs on all three makers, and the mechanic three sittings asked for now has
+demand shaped to feed it.
+
+**What is left.** Closing the finding properly now has a shape it did not have
+before: the high twin arm plus an anchor-table retune to take the difficulty
+back. That is one pass — the tide was built the same way, and the same caveat
+applies, that a spawn-timing change re-rolls every free cell drawn after it. It
+is the first candidate in this record that has been measured to invert the
+assertion at all, so it is worth the sweep.
+
+The nested-set variant — echoing a *superset* of a waiting want, so the window
+asks for a ladder rather than a pair — stays untested and drops down the list.
+The pair-cap sweep is the reason: the ladder is the shape that loses.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:

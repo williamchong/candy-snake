@@ -4,7 +4,7 @@ import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
 import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
 import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
-import { TIERS, type StageConfig } from './orders';
+import { TIERS, TWIN_CHANCE, echoable, type StageConfig } from './orders';
 import { SHELF_SLOTS } from './shelf';
 import { stockedPrimaries, stocksSugar } from './tutorial';
 import {
@@ -128,12 +128,31 @@ const jarTowards = (
  * played a few minutes knows roughly what gets asked for, and the plan's open
  * finding is about a maker who builds for demand that has not arrived yet.
  */
-const demandFor = (stage: StageConfig, color: ColorMask): number => {
+const demandFor = (
+  stage: StageConfig,
+  color: ColorMask,
+  waiting: readonly ColorMask[],
+  twinChance: number,
+): number => {
   const tier = mixCount(color);
   const weight = stage.mix[tier];
   if (weight === undefined) return 0;
 
-  return weight / sum(stage.mix) / (TIERS[tier]?.length ?? 1);
+  const rolled = weight / sum(stage.mix) / (TIERS[tier]?.length ?? 1);
+
+  // What `rollOrder` will echo if the twin roll comes up — the window as it
+  // stands, less the brown the mercy path owns. A maker planning a batch under
+  // a correlated window has to know that a color already being asked for is
+  // likelier to be asked for again, or it plans for a demand shape the game
+  // stopped having. The window it echoes is the one standing now, which is an
+  // approximation: children leave. It is the same approximation `openings`
+  // already makes about children arriving.
+  const echoes = echoable(waiting);
+  if (twinChance <= 0 || echoes.length === 0) return rolled;
+
+  const echoed = echoes.filter((want) => want === color).length / echoes.length;
+
+  return twinChance * echoed + (1 - twinChance) * rolled;
 };
 
 /**
@@ -299,6 +318,7 @@ const planLadder = (
   stage: StageConfig,
   openings: number,
   cap: number,
+  twinChance: number,
 ): { ladder: Ladder; score: number } => {
   const rungs = ladderColors(order);
   const counts = rungs.map(() => 0);
@@ -316,7 +336,7 @@ const planLadder = (
     }
   });
 
-  const chances = rungs.map((color) => demandFor(stage, color));
+  const chances = rungs.map((color) => demandFor(stage, color, wants, twinChance));
   const guessed = rungs.map(() => 0);
   let expected = 0;
 
@@ -370,7 +390,12 @@ const planLadder = (
  * of each rung, and in which sequence, is what puts those rungs in front of
  * children — including the ones still at the door.
  */
-const bestLadder = (state: GameState, stage: StageConfig, cap: number): Ladder => {
+const bestLadder = (
+  state: GameState,
+  stage: StageConfig,
+  cap: number,
+  twinChance: number,
+): Ladder => {
   const wants = state.customers.map((customer) => customer.want);
   const openings =
     Math.max(stage.maxQueue - wants.length, 0) +
@@ -396,7 +421,7 @@ const bestLadder = (state: GameState, stage: StageConfig, cap: number): Ladder =
   for (const order of LADDER_ORDERS) {
     if (!buildable(order)) continue;
 
-    const planned = planLadder(order, wants, stage, openings, cap);
+    const planned = planLadder(order, wants, stage, openings, cap, twinChance);
     if (planned.score > bestScore) {
       bestScore = planned.score;
       best = planned.ladder;
@@ -444,10 +469,15 @@ const bestLadder = (state: GameState, stage: StageConfig, cap: number): Ladder =
  * is what those levels are stocked to teach, since each lays one cube and waits
  * for it to come back (design §7). The same rule plays them correctly.
  */
-const ladderGoal = (state: GameState, stage: StageConfig, cap: number): Vec2 => {
+const ladderGoal = (
+  state: GameState,
+  stage: StageConfig,
+  cap: number,
+  twinChance = TWIN_CHANCE,
+): Vec2 => {
   const carried = state.snake.body;
   const held = carried[0]?.color ?? RAW;
-  const { order, counts } = bestLadder(state, stage, cap);
+  const { order, counts } = bestLadder(state, stage, cap, twinChance);
   /**
    * Steering at nothing in particular, which `steerTowards` reads as "no turn":
    * the maker carries straight on. It is what to do when the jar the ladder
@@ -629,6 +659,17 @@ interface RunResult {
    */
   readonly peakQueue: number;
   /**
+   * The share of the run the window spent offering a **pair** — two children
+   * waiting on the same color at the same time, which is the one shape a single
+   * cut can feed twice (design §9).
+   *
+   * This is what `TWIN_CHANCE` moves and the reading it is tuned against. It is
+   * a property of the *window* rather than of the maker, so it comes back nearly
+   * the same for every bot on a given arm; what differs between them is whether
+   * they take it.
+   */
+  readonly pairOffered: number;
+  /**
    * The most sugar the strand ever carried. Segments rather than `snakeLength`,
    * which counts the head: what is being measured is how much of a ladder got
    * built, and the maker is not a rung of it.
@@ -650,8 +691,13 @@ interface RunResult {
   readonly gears: { readonly rung: number; readonly top: boolean }[];
 }
 
-const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResult => {
-  const game = new Game({ ...DEFAULT_CONFIG, seed });
+const play = (
+  seed: number,
+  ticks: number,
+  goalOf: Goal = grinderGoal,
+  twinChance?: number,
+): RunResult => {
+  const game = new Game({ ...DEFAULT_CONFIG, seed, twinChance });
   const bot = botFor(game, goalOf);
   const violations: string[] = [];
   let score = 0;
@@ -667,6 +713,7 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
   let peakSegments = 0;
   let segmentSum = 0;
   let liveTicks = 0;
+  let pairTicks = 0;
   const gears: { rung: number; top: boolean }[] = [];
 
   for (let tick = 0; tick < ticks; tick += 1) {
@@ -721,6 +768,11 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
       peakSegments = Math.max(peakSegments, state.snake.body.length);
       segmentSum += state.snake.body.length;
       liveTicks += 1;
+
+      // Fewer distinct colors than children is a duplicate at the window, which
+      // is the shape one cut can feed twice (design §9).
+      const wants = new Set(state.customers.map((customer) => customer.want));
+      if (wants.size < state.customers.length) pairTicks += 1;
     }
   }
 
@@ -736,6 +788,7 @@ const play = (seed: number, ticks: number, goalOf: Goal = grinderGoal): RunResul
     peakQueue,
     peakSegments,
     meanSegments: segmentSum / liveTicks,
+    pairOffered: pairTicks / liveTicks,
     gears,
   };
 };
@@ -1234,6 +1287,23 @@ describe('the reference players, after the ramp went in', () => {
       ahead.length,
       `the pair maker outscored the grinder on ${ahead.length} of ${SWEEP.length} seeds`,
     ).toBeGreaterThanOrEqual(12);
+  });
+
+  it('offers the pair a single cut can feed', () => {
+    // What `TWIN_CHANCE` buys, read off the window rather than off the maker.
+    // Uncorrelated, a duplicate is already there 43% of the time — three or four
+    // children over seven colors collide often, which is the thing the twin was
+    // proposed on the assumption it would not. The echo takes that to **58%**
+    // across `WIDE` without moving the tier shares the table asks for
+    // (`orders.test.ts` pins the marginals) and without moving the death target
+    // (the median above still lands inside 4–6 minutes).
+    //
+    // Read off the grinder, which takes no pairs at all: this is a property of
+    // the window, and measuring it on a maker that exploits it would fold the
+    // two together.
+    target(grinderGoal, SWEEP).forEach((run, index) => {
+      expect(run.pairOffered, `seed ${SWEEP[index]}`).toBeGreaterThan(0.45);
+    });
   });
 
   it('does not let strand length stand in for who the strand is built for', () => {
