@@ -7,6 +7,7 @@ import { SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { MIXING_STAGE, type StageConfig } from './orders';
 import { createRng } from './rng';
+import { scoreServe } from './scoring';
 import { SHELF_SLOTS } from './shelf';
 import { snakeLength } from './snake';
 import { createDye, createSugar } from './spawner';
@@ -474,7 +475,9 @@ describe('Game shatter', () => {
 
     drive(game, 1);
 
-    expect(game.state.severed).toEqual([{ segments: severed, fate: 'crumble' }]);
+    expect(game.state.severed).toEqual([
+      { segments: severed, fate: 'crumble', batchServes: 0 },
+    ]);
   });
 
   it('crumbles one block per move, from the impact toward the tail', () => {
@@ -483,11 +486,24 @@ describe('Game shatter', () => {
 
     const first = drive(game, 1);
     expect(first).toContainEqual({ type: 'debris-crumbled', segment: severed[0] });
-    expect(game.state.severed).toEqual([{ segments: [severed[1]], fate: 'crumble' }]);
+    expect(game.state.severed).toEqual([
+      { segments: [severed[1]], fate: 'crumble', batchServes: 0 },
+    ]);
 
     const second = drive(game, 1);
     expect(second).toContainEqual({ type: 'debris-crumbled', segment: severed[1] });
     expect(game.state.severed).toEqual([]);
+  });
+
+  it('serves nobody from debris, even with a matching child waiting', () => {
+    const game = aboutToHitItself();
+    game.state.customers = [createCustomer(1, RAW, 30_000)];
+
+    const events = drive(game, 3);
+
+    expect(events.some((event) => event.type === 'customer-served')).toBe(false);
+    expect(game.state.customers).toHaveLength(1);
+    expect(game.state.bestCombo).toBe(0);
   });
 
   it('closes a pickup the lost length was still carrying', () => {
@@ -536,7 +552,9 @@ describe('Game chopping block', () => {
     const events = drive(game, 1);
 
     expect(events).toContainEqual({ type: 'strand-cut', batch: frozen(colors) });
-    expect(game.state.severed).toEqual([{ segments: frozen(colors), fate: 'chop' }]);
+    expect(game.state.severed).toEqual([
+      { segments: frozen(colors), fate: 'chop', batchServes: 0 },
+    ]);
     expect(game.state.snake.body).toEqual([]);
   });
 
@@ -566,7 +584,9 @@ describe('Game chopping block', () => {
       color: RED,
     });
     expect(game.state.shelf).toEqual([{ color: RED, bornAt: 2 }]);
-    expect(game.state.severed).toEqual([{ segments: laid.slice(1), fate: 'chop' }]);
+    expect(game.state.severed).toEqual([
+      { segments: laid.slice(1), fate: 'chop', batchServes: 0 },
+    ]);
 
     const second = drive(game, 1);
     expect(second).toContainEqual({
@@ -722,6 +742,36 @@ describe('Game serving window', () => {
     expect(game.state.shelf.map((candy) => candy.color)).toEqual([RAW]);
   });
 
+  it('pays the combo bonus for each further child served off one batch', () => {
+    const game = withCustomers(RED, BLUE);
+
+    const served = chop(game, [RED, BLUE]).filter(
+      (event) => event.type === 'customer-served',
+    );
+
+    // The count climbs with the batch; the first serve of it pays no bonus.
+    expect(served.map((event) => event.combo)).toEqual([1, 2]);
+    expect(served[0]?.points).toBe(scoreServe(served[0]!.customer, 0, 0));
+    expect(served[1]?.points).toBe(scoreServe(served[1]!.customer, 1, 1));
+    expect(served[1]!.points).toBeGreaterThan(scoreServe(served[1]!.customer, 1, 0));
+    expect(game.state.score).toBe(served[0]!.points + served[1]!.points);
+    // The high-water mark outlives the piece that carried the count.
+    expect(game.state.severed).toEqual([]);
+    expect(game.state.bestCombo).toBe(2);
+  });
+
+  it('starts every batch at zero rather than carrying a combo across chops', () => {
+    const game = withCustomers(RED, BLUE);
+
+    const first = chop(game, [RED]).filter((event) => event.type === 'customer-served');
+    const second = chop(game, [BLUE]).filter((event) => event.type === 'customer-served');
+
+    expect(first[0]?.combo).toBe(1);
+    expect(second[0]?.combo).toBe(1);
+    expect(second[0]?.points).toBe(scoreServe(second[0]!.customer, 1, 0));
+    expect(game.state.bestCombo).toBe(1);
+  });
+
   it('lets a child arriving take the oldest match off the rack', () => {
     const game = newGame({
       stage: { ...MIXING_STAGE, mix: [100, 0, 0], arrivalIntervalMs: 1_000 },
@@ -738,6 +788,10 @@ describe('Game serving window', () => {
     expect(served[0]?.fromShelf).toBe(true);
     expect(game.state.customers).toEqual([]);
     expect(game.state.shelf).toEqual([{ color: RAW, bornAt: 2 }]);
+    // A racked candy has lost its batch, so a rack serve starts no combo and
+    // pays no bonus (design §9).
+    expect(served[0]?.combo).toBe(0);
+    expect(served[0]?.points).toBe(scoreServe(served[0]!.customer, 0, 0));
   });
 
   it('leaves a child waiting when nothing on the rack matches', () => {
@@ -801,6 +855,7 @@ describe('Game serving window', () => {
       served: 0,
       servedByTier: noServes(),
       bestStreak: 0,
+      bestCombo: 0,
       elapsedMs: 100,
     });
     expect(game.state.over).toBe(true);

@@ -83,6 +83,13 @@ export type Pickup =
 export interface Severed {
   readonly segments: readonly Segment[];
   readonly fate: 'crumble' | 'chop';
+  /**
+   * Children served straight off this batch so far — what the combo bonus
+   * pays on (design §9). A crumble's stays 0: debris serves nobody. Named for
+   * the count *before* the serve being paid, unlike the `combo` the HUD is
+   * handed, which includes it.
+   */
+  readonly batchServes: number;
 }
 
 /**
@@ -138,6 +145,13 @@ export interface GameState {
    * anybody wants to know how well it went, it reads 0.
    */
   bestStreak: number;
+  /**
+   * The most children ever served off one chopped batch — kept as a high-water
+   * mark for the same reason `bestStreak` is, and carried into `RunSummary`
+   * alongside it: each batch's own count dies with the piece that carried it,
+   * so nothing at the end of a run could reconstruct this.
+   */
+  bestCombo: number;
   /**
    * The serves split by how hard the color was to make (design §9's table) —
    * what the run *did*, as opposed to what it was paid. Kept as counts rather
@@ -227,13 +241,16 @@ export type GameEvent =
    * Served and gone happy. `streak` is the run *including* this serve — what
    * the HUD shows — while `points` was already paid at the multiplier the
    * streak stood at before it (design §9). `fromShelf` separates a candy taken
-   * straight off the block from one that was waiting on the rack.
+   * straight off the block from one that was waiting on the rack. `combo`
+   * follows `streak`'s convention: children served off this batch *including*
+   * this one, and 0 for a shelf serve — a racked candy has lost its batch.
    */
   | {
       readonly type: 'customer-served';
       readonly customer: Customer;
       readonly points: number;
       readonly streak: number;
+      readonly combo: number;
       readonly fromShelf: boolean;
     }
   /** Patience ran out; the child leaves angry (design §5). */
@@ -283,6 +300,7 @@ export interface RunSummary {
   readonly served: number;
   readonly servedByTier: Record<ColorTier, number>;
   readonly bestStreak: number;
+  readonly bestCombo: number;
   readonly elapsedMs: number;
 }
 

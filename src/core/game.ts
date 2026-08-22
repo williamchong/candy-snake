@@ -129,6 +129,7 @@ export class Game {
       streak: 0,
       served: 0,
       bestStreak: 0,
+      bestCombo: 0,
       servedByTier: noServes(),
       over: false,
       tutorialIndex: 0,
@@ -455,7 +456,7 @@ export class Game {
       ...segment,
       pos: before.body[cutIndex + index]?.pos ?? segment.pos,
     }));
-    this.state.severed.push({ segments, fate });
+    this.state.severed.push({ segments, fate, batchServes: 0 });
 
     this.releaseAbandonedPickups(events);
     return segments;
@@ -509,10 +510,11 @@ export class Game {
       const [segment, ...rest] = piece.segments;
       if (segment === undefined) return [];
 
+      let batchServes = piece.batchServes;
       if (piece.fate === 'crumble') events.push({ type: 'debris-crumbled', segment });
-      else this.deliverCandy(segment, events);
+      else if (this.deliverCandy(segment, events, batchServes)) batchServes += 1;
 
-      return rest.length > 0 ? [{ ...piece, segments: rest }] : [];
+      return rest.length > 0 ? [{ ...piece, segments: rest, batchServes }] : [];
     });
   }
 
@@ -524,14 +526,23 @@ export class Game {
    * Because every candy is offered to the queue as it is made, and every child
    * arriving sweeps the rack, "a waiting customer next to a matching candy on
    * the shelf" is a state this game cannot reach.
+   *
+   * Returns whether a child took the candy, so the batch's serve counter —
+   * owned by `consumeSevered`, the one place that holds the piece — can count
+   * it. A racked candy is off the batch for good: `Candy` carries no
+   * provenance, so a child sweeping the rack later starts no combo.
    */
-  private deliverCandy(segment: Segment, events: GameEvent[]): void {
+  private deliverCandy(
+    segment: Segment,
+    events: GameEvent[],
+    batchServes: number,
+  ): boolean {
     events.push({ type: 'candy-chopped', pos: segment.pos, color: segment.color });
 
     const waiting = matchIndex(this.state.customers, segment.color);
     if (waiting >= 0) {
-      this.serveCustomer(waiting, false, events);
-      return;
+      this.serveCustomer(waiting, events, batchServes);
+      return true;
     }
 
     const { shelf, staled } = pushCandy(this.state.shelf, {
@@ -541,6 +552,7 @@ export class Game {
     this.state.shelf = shelf;
 
     if (staled !== undefined) events.push({ type: 'candy-staled', color: staled.color });
+    return false;
   }
 
   /**
@@ -578,6 +590,7 @@ export class Game {
       served: this.state.served,
       servedByTier: { ...this.state.servedByTier },
       bestStreak: this.state.bestStreak,
+      bestCombo: this.state.bestCombo,
       elapsedMs: this.state.elapsedMs,
     });
   }
@@ -700,20 +713,33 @@ export class Game {
     if (slot < 0) return;
 
     this.state.shelf = removeAt(this.state.shelf, slot);
-    this.serveCustomer(index, true, events);
+    this.serveCustomer(index, events);
   }
 
-  /** Pays for a serve and sends the child off happy (design §9). */
-  private serveCustomer(index: number, fromShelf: boolean, events: GameEvent[]): void {
+  /**
+   * Pays for a serve and sends the child off happy (design §9). `batchServes`
+   * is how many children the batch this candy came off has already fed — the
+   * combo bonus's input. Leaving it out is what makes a serve a shelf serve:
+   * a racked candy has no batch behind it to count, so "off the rack" and "no
+   * batch" are one fact rather than two parameters that could disagree.
+   *
+   * The opening levels never pay the bonus by construction rather than by a
+   * guard: their window holds one child (`maxQueue: 1`), so a batch
+   * direct-serves at most once.
+   */
+  private serveCustomer(index: number, events: GameEvent[], batchServes?: number): void {
     const customer = this.state.customers[index];
     if (customer === undefined) return;
 
-    const points = scoreServe(customer, this.state.streak);
+    const fromShelf = batchServes === undefined;
+    const points = scoreServe(customer, this.state.streak, batchServes);
+    const combo = fromShelf ? 0 : batchServes + 1;
     this.state.customers = removeAt(this.state.customers, index);
     this.state.score += points;
     this.state.streak += 1;
     this.state.served += 1;
     this.state.bestStreak = Math.max(this.state.bestStreak, this.state.streak);
+    this.state.bestCombo = Math.max(this.state.bestCombo, combo);
     this.state.servedByTier[colorInfo(customer.want).tier] += 1;
     // While the tutorial runs the queue holds nothing but its own child, so a
     // serve is exactly what finishes a level.
@@ -724,6 +750,7 @@ export class Game {
       customer,
       points,
       streak: this.state.streak,
+      combo,
       fromShelf,
     });
   }

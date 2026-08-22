@@ -123,6 +123,18 @@ export const HudDepth = {
    */
   MuteTab: 13,
   MuteTabIcon: 14,
+  /**
+   * The combo meter's pips. Two layers, and named here rather than borrowing
+   * `Icon`/`Glyph`, for the reason the tab pair gives: a fill that shares its
+   * own track's depth is left to display-list insertion order to separate, and
+   * a pip drawn *under* its track is a pip that never lights.
+   *
+   * Which number the pair gets is free: the meter sits on the hearts' row,
+   * which `ui/layout.ts` keeps clear of every other widget in both
+   * orientations, so nothing else is competing for the ordering.
+   */
+  ComboTrack: 15,
+  ComboPip: 16,
 } as const;
 
 export interface Drawn {

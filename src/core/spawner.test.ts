@@ -34,7 +34,13 @@ const stateWith = (
   severed:
     debris.length === 0
       ? []
-      : [{ segments: debris.map((pos) => ({ pos, color: RAW })), fate: 'crumble' }],
+      : [
+          {
+            segments: debris.map((pos) => ({ pos, color: RAW })),
+            fate: 'crumble',
+            batchServes: 0,
+          },
+        ],
   shelf: [],
   // The window plays no part in where a pickup lands.
   customers: [],
@@ -44,6 +50,7 @@ const stateWith = (
   served: 0,
   // Nothing has been served, and nothing about the spawner reads these.
   bestStreak: 0,
+  bestCombo: 0,
   servedByTier: noServes(),
   over: false,
   tutorialIndex: 0,

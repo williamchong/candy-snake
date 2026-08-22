@@ -8,9 +8,11 @@ import { bindHotkey, HotKey } from '../input/keyboard';
 import { GLYPH_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { glyphTextureKey } from '../render/textures';
 import { CheatSheet } from '../ui/cheatSheet';
+import { ComboMeter } from '../ui/comboMeter';
 import { CustomerQueue } from '../ui/customerQueue';
 import { Mood } from '../ui/customerView';
 import { MuteTab } from '../ui/muteTab';
+import { SCORE_SIZE } from '../ui/layout';
 import { onFrame } from '../ui/responsive';
 import { RushDoor } from '../ui/rushDoor';
 import { ShelfStrip } from '../ui/shelfStrip';
@@ -51,6 +53,7 @@ export class UIScene extends Phaser.Scene {
   private shelf!: ShelfStrip;
   private sheet!: CheatSheet;
   private mute!: MuteTab;
+  private combo!: ComboMeter;
   /**
    * Hearts last drawn. Reset in `create`, not at the field: Phaser reuses the
    * scene instance between runs, so a value carried over from the last run
@@ -69,7 +72,7 @@ export class UIScene extends Phaser.Scene {
 
     this.shownLives = -1;
     this.shownLesson = '';
-    this.scoreText = this.add.text(0, 0, '0', textStyle(30)).setOrigin(0, 0.5);
+    this.scoreText = this.add.text(0, 0, '0', textStyle(SCORE_SIZE)).setOrigin(0, 0.5);
 
     // The tutorial's lesson line, hung over the kitchen. What it says is read
     // from core state every frame like everything else here, so it changes as
@@ -88,6 +91,10 @@ export class UIScene extends Phaser.Scene {
 
     this.shelf = new ShelfStrip(this);
     this.queue = new CustomerQueue(this);
+    // Built fresh with the rest, for the reason the hearts are reset above: the
+    // scene instance outlives the run, and a meter left lit by the last one
+    // would open the next on a combo nobody had earned.
+    this.combo = new ComboMeter(this);
     // Built before the queue's own children in the display list but drawn
     // behind them all the same — `HudDepth.Doorway` decides that, not order.
     this.door = new RushDoor(this);
@@ -131,6 +138,7 @@ export class UIScene extends Phaser.Scene {
       this.door.applyFrame(frame);
       this.sheet.applyFrame(frame);
       this.mute.applyFrame(frame);
+      this.combo.applyFrame(frame);
     });
   }
 
@@ -186,6 +194,9 @@ export class UIScene extends Phaser.Scene {
 
       case 'customer-served':
         this.queue.depart(event.customer.id, Mood.Served);
+        // 0 for a shelf serve, which starts no combo — the meter's own guard
+        // reads that as nothing to show rather than as a batch of none.
+        this.combo.play(event.combo);
         return;
 
       case 'customer-left':

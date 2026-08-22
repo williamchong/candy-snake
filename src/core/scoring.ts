@@ -16,6 +16,14 @@ const STREAK_STEP = 1.1;
 const STREAK_CAP = 2;
 
 /**
+ * Flat bonus per child already served off the same chopped batch (design §9).
+ * Additive after the multiplier, deliberately not a fourth multiplier: the
+ * batch is worth something *as a batch*, at the same rate however the run is
+ * otherwise going. A one-segment chop can never earn it.
+ */
+const COMBO_BONUS = 15;
+
+/**
  * The reward for serving without losing anyone. `streak` is the run of serves
  * *before* this one, so the first serve after a loss pays flat and the bonus
  * has to be earned back (design §9).
@@ -25,11 +33,19 @@ export const streakMultiplier = (streak: number): number =>
 
 /**
  * Points for one serve. Rounded once at the end rather than per term, so the
- * bonus and the multiplier cannot each shed a fraction on the way through.
+ * bonus and the multiplier cannot each shed a fraction on the way through —
+ * the combo addend is already an integer, so it joins after the round.
+ * `batchServes` is the children served off the same batch *before* this one,
+ * so the first serve of a batch pays nothing extra and a shelf serve, which
+ * has no batch behind it, passes nothing.
  */
-export const scoreServe = (customer: Customer, streak: number): number => {
+export const scoreServe = (
+  customer: Customer,
+  streak: number,
+  batchServes = 0,
+): number => {
   const base = BASE_POINTS[colorInfo(customer.want).tier];
   const earned = base + base * PATIENCE_BONUS * patienceFraction(customer.patience);
 
-  return Math.round(earned * streakMultiplier(streak));
+  return Math.round(earned * streakMultiplier(streak)) + COMBO_BONUS * batchServes;
 };

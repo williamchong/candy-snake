@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_HEIGHT, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
+import { STARTING_LIVES } from '../core/game';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
 import { CELL_SIZE } from '../render/textures';
@@ -11,6 +12,9 @@ import {
   centredColumn,
   CHILD_HEADROOM,
   CHILD_UNDERFOOT,
+  COMBO_PIP,
+  COMBO_PIPS,
+  COMBO_RUN,
   EXIT_GAP,
   HEADLINE_ROOM,
   hitsTab,
@@ -19,6 +23,7 @@ import {
   menuPlan,
   PARADE_GROWTH,
   scoreboard,
+  SCORE_SIZE,
   TEXT_MARGIN,
   TAB_SIZE,
   wheelSeats,
@@ -90,6 +95,49 @@ const shelfRect = (frame: Frame): Rect => {
     ? { left: at.x - slot / 2, right: at.x + slot / 2, top: start, bottom: end }
     : { left: start, right: end, top: at.y - slot / 2, bottom: at.y + slot / 2 };
 };
+
+/**
+ * A row of `count` marks stepping at `pitch`, as the one box it occupies —
+ * which is what both runs sharing the hearts' row have to be measured as.
+ */
+const runRect = (at: Vec2, pitch: number, count: number, size: number): Rect =>
+  around(
+    { x: at.x + ((count - 1) * pitch) / 2, y: at.y },
+    (count - 1) * pitch + size,
+    size,
+  );
+
+/** The pips, as the box the whole run occupies. */
+const comboRect = (frame: Frame): Rect => {
+  const { at, pitch } = frame.hud.combo;
+  return runRect(at, pitch, COMBO_PIPS, COMBO_PIP);
+};
+
+/**
+ * The hearts, the same way — the run rather than one glyph, since what the
+ * meter has to stay out of is all three of them. A heart is measured by the
+ * clearance the rest of the HUD already keeps off it.
+ */
+const livesRect = (frame: Frame): Rect => {
+  const { at, pitch } = frame.hud.lives;
+  return runRect(at, pitch, STARTING_LIVES, 2 * LIVES_CLEARANCE);
+};
+
+/**
+ * What the score could grow to. It is left-anchored (`UIScene`'s
+ * `setOrigin(0, 0.5)`), and a run that reaches six figures is past anything the
+ * balance sweep has produced — so this is a ceiling the real text stays under,
+ * which is what a clearance test wants. The height is the size it is actually
+ * set at, so the box follows the font rather than being re-guessed beside it.
+ */
+const SCORE_MAX_WIDTH = 110;
+
+const scoreRect = (frame: Frame): Rect => ({
+  left: frame.hud.score.x,
+  right: frame.hud.score.x + SCORE_MAX_WIDTH,
+  top: frame.hud.score.y - SCORE_SIZE / 2,
+  bottom: frame.hud.score.y + SCORE_SIZE / 2,
+});
 
 const boardRect = (frame: Frame): Rect => ({
   left: frame.board.x,
@@ -510,6 +558,31 @@ describe('layout', () => {
     // A top-edge control's whole failure mode: the cheat-sheet tab sitting
     // under the notch, where it can be seen and not pressed.
     expect(inset.hud.sheet.tab.y - TAB_SIZE / 2).toBeGreaterThanOrEqual(notch.top);
+  });
+
+  it.each(VIEWPORTS)('finds room for the combo meter on %s', (_name, view) => {
+    // The meter is the one HUD widget with no fallback: the rack shrinks, the
+    // wheel gives up its head, but four pips are four pips. So the sweep asks
+    // the two questions that would sink it — is it on the screen at all, and
+    // does it land on top of either neighbour it shares the row with.
+    const frame = layout(view);
+    const combo = comboRect(frame);
+
+    // The box measured here is the width `layout.ts` reserved when it fitted
+    // the row, so a drift between the two shows up as a failure rather than as
+    // a clearance quietly checked against the wrong run.
+    expect(combo.right - combo.left).toBe(COMBO_RUN);
+    expect(onScreen(combo, view)).toBe(true);
+    expect(overlaps(combo, scoreRect(frame))).toBe(false);
+    expect(overlaps(combo, livesRect(frame))).toBe(false);
+  });
+
+  it.each(VIEWPORTS)('keeps the combo meter off the kitchen on %s', (_name, view) => {
+    // Drawn HUD, not drawn *over* the board (design §11): a pip lit across the
+    // strand would read as something the maker had cooked.
+    const frame = layout(view);
+
+    expect(overlaps(comboRect(frame), boardRect(frame))).toBe(false);
   });
 
   it('holds a floor under the cell size on a viewport too small to fit one', () => {

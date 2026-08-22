@@ -33,6 +33,19 @@ const tiers = (counts: Record<ColorTier, number>): string =>
     .join('  ·  ');
 
 /**
+ * The best batch, if there was one, as a clause on the streak's line rather
+ * than a line of its own — this screen centres its rows without fitting them to
+ * the frame's *height*, and a ninth row puts the fullest run past a small phone
+ * held sideways. Hung off the streak safely: a combo above 1 takes two serves,
+ * which is a streak of at least two, so the line it joins is always there.
+ *
+ * Nothing below 2, because every serve straight off the block scores 1 — a run
+ * reporting "best combo 1" would be reporting that it was played.
+ */
+const bestBatch = ({ bestCombo }: RunSummary): string =>
+  bestCombo > 1 ? `  ·  best batch fed ${bestCombo}` : '';
+
+/**
  * Where the run landed on the table, or nothing at all for one that missed it.
  * A screen the player is passing through on the way to the next run is no place
  * to be told they came fourteenth.
@@ -90,7 +103,7 @@ const lines = (summary: RunSummary, rank: number | undefined): readonly StackRow
   if (summary.bestStreak > 0) {
     const runs = summary.bestStreak === 1 ? 'serve' : 'in a row';
     spec.push({
-      text: `best streak ${summary.bestStreak} ${runs}`,
+      text: `best streak ${summary.bestStreak} ${runs}${bestBatch(summary)}`,
       size: STAT_SIZE,
       gap: STAT_GAP,
     });

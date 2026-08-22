@@ -44,6 +44,24 @@ describe('scoreServe', () => {
     // ×1.33, and rounding the base first would lose the fraction entirely.
     expect(scoreServe(served(RED), 3)).toBe(33);
   });
+
+  it('pays the combo flat per child already served off the batch', () => {
+    expect(scoreServe(served(RED), 0, 1)).toBe(40);
+    expect(scoreServe(served(RED), 0, 2)).toBe(55);
+    // The same 15 a step whatever the tier — a bonus for the batch, not the color.
+    expect(scoreServe(served(RAW), 0, 1)).toBe(25);
+    expect(scoreServe(served(RED | BLUE), 0, 1)).toBe(65);
+  });
+
+  it('adds the combo after the multiplier rather than inside it', () => {
+    // round(25 × 1.1³) + 15 — a fourth multiplier would have paid round(48.275 × …)
+    // and made the bonus worth more the better the run was already going.
+    expect(scoreServe(served(RED), 3, 1)).toBe(48);
+  });
+
+  it('pays no combo unless one is passed — a shelf serve stays flat', () => {
+    expect(scoreServe(served(RED), 0)).toBe(scoreServe(served(RED), 0, 0));
+  });
 });
 
 describe('streakMultiplier', () => {

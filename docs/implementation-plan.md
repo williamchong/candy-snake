@@ -478,11 +478,13 @@ exactly this kind of proposal.
   `core/scoring.ts` has three terms in it already. A flat per-serve bonus inside
   the window if anything, never a fourth multiplier.
 - **A combo for serving several children in a row.** — **candidate one, now
-  asked for by three players in three sittings.** The scope is unchanged from
-  the first sitting's entry — a serve counter on `Severed`, the term in
-  `core/scoring.ts` — as is the second sitting's correction that the **meter**
-  may be the load-bearing half. It stays second in the order, for the reason the
-  second sitting gave: it pays for a batch nobody can currently afford to build.
+  asked for by three players in three sittings. Built; see the combo-meter pass
+  below.** The scope shipped is the one this entry spelled — a serve counter on
+  `Severed`, the term in `core/scoring.ts`, and the meter the second sitting
+  called the load-bearing half. It did **not** close the open finding, and the
+  measurement says no constant could. The second sitting's objection ("it pays
+  for a batch nobody can currently afford to build") had expired by the seventh;
+  what replaced it is a plainer problem, which is that the grinder does not die.
 
   The Overcooked half of the proposal — **serving in the order the children
   arrived** — is **struck**, on two grounds. There is no verb for it: matching
@@ -2070,6 +2072,131 @@ other, and they pass in front of the high-score table.
 Nothing here is random and nothing here is audible: a fixed cast at fixed speeds
 needs no draw at all, and the menu is before the first gesture, which is before
 a browser will let a cue play.
+
+### What the combo-meter pass measured — the bonus is legible and does not close the finding
+
+Candidate one, built and measured. The mechanic works exactly as specified:
+`Severed` carries a serve counter, `scoreServe` takes a flat addend after the
+multiply, and a four-pip meter on the hearts' row lights as a batch feeds one
+child after another. What it does not do is invert the open finding — the
+batching maker still loses to the grinder — and the measurement is clear that
+this is not a matter of picking a better constant.
+
+**The sweep.** `COMBO_BONUS` against the two numbers that matter, on `SWEEP`
+(16 seeds) for the proportion and `WIDE` (64) for the median:
+
+| bonus | batcher ahead /16 | WIDE median | batcher mean | grinder mean |
+| ----- | ----------------- | ----------- | ------------ | ------------ |
+| 0     | 0                 | 4.21 min    | 4932         | 13032        |
+| 10    | 0                 | 4.32 min    | 5596         | 12907        |
+| **15**| **2**             | **4.28 min**| **6649**     | 12892        |
+| 25    | 0                 | 4.30 min    | 4885         | 12797        |
+| 40    | 1                 | 4.09 min    | 5942         | 12898        |
+| 60    | 1                 | 4.09 min    | 6750         | 13076        |
+| 100   | 2                 | **3.95 min**| 7222         | 13314        |
+
+**The proportion column is noise, and the reason is the ramp.** Bonus points
+feed `rampMs` like any others (`MS_PER_POINT`, 70 ms a point), so every constant
+in that table is a *different run* — the maker dies at a different moment, and
+every free cell drawn after that moment is re-rolled. 0 → 2 → 0 → 1 → 1 → 2 is
+what a re-roll looks like, not a response curve. It is the fourth time a pass
+has had to restate what `simulation.test.ts` already says three times over: a
+run either side of a change that moves an rng draw is a different run, not the
+same one played harder.
+
+**Read as a controlled experiment, the answer is unambiguous.** Excluding combo
+points from the ramp feed makes the runs byte-identical across every constant —
+same median (4.21), same deaths, same `bestCombo` spread — leaving score as the
+only thing that moves. The batcher's mean then climbs **16.93 points per point
+of bonus** — the same slope to two decimals across all three intervals
+measured (0→15, 15→40, 40→100), which is the clearest evidence the arm did
+what it was for — off 4932 against a grinder sitting flat at ~13060. Closing
+an 8126-point mean gap at that rate needs a bonus near **480**: thirty-two
+times the tier-1 base, and nearly ten times what a tier-3 serve is worth. At 100
+— already seven times the tier-1 base — the controlled arm has the batcher on
+6625 against 13207, and 3 of 16. The shipped arm at the same constant reaches
+7222 and pushes the median through the 4-minute floor to 3.95, which is the
+other reason a big constant is not the way out.
+
+So the ramp-feed exclusion the plan held in reserve was **measured and not
+shipped**. Its trigger (a broken median) never fired, it costs legibility, and
+on the shipped arm it read *worse* (1 of 16 at bonus 15, against 2). It bought a
+clean experiment, which is what it was actually good for.
+
+**Why no constant works: the gap is not a rate.** The batcher already makes more
+candy per minute than the grinder and has since the sugar-supply pass — that
+test still passes on every seed. What it does not do is *live*. Measured on
+`SWEEP`: the grinder carries one segment, rarely steers into itself, and is
+**still standing on 9 of 16 seeds** when the sweep runs out of ticks, for a mean
+run of **9.49 min**. The batcher drags a production line, dies on **16 of 16**,
+and averages **4.80 min** — barely half the time on the clock to earn in. A
+per-serve term paid at most three times a batch cannot pay for that. **The
+lever that closes this finding has to touch survival or run length, not the
+price of a serve** — which is what the fifth sitting's held speed candidate and
+the escalation to nested-set orders were always aimed at.
+
+**The mechanic is worth keeping anyway, and `COMBO_BONUS` stays at 15.** It
+sits between tier-1 (10) and tier-2 (25) base, it costs the median nothing
+measurable (4.28 against a 4.21 baseline, inside the ±0.3 the median is quoted
+at), and the thing the second sitting predicted would be load-bearing turned out
+to be exactly that: the pips are the only place a flat term inside a number that
+already carries tier, patience and streak becomes something a player can watch
+themselves earn.
+
+**`bestCombo` says the mechanic actually fires.** The ledger's failure mode was
+"combos never occur, and no constant fixes that". Measured, the batcher's
+high-water mark at the shipped constant is 3 on five seeds and 4 on the other
+eleven; across every arm swept it never once came back 1. And 4 is the window's
+own ceiling (§7's max queue), which is where the meter's four pips come from —
+a count corroborated by the sweep rather than read off a table.
+
+**Notes from building it.**
+
+- **`Candy` carries no provenance, so the combo counts direct serves only.** A
+  racked candy is `{color, bornAt}` and cannot trace back to the batch it was
+  cut from; a child sweeping the rack later therefore starts no combo and pays
+  no bonus. Adding provenance was outside the scope the ledger prescribed, and
+  the rule reads cleanly anyway — a candy belongs to a batch only while it is
+  still on the block.
+- **The counter lives on the piece, not on the game.** `consumeSevered` is the
+  one place that holds a `Severed`, so it owns the increment and
+  `deliverCandy` reports a boolean up to it. A crumble never reaches that path,
+  which is how "debris is not a batch" ends up structural rather than guarded.
+- **Two names for two counts.** `Severed.batchServes` and `scoreServe`'s
+  argument are the children fed off the batch *before* the serve being paid;
+  the `combo` the HUD is handed includes it. They were both called `combo` at
+  first, which made `scoreServe(customer, 1, 1)` and an event reading `combo: 2`
+  describe the same serve.
+- **Off the shelf is the absence of a batch, not a flag beside one.**
+  `serveCustomer` takes an optional `batchServes` and reads `fromShelf` off
+  whether it was given one. A boolean *and* a count could disagree; a racked
+  candy has no batch behind it to count, which is one fact.
+- **`bestCombo` is reported, not just recorded.** It rides `RunSummary` the way
+  `bestStreak` does and prints as a clause on the streak's line — appended
+  rather than given a row of its own, because the game-over stack centres its
+  rows without fitting them to the frame's height, and a ninth row measures 323
+  px against a small phone's 320. Hung off the streak safely: a combo above 1
+  takes two serves, so the line it joins is always there.
+- **The opening levels need no guard.** They run `maxQueue: 1`, so a batch
+  direct-serves at most one child and the term is 0 by construction. Pinned with
+  a test rather than a conditional.
+- **No audio, deliberately.** Consecutive serves already climb the Serve chime
+  through `STREAK_SCALE` and the chop Pop already counts the batch; a combo
+  pitch code on the same cue would put two numbers in one channel (§12). The
+  meter is the whole signal.
+- **The meter needed a harness, not the smoke driver.** It is invisible at rest
+  and shows for 2.6 s after one event, which is exactly what a boots-clean check
+  cannot see. Driven instead through a throwaway page that Vite serves the real
+  `comboMeter.ts` and `layout.ts` to: rest, a three-serve batch, mid-fade, and
+  the `play(9)` clamp, on three viewports.
+- **The breath is a tween, not a hand-driven clock.** It was written as a
+  `render(delta)` counting a hold and a fade down, which is `boardView`'s head
+  flash and `shelfStrip`'s toss spelled again — and the three fields it needed
+  (`remainingMs`, the lit count, a rounded write-cache guarding the ~120
+  redundant frames of the hold) were all there to pay for the driving. One
+  stored tween with `delay: HOLD_MS` does the same thing, and stopping it is how
+  the next serve restarts the run. `CustomerView` and `RushDoor` step by hand
+  for a reason this widget does not have: several children sharing one phase.
 
 ## Risks & mitigations
 

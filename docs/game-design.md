@@ -678,10 +678,30 @@ exactly what their one order needs (§7), so nothing on it can starve.
 | Serve streak (no losses)       | ×1.1 per consecutive serve, cap ×2        |
 | Shelf serve                    | Same as normal (planning ahead is valid)  |
 | Serve an opening-level customer| Base only — no clock, so no bonus (§7)    |
+| Combo (batch feeds >1 child)   | + 15 flat per child already fed off it    |
 
 The streak multiplier is the run standing *before* the serve, so the first
 serve after a loss pays flat and the bonus has to be earned back. Points are
 rounded once, at the end, rather than per term.
+
+The combo is what one chopped batch is worth *as a batch*: chop a strand
+carrying three colors into three waiting children and the second serve pays
++15, the third +30. It is added after the multiplier rather than being a
+fourth one, so a batch is worth the same however well the run is otherwise
+going — and because it is flat, a maker who chops one segment at a time can
+never earn it.
+
+Three things do not pay it, all for the same reason — a candy only belongs to
+a batch while it is still on the block:
+
+- **The first serve off a batch.** Nothing has been fed off it yet.
+- **A shelf serve.** A racked candy has lost its batch; it is a candy now.
+- **A crumble.** Debris from a self-hit (§6) serves nobody, so its count
+  never leaves zero.
+
+The counter tops out at 4 in practice, which is the window's own ceiling
+(§7's max queue): a longer batch can be chopped, but there is nobody left to
+hand it to.
 
 High scores (top 10, with date) persist in `localStorage`.
 
@@ -724,12 +744,11 @@ High scores (top 10, with date) persist in `localStorage`.
 
 ## 11. HUD & screens
 
-- **HUD:** score, lives (heart pips), the queue of children with their bubbles
-  and patience bars (§5), shelf contents (6 slots), cheat-sheet tab, mute tab,
-  pause. The
-  hearts are inked in the symbol's own dark value rather than red: a life is
-  not a candy, and hue in this game belongs to candies alone (§4, palette
-  constraints).
+- **HUD:** score, lives (heart pips), the combo meter (four pips, §9), the
+  queue of children with their bubbles and patience bars (§5), shelf contents
+  (6 slots), cheat-sheet tab, mute tab, pause. The hearts are inked in the
+  symbol's own dark value rather than red: a life is not a candy, and hue in
+  this game belongs to candies alone (§4, palette constraints).
 - **Announcements go where the player is already looking.** The gear change of
   §7's speed ladder pulses the *head* rather than lighting a pip beside the
   score: the thing whose speed changed is the thing being steered, and news
@@ -737,12 +756,27 @@ High scores (top 10, with date) persist in `localStorage`.
   pale ink, not heat — orange would be the obvious colour for a strand running
   hotter, which is exactly why it is not used (§4: hue belongs to candies, and a
   head flashing a secondary reads as a candy being made).
+- **The combo meter shows up and leaves again.** It sits on the hearts' row —
+  four square pips, filling left to right as one batch feeds one child after
+  another (§9) — and it is invisible the rest of the time. A gauge parked at
+  zero all run would be a fifth fixed thing to read and, worse, would look like
+  something the player was failing to fill rather than something they had just
+  earned. So it lights on the serve, holds about two seconds (long enough for a
+  whole batch to drain onto the block), and fades out over roughly half of one.
+  The unlit pips stay drawn while it is up: what is left of the meter is what is
+  left of the batch.
 - **No prose in the HUD.** The only text on the play screen is the score, and
   that is a number. Everything else — what a child wants, how long they will
   wait, how they took it — is carried by a drawn thing, because the HUD is read
   in glances taken from steering.
 - **Screens:** Boot/loading → Menu (play, settings, high scores) → Game →
   Game Over (score breakdown, high-score entry-free — auto-saved, restart CTA).
+  The breakdown reports the run's best batch beside its best streak, on the same
+  line rather than a new one: each batch's own count dies with the piece that
+  carried it, so the end of the run is the only place the best one can be told,
+  and this screen centres its rows without fitting them to the frame's height.
+  Nothing is said below 2 — every serve straight off the block feeds one child,
+  so "best batch fed 1" would report only that the game was played.
 - **First-run teaching:** no modal tutorial, no toasts, and no captions. The
   three lessons — pull sugar and chop, sugar before the jar, two dyes make one
   color — are the three opening levels of §7, taught by what the board does and

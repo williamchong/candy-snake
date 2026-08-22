@@ -46,6 +46,7 @@ const served = (streak: number): GameEvent => ({
   customer: child(streak),
   points: 10,
   streak,
+  combo: 1,
   fromShelf: false,
 });
 

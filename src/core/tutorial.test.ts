@@ -134,6 +134,7 @@ const strand = (
               color: RAW,
             })),
             fate: 'chop',
+            batchServes: 0,
           },
         ],
 });

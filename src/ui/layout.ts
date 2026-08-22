@@ -60,6 +60,14 @@ export interface HudFrame {
   /** The first heart; the rest follow along the row at `pitch`. */
   readonly lives: { readonly at: Vec2; readonly pitch: number };
   /**
+   * The first combo pip; the rest follow along the row at `pitch`, the way the
+   * hearts do. It shares the hearts' row in both orientations because it is
+   * the same kind of thing — a count of the run drawn rather than written
+   * (design §11) — and because that row is the one band the score does not
+   * grow into.
+   */
+  readonly combo: { readonly at: Vec2; readonly pitch: number };
+  /**
    * The rack: where its first slot sits, how far apart they step, which way
    * they run, and how big each one is drawn. The size is here rather than in
    * `ShelfStrip` because on a phone held sideways the rack has to fit between
@@ -170,6 +178,12 @@ const HEADER_HEIGHT = 56;
 const STRIP_HEIGHT = 180;
 
 const SCORE_ROW = 28;
+/**
+ * How tall the score is set. Here rather than at the `add.text` call because it
+ * is the one thing about the score that the clearance sweep has to know, and
+ * screen geometry lives in this file (architecture.md §2).
+ */
+export const SCORE_SIZE = 30;
 const SHELF_ROW = 30;
 const QUEUE_ROW = 150;
 
@@ -182,6 +196,20 @@ const LIVES_PITCH = 26;
 const LIVES_ROW = 76;
 /** Half a heart: what anything hung below the row has to clear it by. */
 export const LIVES_CLEARANCE = 16;
+
+/**
+ * Pips in the combo meter — the most children one batch can ever feed, which is
+ * the window's own ceiling (`difficulty.ts` tops `maxQueue` out at 4) rather
+ * than a number picked to look right. A batch can hold more candy than that,
+ * but there is nobody left to hand it to.
+ */
+export const COMBO_PIPS = 4;
+/** How far apart the pips step. */
+const COMBO_PITCH = 14;
+/** One pip, drawn square — smaller than its step, so the run reads as separate marks. */
+export const COMBO_PIP = 10;
+/** The run's full width, which is what both bands have to find room for. */
+export const COMBO_RUN = (COMBO_PIPS - 1) * COMBO_PITCH + COMBO_PIP;
 
 /** The rack at its roomiest — the desktop pitch, and the cap everywhere else. */
 const SHELF_PITCH = 44;
@@ -390,7 +418,9 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   // Tight under the score rather than clear of it: the hearts are the ceiling
   // the window hangs from on a short screen, so every pixel spent above them is
   // one the child is pushed down the column by.
-  const livesY = insets.top + LIVES_ROW;
+  // The hearts' own anchor, held once: the combo meter is placed off the end of
+  // this run, so the two rows cannot drift apart.
+  const livesAt = { x: columnX + 8, y: insets.top + LIVES_ROW };
   // The rack and the tab hang off the same edge and must stay on it.
   const frameFloor = insets.top + availH - GUTTER;
   // What six slots need at the floor of `shelfRun` — the rack cannot be asked
@@ -413,7 +443,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   const footY = Math.min(
     Math.max(
       rowCentreY(board, cell, CHOP_BLOCK_TOP + CHOP_BLOCK_HEIGHT - 1),
-      livesY + LIVES_CLEARANCE + CHILD_HEADROOM,
+      livesAt.y + LIVES_CLEARANCE + CHILD_HEADROOM,
     ),
     insets.top + availH - rackMin - GUTTER / 2 - CHILD_UNDERFOOT,
   );
@@ -459,7 +489,16 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
     hud: {
       score: { x: columnX, y: insets.top + 40 },
       headline: headlineFor(board, insets.top),
-      lives: { at: { x: columnX + 8, y: livesY }, pitch: LIVES_PITCH },
+      lives: { at: livesAt, pitch: LIVES_PITCH },
+      // A heart's step past the last heart, measured off the hearts' own anchor
+      // rather than rebuilt from it, so moving the row moves both runs. The
+      // column is at its narrowest 180 px, which the two clear together with
+      // room over, so the meter never has to be fitted per viewport the way the
+      // rack and the wheel are.
+      combo: {
+        at: { x: livesAt.x + STARTING_LIVES * LIVES_PITCH, y: livesAt.y },
+        pitch: COMBO_PITCH,
+      },
       // `at` is the first slot's centre and `rackTop` its top edge: the run
       // starts half a slot below the clearance the child was given, or the
       // patience bar drains across the candy in the top slot.
@@ -563,6 +602,19 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
           y: insets.top + SCORE_ROW,
         },
         pitch: LIVES_PITCH,
+      },
+      // Centred in the band's own slack rather than hung off either end of it:
+      // upright the score grows leftward from the board's edge and the hearts
+      // are pinned to the right, so the middle is the one part of the row
+      // neither of them can reach into.
+      combo: {
+        at: {
+          // `centre` gives the run's left edge; the anchor is the first pip's
+          // middle, half a pip in from it.
+          x: centre(board.x, board.width, COMBO_RUN) + COMBO_PIP / 2,
+          y: insets.top + SCORE_ROW,
+        },
+        pitch: COMBO_PITCH,
       },
       shelf: {
         // Right-aligned under the bench's own wall, so the candy's path still
