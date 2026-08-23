@@ -14,7 +14,8 @@ import {
   CHILD_UNDERFOOT,
   COMBO_PIP,
   COMBO_PIPS,
-  COMBO_RUN,
+  COMBO_FIGURE,
+  COMBO_WIDTH,
   EXIT_GAP,
   HEADLINE_ROOM,
   hitsTab,
@@ -128,10 +129,21 @@ const runRect = (at: Vec2, pitch: number, count: number, size: number): Rect =>
     size,
   );
 
-/** The pips, as the box the whole run occupies. */
+/**
+ * The meter, as the box it occupies: the pips *and* the room kept beside them
+ * for what the run is paying (`ComboMeter`). Measured together, because a
+ * figure drawn in space the row was never fitted for is a figure drawn over a
+ * heart.
+ */
 const comboRect = (frame: Frame): Rect => {
-  const { at, pitch } = frame.hud.combo;
-  return runRect(at, pitch, COMBO_PIPS, COMBO_PIP);
+  const { at, pitch, label } = frame.hud.combo;
+  const pips = runRect(at, pitch, COMBO_PIPS, COMBO_PIP);
+
+  // The right edge is taken from the frame's own label anchor rather than
+  // rebuilt from the pips, so the box measured here is the box `layout.ts`
+  // actually placed — a figure written somewhere the row was not fitted for
+  // fails this rather than being quietly measured against the run alone.
+  return { ...pips, right: label.x + COMBO_FIGURE };
 };
 
 /**
@@ -621,7 +633,7 @@ describe('layout', () => {
     // The box measured here is the width `layout.ts` reserved when it fitted
     // the row, so a drift between the two shows up as a failure rather than as
     // a clearance quietly checked against the wrong run.
-    expect(combo.right - combo.left).toBe(COMBO_RUN);
+    expect(combo.right - combo.left).toBe(COMBO_WIDTH);
     expect(onScreen(combo, view)).toBe(true);
     expect(overlaps(combo, scoreRect(frame))).toBe(false);
     expect(overlaps(combo, livesRect(frame))).toBe(false);

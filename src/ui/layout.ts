@@ -66,7 +66,17 @@ export interface HudFrame {
    * (design §11) — and because that row is the one band the score does not
    * grow into.
    */
-  readonly combo: { readonly at: Vec2; readonly pitch: number };
+  readonly combo: {
+    readonly at: Vec2;
+    readonly pitch: number;
+    /**
+     * Where the figure beside the run is written from — its left edge, on the
+     * pips' own row. Here rather than measured off `at` by the widget, because
+     * all screen geometry lives in this file: a number the meter worked out for
+     * itself is a number the row was never fitted for.
+     */
+    readonly label: Vec2;
+  };
   /**
    * The rack: where its first slot sits, how far apart they step, which way
    * they run, and how big each one is drawn. The size is here rather than in
@@ -221,8 +231,38 @@ export const COMBO_PIPS = 4;
 const COMBO_PITCH = 14;
 /** One pip, drawn square — smaller than its step, so the run reads as separate marks. */
 export const COMBO_PIP = 10;
-/** The run's full width, which is what both bands have to find room for. */
+/** The run's full width. */
 export const COMBO_RUN = (COMBO_PIPS - 1) * COMBO_PITCH + COMBO_PIP;
+/** The gap between the last pip and the figure beside it. */
+const COMBO_LABEL_GAP = 8;
+/**
+ * What the figure itself takes: the widest the meter can ever show, which is
+ * the last pip's — `+45`, at the size `ComboMeter` sets it. A ceiling rather
+ * than a measurement of the text, because the row is fitted before the meter
+ * has anything to say.
+ */
+export const COMBO_FIGURE = 28;
+/**
+ * Room the figure beside the pips needs — what the run is paying (`ComboMeter`).
+ * It hangs off the right of the run rather than being centred with it: upright,
+ * the pips sit in the middle of a band whose left end the score grows into, and
+ * a meter re-centred to make room for the figure walks the pips into the score
+ * on the narrowest phone. The slack to the right is where the room actually is,
+ * and `layout.test.ts` sweeps every viewport to prove it stays there.
+ */
+export const COMBO_LABEL_ROOM = COMBO_LABEL_GAP + COMBO_FIGURE;
+/** The whole meter — the run and the figure — which is what a band has to hold. */
+export const COMBO_WIDTH = COMBO_RUN + COMBO_LABEL_ROOM;
+
+/**
+ * The combo meter from its first pip: the run steps at one pitch in both
+ * orientations, and the figure sits off the end of it (`COMBO_LABEL_ROOM`).
+ */
+const comboRun = (at: Vec2): HudFrame['combo'] => ({
+  at,
+  pitch: COMBO_PITCH,
+  label: { x: at.x + COMBO_RUN - COMBO_PIP / 2 + COMBO_LABEL_GAP, y: at.y },
+});
 
 /** The rack at its roomiest — the desktop pitch, and the cap everywhere else. */
 const SHELF_PITCH = 44;
@@ -518,10 +558,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
       // column is at its narrowest 180 px, which the two clear together with
       // room over, so the meter never has to be fitted per viewport the way the
       // rack and the wheel are.
-      combo: {
-        at: { x: livesAt.x + STARTING_LIVES * LIVES_PITCH, y: livesAt.y },
-        pitch: COMBO_PITCH,
-      },
+      combo: comboRun({ x: livesAt.x + STARTING_LIVES * LIVES_PITCH, y: livesAt.y }),
       // `at` is the first slot's centre and `rackTop` its top edge: the run
       // starts half a slot below the clearance the child was given, or the
       // patience bar drains across the candy in the top slot.
@@ -656,15 +693,12 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
       // upright the score grows leftward from the board's edge and the hearts
       // are pinned to the right, so the middle is the one part of the row
       // neither of them can reach into.
-      combo: {
-        at: {
-          // `centre` gives the run's left edge; the anchor is the first pip's
-          // middle, half a pip in from it.
-          x: centre(board.x, board.width, COMBO_RUN) + COMBO_PIP / 2,
-          y: insets.top + SCORE_ROW,
-        },
-        pitch: COMBO_PITCH,
-      },
+      combo: comboRun({
+        // `centre` gives the run's left edge; the anchor is the first pip's
+        // middle, half a pip in from it.
+        x: centre(board.x, board.width, COMBO_RUN) + COMBO_PIP / 2,
+        y: insets.top + SCORE_ROW,
+      }),
       shelf: {
         // Right-aligned under the bench's own wall, so the candy's path still
         // reads toward one side once the column has become a strip (design §10).

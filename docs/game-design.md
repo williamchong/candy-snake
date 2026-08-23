@@ -939,10 +939,18 @@ High scores (top 10, with date) persist in `localStorage`.
   whole batch to drain onto the block), and fades out over roughly half of one.
   The unlit pips stay drawn while it is up: what is left of the meter is what is
   left of the batch.
-- **No prose in the HUD.** The only text on the play screen is the score, and
-  that is a number. Everything else — what a child wants, how long they will
-  wait, how they took it — is carried by a drawn thing, because the HUD is read
-  in glances taken from steering.
+- **And it says what it is paying.** A figure sits off the end of the run —
+  `+15`, `+30`, `+45` — the bonus that serve just earned, appearing with the
+  second child off a batch and going with the pips. Pips alone say *how many*
+  and can never say *how much*, and a flat term buried in a score that also
+  carries the tier, the patience bonus and the streak multiplier is a term
+  nobody sees themselves earn. It is the batch's own bonus and not the streak
+  multiplier beside it in §9 — a different mechanic on a different clock, and
+  labelling the pips with a "×" would be a lie about which one they count.
+- **No prose in the HUD.** The only text on the play screen is the score and
+  the combo's payout, and both are numbers. Everything else — what a child
+  wants, how long they will wait, how they took it — is carried by a drawn
+  thing, because the HUD is read in glances taken from steering.
 - **Screens:** Boot/loading → Menu (play, settings, high scores) → Game →
   Game Over (score breakdown, high-score entry-free — auto-saved, restart CTA).
   The breakdown reports the run's best batch beside its best streak, on the same

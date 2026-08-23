@@ -24,6 +24,15 @@ const STREAK_CAP = 2;
 const COMBO_BONUS = 15;
 
 /**
+ * What the batch adds to a serve that has already fed `batchServes` others.
+ * Exported so the meter that draws the run can say what it is paying without
+ * keeping a second copy of the rate — the same reason the palette lives in one
+ * table (design §4): a HUD that disagrees with the score is worse than one that
+ * says nothing.
+ */
+export const comboBonus = (batchServes: number): number => COMBO_BONUS * batchServes;
+
+/**
  * The reward for serving without losing anyone. `streak` is the run of serves
  * *before* this one, so the first serve after a loss pays flat and the bonus
  * has to be earned back (design §9).
@@ -47,5 +56,5 @@ export const scoreServe = (
   const base = BASE_POINTS[colorInfo(customer.want).tier];
   const earned = base + base * PATIENCE_BONUS * patienceFraction(customer.patience);
 
-  return Math.round(earned * streakMultiplier(streak)) + COMBO_BONUS * batchServes;
+  return Math.round(earned * streakMultiplier(streak)) + comboBonus(batchServes);
 };
