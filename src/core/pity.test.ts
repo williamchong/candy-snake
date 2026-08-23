@@ -27,6 +27,7 @@ const stateWith = (
     severed: [],
     shelf: [],
     customers: wants.map((want, index) => createCustomer(index + 1, want, 30_000)),
+    upcoming: [],
     score: 0,
     lives: 3,
     streak: 0,
@@ -111,6 +112,36 @@ describe('starvedPrimaries', () => {
 
   it('asks for nothing for a raw order', () => {
     expect(starvedPrimaries(stateWith([RAW]))).toEqual([]);
+  });
+
+  /**
+   * A previewed order is demand the doorway has already shown the player
+   * (design §5), and a shown order the board will not stock is worse than no
+   * preview at all — the maker builds toward a jar that never comes and spends
+   * the whole of the lead time circling. The tenth sitting paid a sweep to
+   * learn this from the other side.
+   */
+  it('promises a previewed order its jars too', () => {
+    expect(starvedPrimaries(stateWith([], { upcoming: [RED | BLUE] }))).toEqual([
+      RED,
+      BLUE,
+    ]);
+  });
+
+  it('pools the window and the doorway together', () => {
+    expect(starvedPrimaries(stateWith([RED], { upcoming: [YELLOW] }))).toEqual([
+      RED,
+      YELLOW,
+    ]);
+  });
+
+  it('asks for nothing for a previewed order the rack can already fill', () => {
+    const state = stateWith([], {
+      upcoming: [RED | BLUE],
+      shelf: [{ color: RED | BLUE, bornAt: 0 }],
+    });
+
+    expect(starvedPrimaries(state)).toEqual([]);
   });
 });
 

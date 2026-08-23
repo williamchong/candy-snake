@@ -126,6 +126,7 @@ export class Game {
       severed: [],
       shelf: [],
       customers: [],
+      upcoming: [],
       score: 0,
       lives: STARTING_LIVES,
       streak: 0,
@@ -181,6 +182,19 @@ export class Game {
    */
   get twinChance(): number {
     return this.config.twinChance ?? TWIN_CHANCE;
+  }
+
+  /**
+   * How many arrivals ahead the doorway shows its colors, the same shape as
+   * `twinChance` above and pinned the same way — 0 is the shipped game and
+   * draws nothing early (`GameConfig.previewDepth`).
+   *
+   * Read through a getter rather than off `config` at the call site so that a
+   * sweep arm and the maker planning against it can never disagree about how
+   * far ahead the window is legible.
+   */
+  get previewDepth(): number {
+    return this.config.previewDepth ?? 0;
   }
 
   /**
@@ -732,8 +746,9 @@ export class Game {
     const customer = createCustomer(
       this.nextCustomerId,
       // Drawn only now that a child is actually arriving, so the seeded run of
-      // orders does not depend on how often `step` was called.
-      level?.want ?? this.rollWant(stage),
+      // orders does not depend on how often `step` was called — or taken off
+      // the front of the doorway, which is that same draw made a turn earlier.
+      level?.want ?? this.takeWant(stage),
       window.patienceMs,
     );
     this.nextCustomerId += 1;
@@ -741,6 +756,54 @@ export class Game {
     events.push({ type: 'customer-arrived', customer });
 
     this.serveFromShelf(this.state.customers.length - 1, events);
+    // After the rack sweep, so a previewed order is drawn against the window as
+    // it actually stands. That is the rule `rollWant` already follows; the
+    // preview reads it a moment earlier rather than reading a different one.
+    this.fillPreview(stage);
+  }
+
+  /**
+   * What the arriving child asks for: the order the doorway has been showing,
+   * or a fresh draw when there is nothing queued there.
+   *
+   * At `previewDepth` 0 the doorway is always empty, so this is `rollWant` at
+   * the call site it has always been at and the seeded stream is untouched.
+   * That is what makes the shipped game the control arm rather than one more
+   * arm of the sweep — the mistake this record has made about every lever it
+   * has measured so far.
+   */
+  private takeWant(stage: StageConfig): ColorMask {
+    const [previewed, ...rest] = this.state.upcoming;
+    if (previewed === undefined) return this.rollWant(stage);
+
+    // Mercy pre-empts rather than replaces: the order the doorway showed stays
+    // queued for the child behind this one, so nothing the player was shown is
+    // thrown away — it just arrives a turn late (`mercyWant`).
+    const mercy = this.mercyWant();
+    if (mercy !== undefined) return mercy;
+
+    this.state.upcoming = rest;
+    return previewed;
+  }
+
+  /**
+   * Tops the doorway back up to `previewDepth`.
+   *
+   * Only the endless game previews. An opening level's orders are the level's
+   * own (design §7), so there is nothing to draw ahead — and drawing one anyway
+   * would spend the seeded stream on a want no child is ever going to ask for.
+   *
+   * Each draw sees the window as it stands, which means a previewed order can
+   * echo a child who has *arrived* and never another guess. A queue of guesses
+   * echoing each other would raise the twin rate without anyone asking for it,
+   * and `TWIN_CHANCE` is a knob the twin-arm sweep has already priced.
+   */
+  private fillPreview(stage: StageConfig): void {
+    if (this.openingLevel !== undefined) return;
+
+    while (this.state.upcoming.length < this.previewDepth) {
+      this.state.upcoming = [...this.state.upcoming, this.orderWant(stage)];
+    }
   }
 
   /**
@@ -762,12 +825,33 @@ export class Game {
    * are served the moment they walk up — the cleanup is the whole visit.
    */
   private rollWant(stage: StageConfig): ColorMask {
+    return this.mercyWant() ?? this.orderWant(stage);
+  }
+
+  /**
+   * The mercy customer, or nobody — the brown half of `rollWant` above, split
+   * out because it is the half a preview must not touch.
+   *
+   * Every condition it reads is a fact about *now*: a brown on the rack this
+   * moment, a ramp that has settled by this moment. Drawn an arrival early
+   * those facts go stale — the spare brown can be staled off a full rack before
+   * the child it was rolled for arrives (design §5), and at a depth of two the
+   * same unchanged rack would license two of them. So mercy stays a
+   * substitution made at the window, and the doorway shows the ordinary draw.
+   *
+   * The order of the two rolls is unchanged, which is what keeps depth 0 the
+   * control: the mercy draw is taken at the arrival, before the tier draw, in
+   * exactly the run of the stream it has always been taken in.
+   */
+  private mercyWant(): ColorMask | undefined {
     const spare = this.state.shelf.some((candy) => candy.color === BROWN);
     const settled = rampMs(this.endlessMs, this.endlessScore) >= SETTLED_MS;
-    if (spare && settled && this.rng.next() < MERCY_CHANCE) {
-      return BROWN;
-    }
 
+    return spare && settled && this.rng.next() < MERCY_CHANCE ? BROWN : undefined;
+  }
+
+  /** An ordinary order off the stage's weights — the half the doorway shows. */
+  private orderWant(stage: StageConfig): ColorMask {
     return rollOrder(
       stage,
       this.rng,
@@ -867,6 +951,12 @@ export class Game {
       this.arrivalGapMs(stage.arrivalIntervalMs, stage.maxQueue) -
       TUTORIAL_ARRIVAL_GAP_MS;
     this.waitMs = Number.isFinite(served) ? Math.max(0, served) : 0;
+
+    // The doorway opens with the endless game and not an arrival later. Left to
+    // `admitCustomer`, the first real child would find nothing queued and be
+    // drawn on the spot — so the one arrival the preview exists to get ahead of
+    // is the one arrival it would have missed. A no-op at depth 0.
+    this.fillPreview(stage);
   }
 
   private spawnPickups(events: GameEvent[]): void {

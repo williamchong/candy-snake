@@ -36,7 +36,7 @@ const reachableFrom = (base: ColorMask, color: ColorMask): boolean =>
   (base & color) === base;
 
 /**
- * The primaries a waiting order still needs that the board has not got.
+ * The primaries an order still needs that the board has not got.
  *
  * What counts as "already satisfiable" is design §8.3's list: the shelf, the
  * strand, and the jars on the floor. A segment only helps if its color is a
@@ -44,6 +44,15 @@ const reachableFrom = (base: ColorMask, color: ColorMask): boolean =>
  * segment is no use to someone who wanted red. Raw is a subset of everything,
  * which is the base case: there is always a cube on the map (§8.1), so the
  * worst case is needing the order's primaries outright.
+ *
+ * **A previewed order counts, and it has to.** `state.upcoming` is demand the
+ * doorway has already shown the player (design §5), and a shown order the board
+ * will not stock is worse than no preview at all: the maker builds toward a jar
+ * that never comes and spends the lead time circling. The tenth sitting paid a
+ * whole sweep to learn this in the other direction — its speculative rungs had
+ * no promise behind them, and the bot waited on jars its level was never
+ * stocked to lay. The promise is what turns a preview into something worth
+ * acting on, so the two ship together or neither does.
  */
 export const starvedPrimaries = (state: GameState): Primary[] => {
   const onMap = new Set<ColorMask>(
@@ -51,8 +60,11 @@ export const starvedPrimaries = (state: GameState): Primary[] => {
   );
 
   const starved = new Set<Primary>();
-  for (const customer of state.customers) {
-    const { want } = customer;
+  const ordered = [
+    ...state.customers.map((customer) => customer.want),
+    ...state.upcoming,
+  ];
+  for (const want of ordered) {
     if (state.shelf.some((candy) => candy.color === want)) continue;
 
     // The most-mixed segment that is still on the way to this order. Raw floors

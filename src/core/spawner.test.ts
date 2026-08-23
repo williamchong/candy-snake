@@ -42,8 +42,11 @@ const stateWith = (
           },
         ],
   shelf: [],
-  // The window plays no part in where a pickup lands.
+  // The window plays no part in where a pickup lands, and neither does the
+  // doorway — a previewed order steers the pity clock (`pity.ts`), not the cell
+  // the spawner picks.
   customers: [],
+  upcoming: [],
   score: 0,
   lives: 3,
   streak: 0,

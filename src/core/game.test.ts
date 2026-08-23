@@ -933,6 +933,93 @@ describe('Game serving window', () => {
   });
 });
 
+describe('Game order preview', () => {
+  /** An open window on the handover row, so children actually turn up. */
+  const previewing = (previewDepth: number, seed = 1): Game =>
+    newGame({ stage: MIXING_STAGE, seed, previewDepth });
+
+  /** The wants of everyone who reached the window, in the order they did. */
+  const arrivals = (game: Game, ticks: number): ColorMask[] => {
+    const wants: ColorMask[] = [];
+    for (let tick = 0; tick < ticks; tick += 1) {
+      for (const event of game.step(20, NO_TURNS)) {
+        if (event.type === 'customer-arrived') wants.push(event.customer.want);
+      }
+    }
+    return wants;
+  };
+
+  /**
+   * The control, and the reason the whole measurement is worth taking. Every
+   * lever this record has swept moved an rng draw, so each arm was a different
+   * run and not the same one played differently — the file says so four times.
+   * At depth 0 nothing is drawn early, so the game off the shelf and the game
+   * with the knob at zero are the same game, and the arm above it is the only
+   * thing that differs.
+   */
+  it('draws the same orders as a game that has never heard of the preview', () => {
+    // Built without the key at all, not with it at zero — the claim is about a
+    // game that has never heard of the preview.
+    const plain = newGame({ stage: MIXING_STAGE, seed: 7 });
+
+    expect(arrivals(previewing(0, 7), 3_000)).toEqual(arrivals(plain, 3_000));
+  });
+
+  it('shows nothing at all while the knob is at zero', () => {
+    const game = previewing(0);
+    arrivals(game, 3_000);
+
+    expect(game.state.upcoming).toEqual([]);
+  });
+
+  it('keeps the doorway topped up to the depth asked for', () => {
+    for (const depth of [1, 2]) {
+      const game = previewing(depth);
+      arrivals(game, 3_000);
+
+      expect(game.state.upcoming).toHaveLength(depth);
+    }
+  });
+
+  /**
+   * The whole promise of the feature: what the doorway shows is what walks in.
+   * A preview that only *usually* held would be worse than none — the maker
+   * builds a ladder against it, and a ladder built for the wrong child is the
+   * thing the open finding is already about.
+   */
+  it('sends in the child the doorway was showing', () => {
+    const game = previewing(1);
+    arrivals(game, 1_500);
+
+    for (let round = 0; round < 12; round += 1) {
+      // Cleared rather than served: what this is about is the order the
+      // doorway drew, and a serve would drag the rack and the score into it.
+      game.state.customers = [];
+
+      const shown = game.state.upcoming[0];
+      expect(shown).toBeDefined();
+
+      const next = arrivals(game, 1_500)[0];
+      expect(next).toBe(shown);
+    }
+  });
+
+  /**
+   * An opening level's orders are the level's own (design §7), so there is
+   * nothing to draw ahead of them — and drawing one anyway would spend the
+   * seeded stream on a want no child is ever going to ask for.
+   */
+  it('previews nothing while an opening level is running', () => {
+    const game = new Game({ ...DEFAULT_CONFIG, seed: 1, previewDepth: 2 });
+
+    for (let tick = 0; tick < 200; tick += 1) {
+      game.step(20, NO_TURNS);
+      if (game.openingLevel === undefined) break;
+      expect(game.state.upcoming).toEqual([]);
+    }
+  });
+});
+
 describe('Game opening levels', () => {
   /** A real run: the three teaching levels, exactly as a player gets them. */
   const opening = (seed = 1): Game => new Game({ ...DEFAULT_CONFIG, seed });

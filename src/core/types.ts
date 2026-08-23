@@ -134,6 +134,17 @@ export interface GameState {
   shelf: Candy[];
   /** The queue at the serving window, in arrival order (design §5). */
   customers: Customer[];
+  /**
+   * Orders drawn but not yet at the window, in arrival order — what the
+   * doorway is showing (design §5, §11). Empty unless `GameConfig.previewDepth`
+   * asks for lead time, which is what keeps a run without the preview drawing
+   * the same orders in the same places it always did.
+   *
+   * Wants rather than customers, because none of these children exist yet: they
+   * have no id, no patience clock, and no place in the queue. All that has been
+   * decided about them is what they will ask for.
+   */
+  upcoming: ColorMask[];
   score: number;
   lives: number;
   /** Consecutive serves with nobody lost — the scoring multiplier (design §9). */
@@ -208,6 +219,24 @@ export interface GameConfig {
    * is: an arm of a sweep is one number different, not a different game.
    */
   readonly twinChance?: number;
+  /**
+   * How many arrivals ahead the window shows its colors — the doorway telling
+   * the maker *what* is coming and not only how many (design §5, §11). 0 is the
+   * game as it shipped, and is a control rather than another arm: at 0 nothing
+   * is drawn early, so the seeded run of orders is the one a game without this
+   * feature played, cell for cell. `orders.ts`'s `TWIN_CHANCE` earns its zero
+   * the same way and for the same reason.
+   *
+   * It is here rather than in `StageConfig` because it is not a difficulty knob
+   * the ramp interpolates — it is a rule about when the player is told, and the
+   * whole point of the measurement is that it does not move the curve.
+   *
+   * Why the maker would want it: the balancing sim has said for six sittings
+   * that building a ladder for demand *at* the window pays and building one for
+   * demand that has not walked in does not. Lead time is what turns the second
+   * into the first.
+   */
+  readonly previewDepth?: number;
 }
 
 export type GameEvent =
