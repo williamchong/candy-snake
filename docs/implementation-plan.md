@@ -2987,8 +2987,17 @@ now reads off `WIDE`, and its bound is the halfway mark rather than the 25% the
 narrow draw happened to support — a tighter bound would fail on the next
 spawn-moving change and read as the finding closing when nothing had.
 
-The baseline, on `WIDE`, three makers per arm (the 0.5 and 0.75 rows are the
-first readings of those arms on this draw; the twin section's are all sixteen):
+The baseline, on `WIDE`, three makers per arm. `median` and `>7 min` are the
+batcher's — the two halves of the death target — and `>7 min` is out of the runs
+that were closed out, which is what the assertion bounds. The 0.5 and 0.75 rows
+are the first readings of those arms on this draw; the twin section's are all
+sixteen.
+
+Its 0.25 row does **not** reproduce the twin section's table above (12 349
+against 13 244, 21 deaths against 20), and should not: six passes have landed
+since — the combo level, the pause, both tides, the turning and the reading —
+and any of them that moved a spawn re-rolled the whole draw. The two tables are
+two builds:
 
 | twin | batcher ahead | median | >7 min | grinder score | grinder died |
 | ---- | ------------- | ------ | ------ | ------------- | ------------ |
@@ -2999,26 +3008,38 @@ first readings of those arms on this draw; the twin section's are all sixteen):
 | 0.65 | 39/64         | 6.76   | 28/61  | 12 108        | 19/64        |
 | 0.75 | 48/64         | 6.60   | 23/58  | 11 832        | 15/64        |
 
-**The retune levers do the opposite of what they were proposed on.** The
-argument for reaching for the arrival interval first was that more children
-means more pressure; measured, shortening it makes the game **easier** — at −25%
-the grinder's deaths fall from 21 of 64 to 13, because a fuller window is more
-to serve rather than more to survive. And patience, proposed as the lever that
-would undo the inversion by punishing the maker who builds ahead, leaves it
-entirely intact. Only patience takes difficulty back, and patience is what costs
-the grinder, so the two cannot be separated.
+**Both levers were proposed on the wrong reasoning, and only one of them is a
+lever at all.** The arrival interval was to be reached for first, on the
+argument that more children means more pressure and that patience — which
+punishes the maker who builds ahead — would undo the inversion. Measured, the
+interval does not move the grinder in *either* direction: its deaths read 15,
+24 and 13 of 64 across no retune, −14% and −25%, which is a swing of eleven
+seeds each way and not a curve. Its score is the number that holds still —
+11 832, 11 703, 12 088, inside 3% across the whole range — and that is the
+reading to take: **shortening the interval buys no difficulty.** Patience does,
+monotonically and steeply (36 of 64 at −7%, 56 at −13%), and it leaves the
+inversion entirely intact. So difficulty comes back only through the lever that
+costs the grinder, and the two cannot be separated.
+
+A note on why the death counts are read that way. Anything that moves a spawn
+re-rolls every free cell after it, so each row of both tables is a different
+game rather than the same one played harder; a count of deaths out of 64 is a
+proportion of a whole run's luck, where a mean score is an average over it. The
+file has said this three times about three statistics and it applies here to the
+column that looks most like a difficulty readout and is the least trustworthy
+one in the table.
 
 At twin 0.75:
 
 | retune                    | ahead | median | >7 min | grinder score | grinder died |
 | ------------------------- | ----- | ------ | ------ | ------------- | ------------ |
-| none                      | 48/64 | 6.60   | 40%    | 11 832        | 15/64        |
-| interval −14%             | 41/64 | 6.38   | 33%    | 11 703        | 24/64        |
-| interval −25%             | 45/64 | 6.46   | 40%    | 12 088        | 13/64        |
-| patience −7%              | 42/64 | 6.05   | 27%    | 11 327        | 36/64        |
-| patience −13%             | 48/64 | 5.96   | 19%    | 9 110         | 56/64        |
-| **patience −7% + interval −14%** | **34/64** | **5.77** | **22%** | **10 550** | **38/64** |
-| the same + mix correction | 37/64 | 6.18   | 24%    | 10 954        | 34/64        |
+| none                      | 48/64 | 6.60   | 23/58  | 11 832        | 15/64        |
+| interval −14%             | 41/64 | 6.38   | 20/60  | 11 703        | 24/64        |
+| interval −25%             | 45/64 | 6.46   | 25/62  | 12 088        | 13/64        |
+| patience −7%              | 42/64 | 6.05   | 17/62  | 11 327        | 36/64        |
+| patience −13%             | 48/64 | 5.96   | 12/64  | 9 110         | 56/64        |
+| **patience −7% + interval −14%** | **34/64** | **5.77** | **14/63** | **10 550** | **38/64** |
+| the same + mix correction | 37/64 | 6.18   | 15/63  | 10 954        | 34/64        |
 
 **The last-but-one row closes the finding.** 34 of 64 is the first time an arm
 has crossed halfway on the draw that can measure it, with the batcher's median
