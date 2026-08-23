@@ -331,6 +331,14 @@ Sugar and dye share one rule, and it is the rule that gives both their feel:
 - A child on their way out **steps clear of the line first**, and walks off in
   front of it: the queue closes up the moment they are off it, so a leaver who
   stayed in lane would be walked through by whoever is moving up.
+- **Nothing about the ending shows until they reach the window.** A child can be
+  spoken for while still walking on — a new arrival sweeps the rack, so one
+  whose candy is already sitting there is served on the spot (below) — and the
+  serve is settled the instant it happens. What they *do* about it is not: the
+  face, the order leaving their hands and the confetti all wait for them to
+  arrive. A candy handed over half way up the line is handed
+  over at a counter nobody has reached, and it reads as a child who changed
+  their mind about ordering.
 
 #### Who gets the candy
 

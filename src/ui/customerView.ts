@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import { colorInfo } from '../core/colors';
 import { patienceFraction } from '../core/customers';
-import { RAW, type ColorMask, type Customer } from '../core/types';
+import { RAW, type ColorMask, type Customer, type Vec2 } from '../core/types';
 import {
   BORDER,
   CHILD_TINT,
@@ -121,6 +121,8 @@ export class CustomerView {
 
   /** The standing line: every child in the queue has their feet on it. */
   private footY: number;
+  /** The window end of it, kept only to measure how far the line has moved. */
+  private frontX: number;
   /**
    * Where a child is before they arrive and after they go: past the frame's own
    * edge, so nobody is ever seen to pop into or out of existence. They come from
@@ -147,26 +149,33 @@ export class CustomerView {
   /** Which half of the walk cycle is on screen — see `draw`. */
   private stepping = false;
   /**
-   * Whether this child's send-off has already been thrown. Reset in `arrive`
-   * along with everything else that outlives one child: views are handed out
-   * again, and a latch left set means the *next* child served by this one gets
-   * no party at all — silently, with nothing to catch it.
+   * How this one ends, held from the moment they are spoken for until they are
+   * actually at the window to show it. Undefined for a send-off nobody gave a
+   * reason for, which keeps whatever face they were wearing.
    */
-  private cheered = false;
+  private farewell: Mood | undefined;
+  /**
+   * Whether that ending has been played yet. Reset in `arrive` along with
+   * everything else that outlives one child: views are handed out again, and a
+   * latch left set means the *next* child served by this one gets no reaction
+   * and no party at all — silently, with nothing to catch it.
+   */
+  private reacted = false;
   /** What they asked for, kept so the send-off can be thrown in that color. */
   private wanted: ColorMask = RAW;
 
-  constructor(scene: Phaser.Scene, footY: number, offstage: number, cheers: Burst) {
+  constructor(scene: Phaser.Scene, front: Vec2, offstage: number, cheers: Burst) {
     this.scene = scene;
     this.cheers = cheers;
-    this.footY = footY;
+    this.footY = front.y;
+    this.frontX = front.x;
     this.offstage = offstage;
     this.x = offstage;
     this.targetX = offstage;
 
     // Everything is born off-screen at the same scale, so the four sprites
     // differ only in what they are and where they sit in the stack.
-    const off = { x: offstage, y: footY };
+    const off = { x: offstage, y: front.y };
     const sprite = (
       key: TextureKey,
       tint: number,
@@ -185,12 +194,12 @@ export class CustomerView {
     this.face = sprite(FACES[Mood.Waiting], CHILD_TINT, HudDepth.Glyph);
 
     this.barTrack = scene.add
-      .rectangle(off.x, footY + BAR_Y, BAR_WIDTH, BAR_HEIGHT, BORDER)
+      .rectangle(off.x, front.y + BAR_Y, BAR_WIDTH, BAR_HEIGHT, BORDER)
       .setDepth(HudDepth.Icon);
     // Anchored at its left edge, so draining shortens it rather than shrinking
     // it toward the middle.
     this.barFill = scene.add
-      .rectangle(off.x, footY + BAR_Y, BAR_WIDTH, BAR_HEIGHT, GLYPH_TINT)
+      .rectangle(off.x, front.y + BAR_Y, BAR_WIDTH, BAR_HEIGHT, GLYPH_TINT)
       .setOrigin(0, 0.5)
       .setDepth(HudDepth.Glyph);
 
@@ -206,15 +215,27 @@ export class CustomerView {
    * The screen changed shape under them. The standing line and the door both
    * move, and a child already walking out was headed for an edge that may now
    * be in the middle of the screen — so their exit is re-aimed at the new one.
-   * Where they stand in the line is not set here: `CustomerQueue.render` walks
-   * everyone to their slot every frame, so they slide across rather than jump.
+   * Where a *waiting* child stands is not set here: `CustomerQueue.render`
+   * walks everyone to their slot every frame, so they slide across rather than
+   * jump.
+   *
+   * A child already spoken for is the exception, and the reason `front` is
+   * handed over rather than only the row it sits on. They are off the queue's
+   * books the moment the serve lands (`CustomerQueue.depart`), so nothing walks
+   * them anywhere any more — and one still on their way up the line is now
+   * walking for the whole of it (see `leave`). Their place is carried along by
+   * however far the line itself moved, or they would walk to a coordinate the
+   * last layout owned and react to their candy standing in it.
    */
-  relocate(footY: number, offstage: number): void {
+  relocate(front: Vec2, offstage: number): void {
     const leftFor = this.offstage;
-    this.footY = footY;
+    const lineMovedBy = front.x - this.frontX;
+    this.frontX = front.x;
+    this.footY = front.y;
     this.offstage = offstage;
 
     if (this.targetX === leftFor) this.targetX = offstage;
+    else if (this.leaving) this.targetX += lineMovedBy;
     if (this.done) this.x = offstage;
 
     // The patience bar hangs off the standing line rather than off the walk, so
@@ -232,7 +253,8 @@ export class CustomerView {
     this.targetX = slotX;
     this.shownBarWidth = -1;
     this.alarmed = false;
-    this.cheered = false;
+    this.farewell = undefined;
+    this.reacted = false;
     this.wanted = customer.want;
     this.body.setDepth(HudDepth.Icon);
     this.face.setDepth(HudDepth.Glyph);
@@ -278,16 +300,33 @@ export class CustomerView {
   }
 
   /**
-   * Served or walked out: the face says which, holds it long enough to read,
-   * and then they leave. The bubble goes at once either way — whatever they
-   * came for, they are no longer asking for it. No mood keeps the face they
-   * were wearing, for a send-off nobody told us the reason for.
+   * Served or walked out. Only *booked* here: what the child does about it —
+   * the face, the order leaving their hands, the send-off — waits until they
+   * are standing at the window, which `step` sees them reach. A child can be
+   * spoken for while still walking on, off a rack that already held their
+   * candy (design §5), and a candy handed to someone half way up the line is
+   * handed over at a counter they have not reached yet: the face changed and
+   * the order vanished from over their head before they had asked for it.
+   *
+   * They still stop being steerable the moment it happens — `leaving` holds
+   * their place in line rather than closing up behind them.
    */
   leave(mood?: Mood): void {
-    if (mood !== undefined) this.setMood(mood);
+    this.farewell = mood;
     this.leaving = true;
     // Whatever they were waiting on is settled, one way or the other.
     this.alarmed = false;
+  }
+
+  /**
+   * The ending, played at the window: the face says which it was, the bubble
+   * goes — whatever they came for, they are no longer asking for it — and a
+   * serve throws its confetti from the bubble it left. Then the reaction beat
+   * holds it all long enough to read.
+   */
+  private react(): void {
+    this.reacted = true;
+    if (this.farewell !== undefined) this.setMood(this.farewell);
     this.pauseMs = REACTION_MS;
     this.bubble.setVisible(false);
     show(this.want, false);
@@ -295,6 +334,13 @@ export class CustomerView {
     this.barFill.setVisible(false);
     this.body.setDepth(HudDepth.LeavingIcon);
     this.face.setDepth(HudDepth.LeavingGlyph);
+
+    if (this.farewell === Mood.Served) {
+      this.cheers.fire(
+        { x: this.x, y: this.footY + BUBBLE_Y },
+        colorInfo(this.wanted).hex,
+      );
+    }
   }
 
   /**
@@ -306,23 +352,13 @@ export class CustomerView {
   step(dtMs: number): void {
     if (this.done) return;
 
-    // The send-off waits until they have reached their place, so a child served
-    // the instant they walk up — off a rack that already held their candy — is
-    // still seen to walk up. The reaction beat then doubles as the step out of
-    // the line: by the time the face has been read they are clear of the slot
-    // the next child is walking into, and in front of it.
+    // Booked at the window, played at the window — `leave` says why.
+    if (this.leaving && !this.reacted && this.x === this.targetX) this.react();
+
+    // The reaction beat then doubles as the step out of the line: by the time
+    // the face has been read they are clear of the slot the next child is
+    // walking into, and in front of it.
     if (this.pauseMs > 0 && this.x === this.targetX) {
-      // The send-off waits for them to walk up, so the confetti waits with it:
-      // a child served the instant they arrive is still off the frame's edge
-      // on the move the event lands, and a burst thrown there is thrown
-      // off-screen.
-      if (!this.cheered && this.mood === Mood.Served) {
-        this.cheered = true;
-        this.cheers.fire(
-          { x: this.x, y: this.footY + BUBBLE_Y },
-          colorInfo(this.wanted).hex,
-        );
-      }
       this.pauseMs -= dtMs;
       this.lane = LEAVING_LANE * Math.min(1 - this.pauseMs / REACTION_MS, 1);
       if (this.pauseMs <= 0) this.targetX = this.offstage;
@@ -336,7 +372,11 @@ export class CustomerView {
     this.x = walking ? this.x + Math.sign(gap) * stride : this.targetX;
 
     this.draw(walking);
-    if (!walking && this.leaving && this.pauseMs <= 0) this.hide();
+    // `reacted` rather than `leaving`: a child spoken for on their way up is
+    // leaving from the moment the event lands, and reaching their place in the
+    // line is not reaching the door. They are done when the beat that follows
+    // the ending has run out, and never before it has been played.
+    if (!walking && this.reacted && this.pauseMs <= 0) this.hide();
   }
 
   private setMood(mood: Mood): void {

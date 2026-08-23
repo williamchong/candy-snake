@@ -75,7 +75,7 @@ export class CustomerQueue {
     this.front = front;
     this.pitch = pitch;
     this.offstage = offstage;
-    for (const view of this.views) view.relocate(front.y, offstage);
+    for (const view of this.views) view.relocate(front, offstage);
     // A send-off is thrown at the bubble it left, and that bubble has just
     // moved. The children slide across to their new places; confetti in the air
     // has nothing left to slide *from*, so it is cut rather than stranded where
@@ -105,8 +105,9 @@ export class CustomerQueue {
   /**
    * Brings a child on. Called from the arrival event too, so that one who is
    * served the instant they walk up — off a shelf that already had their candy
-   * (design §5) — exists at all: they walk on already smiling, because the
-   * send-off waits for them to reach the window (see `CustomerView.step`).
+   * (design §5) — exists at all. They walk on wearing the face they arrived
+   * with and holding their order up: nothing about being served shows until
+   * they reach the window (see `CustomerView.leave`).
    */
   admit(customer: Customer, slot = this.waiting.size): CustomerView {
     const known = this.waiting.get(customer.id);
@@ -148,7 +149,7 @@ export class CustomerQueue {
   }
 
   private build(): CustomerView {
-    const view = new CustomerView(this.scene, this.front.y, this.offstage, this.cheers);
+    const view = new CustomerView(this.scene, this.front, this.offstage, this.cheers);
     this.views.push(view);
     return view;
   }
