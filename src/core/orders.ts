@@ -102,6 +102,17 @@ const pick = (colors: readonly ColorMask[], rng: Rng): ColorMask =>
  * is smaller than one step of the anchor table's own T3 column, and the death
  * target held across the sweep, which is why it is recorded rather than
  * corrected.
+ *
+ * **Raised, it does not stay small, and it cannot be corrected in the
+ * weights.** That was left here as the thing to measure first and the twin-arm
+ * sweep measured it: at 0.75 the delivered secondaries run **+7.5 points** over
+ * the table against +2.7 here, and an anchor row asking for 10% raw to
+ * compensate still delivers 4.1%. Pre-compensation cannot work, because the
+ * mechanism is not that raw is drawn too rarely — it is that raw *leaves the
+ * window* before anything can echo it. Weighting the draw harder puts more raw
+ * at a window that sweeps it just as fast. So the constant and the tier table
+ * are not independent knobs above a point, and this one is near it. See the
+ * plan's twin-arm sweep.
  */
 export const TWIN_CHANCE = 0.25;
 

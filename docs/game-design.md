@@ -619,8 +619,12 @@ seven colors it is left to coincidence.
   delivered at **59.8% against the table's 57.1%**, with raw and the primaries
   each about a point light; at a chance of zero the same measurement comes back
   level. That is less than one step of the T3 column and the death target held
-  across the sweep, so it is recorded rather than corrected — but it is the first
-  thing to re-measure if this constant is ever raised.
+  across the sweep, so it is recorded rather than corrected. **Measured at a
+  raised constant, it does not stay small and cannot be tuned out:** at 0.75 the
+  drift is +7.5 points, and an anchor row asking for 10% raw still delivers
+  4.1%, because raw leaves the window before anything can echo it. Above a
+  point, this constant and the tier table stop being independent knobs — which
+  is one of the two prices that kept the twin-arm sweep from shipping.
 - **Brown is never echoed.** It is the over-mix mistake and reaches the window
   only through the mercy customer, who wants one already on the rack.
 - **It is not the fix for the batching finding.** Measured, it pays the maker who

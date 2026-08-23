@@ -2351,6 +2351,12 @@ the control that says the belief is not simply a better bot: believing in twins
 the game does not deal is worth **less** than not believing in them (6 423
 against 6 649).
 
+> **Corrected by the twin-arm sweep below.** "Two thirds of that inversion is
+> the bot" is a sixteen-seed reading. On `WIDE` the maker who does not know the
+> echo exists is ahead on **33 of 64** at game 0.75, against 6 of 64 on the
+> shipped arm — so the split is about two thirds *rule*, one third belief. The
+> table above stands as measured; only the sentence drawn from it was wrong.
+
 **Shipped at 0.25**, confirmed on `WIDE`:
 
 | twin | maker   | score | died  | median | pair on offer | best combo | staled |
@@ -2961,6 +2967,94 @@ a coordinate the last layout owned, and a window dragged mid-serve left them
 walking to it and reacting there. The window used to be one reaction beat and is
 now the whole walk up, so `relocate` takes the standing line's anchor and
 carries a booked child's target along by however far that line moved.
+
+### What the twin-arm sweep measured — the finding closes, and the draw was the bug
+
+The pass the twin section asked for: the high twin arm plus an anchor-table
+retune to take the difficulty back, swept as one thing. It came back with an
+arm that closes the open finding, two prices that are not worth paying, and a
+correction to the assertion that has carried the finding for six sittings.
+
+**The number carrying the open finding was measured on a draw that cannot
+resolve it.** `SWEEP`'s sixteen read the shipped game at 3 of 16; `WIDE`'s
+sixty-four read the same build at **15 of 64**. At a twin constant of 0.5 the
+two draws read 2 of 16 and 23 of 64 — 12% and 36% of the same game. This is the
+third statistic in this file to need a wider draw than the one it was written
+on, after the proportion that needed sixteen and the median that needed
+sixty-four, and it is the worst of the three: a comparison *between* two runs
+re-rolls both arms independently, so it is noisier than either. The assertion
+now reads off `WIDE`, and its bound is the halfway mark rather than the 25% the
+narrow draw happened to support — a tighter bound would fail on the next
+spawn-moving change and read as the finding closing when nothing had.
+
+The baseline, on `WIDE`, three makers per arm (the 0.5 and 0.75 rows are the
+first readings of those arms on this draw; the twin section's are all sixteen):
+
+| twin | batcher ahead | median | >7 min | grinder score | grinder died |
+| ---- | ------------- | ------ | ------ | ------------- | ------------ |
+| 0    | 1/64          | 4.46   | 0/64   | 12 825        | 22/64        |
+| 0.25 | **15/64**     | 5.22   | 3/64   | 12 349        | 21/64        |
+| 0.5  | 23/64         | 5.79   | 13/64  | 12 627        | 14/64        |
+| 0.55 | 29/64         | 5.95   | 24/62  | 12 405        | 23/64        |
+| 0.65 | 39/64         | 6.76   | 28/61  | 12 108        | 19/64        |
+| 0.75 | 48/64         | 6.60   | 23/58  | 11 832        | 15/64        |
+
+**The retune levers do the opposite of what they were proposed on.** The
+argument for reaching for the arrival interval first was that more children
+means more pressure; measured, shortening it makes the game **easier** — at −25%
+the grinder's deaths fall from 21 of 64 to 13, because a fuller window is more
+to serve rather than more to survive. And patience, proposed as the lever that
+would undo the inversion by punishing the maker who builds ahead, leaves it
+entirely intact. Only patience takes difficulty back, and patience is what costs
+the grinder, so the two cannot be separated.
+
+At twin 0.75:
+
+| retune                    | ahead | median | >7 min | grinder score | grinder died |
+| ------------------------- | ----- | ------ | ------ | ------------- | ------------ |
+| none                      | 48/64 | 6.60   | 40%    | 11 832        | 15/64        |
+| interval −14%             | 41/64 | 6.38   | 33%    | 11 703        | 24/64        |
+| interval −25%             | 45/64 | 6.46   | 40%    | 12 088        | 13/64        |
+| patience −7%              | 42/64 | 6.05   | 27%    | 11 327        | 36/64        |
+| patience −13%             | 48/64 | 5.96   | 19%    | 9 110         | 56/64        |
+| **patience −7% + interval −14%** | **34/64** | **5.77** | **22%** | **10 550** | **38/64** |
+| the same + mix correction | 37/64 | 6.18   | 24%    | 10 954        | 34/64        |
+
+**The last-but-one row closes the finding.** 34 of 64 is the first time an arm
+has crossed halfway on the draw that can measure it, with the batcher's median
+death at 5.77 minutes and its tail at 22% — both inside what design §7 asks of
+the ramp, and the pair maker still ahead on 15 of 16.
+
+**It was not shipped, for two prices.** The grinder's score falls 15% and its
+deaths go 21 → 38 of 64: this is not batching starting to pay so much as
+everybody doing worse and the batcher doing less worse. And the order mix drifts
++7.5 points of T3 against a table that asks for 60, which design §7 would then
+be wrong about by more than a whole step of its own column.
+
+**The mix cannot be pre-compensated, and that is a result rather than a failed
+attempt.** An anchor row asking for 10% raw still delivers 4.1%. The skew is not
+that raw is drawn too rarely; it is that raw *leaves the window* before anything
+can echo it (design §5 sweeps an easy color off the rack on the spot), so
+weighting the draw harder puts more raw at a window that clears it just as fast.
+Above some constant, `TWIN_CHANCE` and the tier table stop being independent
+knobs. `orders.ts` carries the measurement.
+
+**And the twin section's belief claim is backwards.** It said two thirds of the
+inversion at 0.75 was the bot rather than the rule, off a sixteen-seed reading
+of 4 of 16 for the maker who does not know the echo exists. On `WIDE` that maker
+is ahead on **33 of 64**, against 6 of 64 on the shipped arm — so the rule
+carries about two thirds of the gain and the belief the other third, the other
+way round from what was written. A player would not have to learn anything for
+batching to start paying. That does not change the decision, since the prices
+above are paid either way, but it is the second claim in this record reasoned
+from sixteen seeds and corrected by sixty-four.
+
+**What is left.** The finding stays open, and for the first time it is open with
+a measured price rather than for want of a lever: closing it costs 15% of the
+grinder's run and a tier table that no longer describes the game. The candidates
+that remain are the ones that change what a ladder *is* worth rather than how
+often demand suits it — the partial chop of the tenth sitting is still the only
+one of those anybody has written down.
 
 ## Risks & mitigations
 
