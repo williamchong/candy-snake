@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { CHOP_BLOCK_CELLS, COLS, ROWS, eq } from './board';
-import { PRIMARIES, mixCount, primariesOf, type Primary } from './colors';
+import {
+  PRIMARIES,
+  colorInfo,
+  mixCount,
+  noServes,
+  primariesOf,
+  type ColorTier,
+  type Primary,
+} from './colors';
 import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { TIERS, echoable, type StageConfig } from './orders';
@@ -406,7 +414,23 @@ const bestLadder = (
   cap: number,
   twinChance: number,
 ): Ladder => {
-  const wants = state.customers.map((customer) => customer.want);
+  /**
+   * The window *and* the doorway. `state.upcoming` is empty unless the run
+   * pins `previewDepth` (design §5), so this is the maker the harness has
+   * always run until the moment an arm asks for lead time — which is what
+   * makes the preview one number's difference rather than a fourth bot.
+   *
+   * A fourth bot is what this was going to be, and it would have repeated the
+   * mistake the tenth sitting caught: every batcher-against-grinder reading
+   * before it varied how long the strand was *and* who it was built for, then
+   * attributed the whole difference to the first.
+   *
+   * A previewed want is treated exactly like a waiting one, which is only
+   * honest because `pity.ts` extends design §8.3's promise to cover it. Were it
+   * not, `promised` below would vouch for jars the board had never undertaken
+   * to lay, and the maker would circle for them.
+   */
+  const wants = [...state.customers.map((customer) => customer.want), ...state.upcoming];
   const openings =
     Math.max(stage.maxQueue - wants.length, 0) +
     Math.max(SHELF_SLOTS - state.shelf.length, 0);
@@ -718,6 +742,21 @@ interface RunResult {
    * ease-in.
    */
   readonly gears: { readonly rung: number; readonly top: boolean }[];
+  /**
+   * Every order that reached the window, split by tier — what demand the run
+   * actually *delivered*, as against the T1/T2/T3 column design §7 asked for.
+   *
+   * The twin-arm sweep is the reason this is a reading rather than a
+   * calculation: an easy color leaves the window faster than it can be echoed,
+   * so what a run delivers drifts from what the table weights, and at a twin
+   * constant of 0.75 it drifted by more than a whole step of the column. Any
+   * arm that touches when an order is drawn owes this number.
+   *
+   * The opening levels' own orders are in here too. They are a fixed handful
+   * against a seven-minute run and they are the same handful in every arm, so
+   * they move a share by well under the drift being looked for.
+   */
+  readonly orderedByTier: Record<ColorTier, number>;
 }
 
 const play = (
@@ -725,8 +764,9 @@ const play = (
   ticks: number,
   goalOf: Goal = grinderGoal,
   twinChance?: number,
+  previewDepth?: number,
 ): RunResult => {
-  const game = new Game({ ...DEFAULT_CONFIG, seed, twinChance });
+  const game = new Game({ ...DEFAULT_CONFIG, seed, twinChance, previewDepth });
   const bot = botFor(game, goalOf);
   const violations: string[] = [];
   let score = 0;
@@ -744,6 +784,7 @@ const play = (
   let liveTicks = 0;
   let pairTicks = 0;
   const gears: { rung: number; top: boolean }[] = [];
+  const orderedByTier = noServes();
 
   for (let tick = 0; tick < ticks; tick += 1) {
     for (const event of game.step(20, bot)) {
@@ -751,6 +792,9 @@ const play = (
       if (event.type === 'candy-staled') staled += 1;
       if (event.type === 'strand-broken') broken += 1;
       if (event.type === 'speed-raised') gears.push({ rung: event.rung, top: event.top });
+      if (event.type === 'customer-arrived') {
+        orderedByTier[colorInfo(event.customer.want).tier] += 1;
+      }
       if (event.type !== 'strand-cut') continue;
 
       // Both readings are of the **strand the maker built**, which is the batch
@@ -819,6 +863,7 @@ const play = (
     meanSegments: segmentSum / liveTicks,
     pairOffered: pairTicks / liveTicks,
     gears,
+    orderedByTier,
   };
 };
 
@@ -1560,4 +1605,134 @@ describe('the reference players, after the ramp went in', () => {
       );
     });
   });
+});
+
+/**
+ * The preview sweep — the campaign behind the twelfth sitting, and the first
+ * one in this record whose control arm is the shipped game rather than another
+ * roll of it.
+ *
+ * Skipped unless `SWEEP_PREVIEW` is set, because it is minutes of arithmetic
+ * and CI has no use for it: `SWEEP_PREVIEW=0,1,2 npx vitest run
+ * src/core/simulation.test.ts -t 'the preview sweep'`. The suite keeps the
+ * assertions; this prints the table they will be rewritten from.
+ *
+ * **Read the arms as different games, and the pairs inside an arm as the same
+ * one.** Drawing an order early moves the seeded stream, so the grinder at
+ * depth 1 is not the grinder at depth 0 played harder — which is why criterion
+ * 2 is a mean over sixty-four seeds and not a comparison seed by seed. Within
+ * one arm both makers take the same stream from the same seed, so `ahead` is a
+ * fair pairing.
+ */
+const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
+(previewArms === undefined ? describe.skip : describe)('the preview sweep', () => {
+  const mean = (values: readonly number[]): number => sum(values) / values.length;
+
+  const median = (values: readonly number[]): number => {
+    const sorted = [...values].sort((a, b) => a - b);
+    if (sorted.length === 0) return NaN;
+
+    return sorted.length % 2 === 1
+      ? sorted[(sorted.length - 1) / 2]!
+      : (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2;
+  };
+
+  const minutes = (run: RunResult): number => run.game.state.elapsedMs / 60_000;
+
+  it('measures every arm on the wide draw', () => {
+    // Filtered and then insisted on, so a typo in the arm list fails loudly
+    // rather than printing an empty table that reads like a finished sweep.
+    const depths = (previewArms ?? '')
+      .split(',')
+      .map((arm: string) => Number.parseInt(arm.trim(), 10))
+      .filter((depth: number) => Number.isInteger(depth) && depth >= 0);
+    expect(depths.length, `no arms in SWEEP_PREVIEW="${previewArms}"`).toBeGreaterThan(0);
+
+    const rows = depths.map((depth: number) => {
+      const grinders = WIDE.map((seed) =>
+        play(seed, TARGET_TICKS, grinderGoal, undefined, depth),
+      );
+      const batchers = WIDE.map((seed) =>
+        play(seed, TARGET_TICKS, batcherGoal, undefined, depth),
+      );
+
+      // Minutes, because design §7's death window is stated in them.
+      const deaths = batchers
+        .map((run) => run.diedAtMs)
+        .filter((ms): ms is number => ms !== undefined)
+        .map((ms) => ms / 60_000);
+
+      // Delivered demand, pooled over the draw — design §7's column is a share
+      // of orders and not of runs, so the tiers are summed before they are
+      // divided rather than averaged per run.
+      const tiers = batchers.reduce(
+        (totals, run) => {
+          for (const tier of [1, 2, 3] as const) totals[tier] += run.orderedByTier[tier];
+          return totals;
+        },
+        { 1: 0, 2: 0, 3: 0 },
+      );
+      const orders = tiers[1] + tiers[2] + tiers[3];
+
+      return {
+        depth,
+        ahead: batchers.filter(
+          (batcher, seed) => batcher.game.state.score > grinders[seed]!.game.state.score,
+        ).length,
+        median: median(deaths).toFixed(2),
+        died: deaths.length,
+        grinder: Math.round(mean(grinders.map((run) => run.game.state.score))),
+        batcher: Math.round(mean(batchers.map((run) => run.game.state.score))),
+        choppedPerMin: mean(batchers.map((run) => run.chopped / minutes(run))).toFixed(1),
+        // Candy made against children actually handed one: the two come apart
+        // exactly when a maker is producing but not producing *in time*.
+        servedPerMin: mean(
+          batchers.map((run) => run.game.state.served / minutes(run)),
+        ).toFixed(1),
+        // The grinder cannot read the doorway, so this column is the control on
+        // the control: if it moves with depth, the preview is buying something
+        // through a channel other than the maker's plan — the likeliest being
+        // the pity promise now pre-stocking jars for orders still at the door.
+        grinderServedPerMin: mean(
+          grinders.map((run) => run.game.state.served / minutes(run)),
+        ).toFixed(1),
+        staled: Math.round(mean(batchers.map((run) => run.staled))),
+        broken: sum(batchers.map((run) => run.broken)),
+        segments: mean(batchers.map((run) => run.meanSegments)).toFixed(2),
+        t1: ((100 * tiers[1]) / orders).toFixed(1),
+        t2: ((100 * tiers[2]) / orders).toFixed(1),
+        t3: ((100 * tiers[3]) / orders).toFixed(1),
+      };
+    });
+
+    const base = rows[0];
+    console.log(`\n${WIDE.length} seeds an arm, ${TARGET_TICKS} ticks a run\n`);
+    console.log(
+      '| depth | ahead | median | grinder | g serve/min | batcher | chop/min | serve/min | staled | broken | segs | T1 | T2 | T3 |',
+    );
+    console.log(
+      '| ----- | ----- | ------ | ------- | ----------- | ------- | -------- | --------- | ------ | ------ | ---- | -- | -- | -- |',
+    );
+    for (const row of rows) {
+      console.log(
+        `| ${row.depth} | ${row.ahead}/${WIDE.length} | ${row.median} | ${row.grinder} | ${row.grinderServedPerMin} | ${row.batcher} | ${row.choppedPerMin} | ${row.servedPerMin} | ${row.staled} | ${row.broken} | ${row.segments} | ${row.t1} | ${row.t2} | ${row.t3} |`,
+      );
+    }
+
+    // The pre-registered criteria, said in the output rather than asserted: an
+    // arm that fails one is a result to write down, not a broken test.
+    if (base !== undefined) {
+      console.log('\nagainst the control arm:');
+      for (const row of rows) {
+        const drift = (100 * (row.grinder - base.grinder)) / base.grinder;
+        console.log(
+          `  depth ${row.depth}: ahead ${row.ahead}/${WIDE.length} (needs >${WIDE.length / 2}), ` +
+            `grinder ${drift >= 0 ? '+' : ''}${drift.toFixed(1)}% (needs within 5%), ` +
+            `median ${row.median} (needs 4–6), T3 ${row.t3}`,
+        );
+      }
+    }
+
+    expect(rows).toHaveLength(depths.length);
+  }, 3_600_000);
 });

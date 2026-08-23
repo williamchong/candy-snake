@@ -3077,6 +3077,152 @@ that remain are the ones that change what a ladder *is* worth rather than how
 often demand suits it — the partial chop of the tenth sitting is still the only
 one of those anybody has written down.
 
+*The preview sweep below found a second one and measured it. It failed the same
+way, and the class is now empty.*
+
+### What the preview sweep measured — the maker was never short of information
+
+The candidate the twin-arm sweep asked for: something that changes what a ladder
+*is* worth rather than how often demand suits it. The partial chop was the only
+one written down, and it had already been measured and rejected — so this
+sitting went looking for another, and the record's own diagnosis names where to
+look. `pairGrinderGoal` beats the grinder on **54 of 64**. Batching against
+demand that is *at* the window pays; batching against demand that has not walked
+in does not. The difference between those two makers is not how much they build.
+It is that one of them knows who is coming.
+
+So: **tell the maker.** The doorway already telegraphs how many children are on
+the way (`RUSH_CROWD`, design §11) and has never said what any of them wants.
+`previewDepth` draws that many orders early and stands them in the doorway;
+`state.upcoming` carries them, and the batching bot plans against the window and
+the doorway as one list.
+
+**Three things had to be true before the arm meant anything, and the first is
+the tenth sitting's lesson repaid.** A previewed order gets design §8.3's pity
+promise (`pity.ts` now walks `upcoming` beside `customers`) — without it the
+doorway advertises jars the board never undertook to lay, and the tenth
+sitting's speculative rungs already showed what that does: the maker circles the
+kitchen waiting on a jar that is not coming. (That promise turned out to have a
+price of its own; see the grinder below.) A previewed order is drawn against the
+window as it stands, so a guess can echo a child who has *arrived* and never
+another guess; a queue of guesses echoing each other would have raised
+`TWIN_CHANCE` by the back door, which is a knob the twin-arm sweep has priced.
+
+And **the mercy customer stays out of the preview**, which the first build got
+wrong. `rollWant` rolls brown only when there is a spare brown on the rack *at
+that moment* (design §7), and every condition it reads is a fact about now — so
+drawn an arrival early those facts go stale: the spare can be staled off a full
+rack before the child it was rolled for arrives, and at a depth of two one rack
+could license two of them. Mercy is now a substitution made at the window, with
+the ordinary draw in the doorway; the order the doorway showed is not discarded,
+it arrives a turn late. The rolls are taken in the same sequence either way,
+which is what keeps depth 0 exact.
+
+**This is the first arm in this record whose control is the shipped game.** At
+`previewDepth` 0 nothing is drawn early, so the seeded stream is exactly the one
+a game without the feature plays — `TWIN_CHANCE`'s zero earns its keep the same
+way, and `game.test.ts` pins it by replaying both. Every one of the file's 863
+existing assertions passed unmoved with the mechanism in the build, which is the
+proof rather than the claim. Four sittings have had to say that a run either
+side of a change is a different run; this one did not have to.
+
+The arms are still different games from each other, because drawing an order
+early moves the stream. Sixty-four seeds, batcher against grinder within each
+arm on the same seeds:
+
+| depth | ahead     | median | grinder | g serve/min | batcher | chop/min | serve/min | staled | segs |
+| ----- | --------- | ------ | ------- | ----------- | ------- | -------- | --------- | ------ | ---- |
+| 0     | **15/64** | 5.22   | 12 349  | 14.0        | 8 814   | 24.7     | 15.8      | 41     | 2.02 |
+| 1     | 3/64      | 3.72   | 12 890  | 14.3        | 5 382   | 22.3     | 13.5      | 29     | 2.07 |
+| 2     | 1/64      | 3.60   | 12 995  | 14.5        | 4 353   | 21.6     | 12.6      | 26     | 2.16 |
+| 3     | 0/64      | 3.14   | 13 074  | 14.4        | 3 137   | 20.6     | 10.9      | 25     | 2.32 |
+
+**It fails, and it fails the way the partial chop failed — monotonically, in the
+direction it was aimed.** More lead time is strictly worse: the inversion goes
+from 15 of 64 the wrong way to 0 of 64, the batcher's score falls by nearly two
+thirds, and its median death drops through the floor of design §7's window at
+every arm.
+
+**And the reason is not the one that would have been guessed.** The preview
+worked. The maker used it exactly as intended — `segs` climbs with every rung of
+depth, so it builds *longer* ladders, and `staled` falls from 41 to 25, so those
+ladders find mouths rather than the rack. Better information bought better
+targeting and it bought it as advertised.
+
+What it did not buy is delivery. Set the two rates side by side:
+
+- candy off the block falls 17% (24.7 → 20.6)
+- **candy into a child's hand falls 31%** (15.8 → 10.9)
+
+Their difference — candy made that nobody took — holds at 8.9, 8.8, 9.0 a minute
+across the first three arms and only drifts at the deepest. So the preview did
+**not** change what was wasted. It changed what was delivered. The maker spends
+more of the run building and less of it handing things over, and the children it
+was building *for* walk out while it does.
+
+That is `planLadder`'s own comment, measured from the other side: *"what kills a
+maker is not waste but the time spent building before anybody is handed
+anything."* The economy charges for the time before the first hand-over, and no
+amount of knowing who is coming reduces that time — knowing only makes building
+more look worth it. **A preview is an invitation to build, and building is the
+thing that costs.**
+
+**So the class the twin-arm sweep named is now empty, and that is the result.**
+Four levers have been aimed at what a ladder is worth and all four have come
+back with a price: the combo bonus was too weak by a factor of ten (≈480 needed
+against a tier-3 serve worth 50), the partial chop made the strand cheaper to
+keep and halved what it produced, the twin constant worked and cost 15% of the
+grinder's run plus the tier table, and the preview made the ladder better aimed
+and delivered less of it. **Two of the four failed through the same term** —
+the partial chop paid *k* extra moves on every pickup for the rest of the run,
+the preview paid the time before the first hand-over — and those are the two
+that attacked the ladder's cost directly. The other two never reached that term:
+the bonus was arithmetic on top of a run that ends too early, and the twin
+constant changed demand rather than the ladder.
+
+**The grinder was supposed to be the control, and it moved — which turned out to
+be the most useful thing in the sweep.** It carries one segment by construction
+and never reads `state.upcoming`, so its column was pre-registered to hold still
+inside 5%. Instead it climbs 12 349 → 12 890 → 12 995 → 13 074, monotonically,
+breaking the criterion at the two deepest arms.
+
+The first draw of this sweep read that column as non-monotonic noise and the
+paragraph here said so. It was wrong, and the reading that settles it is the
+grinder's **serve rate**: 14.0, 14.3, 14.5, 14.4. A maker scoring luckier does
+not also hand over more candy a minute. The grinder is genuinely producing more.
+
+The channel is the pity promise. `starvedPrimaries` now walks `upcoming` beside
+`customers`, so the board is stocked for orders that have not arrived — and a
+jar laid early is on the floor for **whoever** reaches it, including a maker who
+cannot see why it is there. The promise the preview needed to be worth acting on
+(without it the doorway advertises jars the board never undertook to lay, which
+is the tenth sitting's lesson) turns out to be a small difficulty reduction paid
+to every player.
+
+That is worth separating from the verdict. It flatters the grinder by about 4%
+and so widens the gap the batcher is being measured across — but the batcher's
+*own* score falls 8 814 → 3 137 in the same table, and no amount of grinder
+handicap accounts for losing 64% of your own run. The finding survives its own
+confound. A future arm that wants the promise without the difficulty reduction
+would have to stock previewed orders only for the maker who can see them, which
+is not a thing a board can do.
+
+**What is left.** The open finding stays open, and for the first time the honest
+recommendation is to stop opening it. Six levers have been measured and priced,
+and the two that went at the ladder's cost both failed through build time, which
+no knob in `difficulty.ts` or `scoring.ts` addresses. Closing it now means
+changing what a *chop* costs —
+not what it pays, not how often demand suits it, and not what the maker knows —
+and no such lever has been written down. Until one is, the finding is better
+read as a description of the game than as a defect in it: **Candy Snake rewards
+serving the window in front of you**, and the production line is a way of
+playing that the economy tolerates rather than pays for.
+
+The mechanism and the sweep that measured it are pinned behind `previewDepth`,
+default 0, so the arm can be re-measured without being rebuilt:
+`SWEEP_PREVIEW=0,1,2,3 npx vitest run src/core/simulation.test.ts -t 'the
+preview sweep'`.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
