@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 
 import { colorInfo } from '../core/colors';
 import { patienceFraction } from '../core/customers';
-import { RAW, type ColorMask, type Customer, type Vec2 } from '../core/types';
+import { RAW, type ColorMask, type Customer } from '../core/types';
 import {
   BORDER,
   CHILD_TINT,
@@ -13,11 +13,13 @@ import {
   paint,
   PANEL_FILL,
   place,
+  scaleDrawn,
   show,
   type Drawn,
 } from '../render/drawn';
 import type { Burst } from '../render/effects';
-import { TEXTURE_SIZE, TextureKey } from '../render/textures';
+import { TextureKey } from '../render/textures';
+import { CHILD_BUBBLE_GAP, CHILD_SCALE, childHeight, type QueueFrame } from './layout';
 
 /**
  * One child at the serving window: they walk in from off-screen, stand in line
@@ -45,29 +47,34 @@ const FACES: Record<Mood, TextureKey> = {
   [Mood.Walkout]: TextureKey.FaceCross,
 };
 
-/**
- * Bigger than the board's 2×, because a face is the whole point of this sprite
- * and the queue is what the player glances at rather than steers by.
- */
-export const CHILD_SCALE = 3;
-/** How tall a child is drawn — what anything standing one on the line needs. */
-export const CHILD_HEIGHT = TEXTURE_SIZE * CHILD_SCALE;
-
 /** The bubble is a panel like any other, and reads against the same ground. */
 const BUBBLE_TINT = PANEL_FILL;
 
 /**
- * Rows above the standing line, in screen pixels. `BODY_Y` is exported because
- * the doorway crowd stands on the same line and must not drift off it
- * (`ui/rushDoor.ts`) — they are the same children, one room back.
+ * Rows above the standing line, in screen pixels, and so all of them measured
+ * off how big the child is drawn — which is the lane's to decide (`layout.ts`'s
+ * `queueRun`), not this file's. `bodyY` is exported because the doorway crowd
+ * stands on the same line and must not drift off it (`ui/rushDoor.ts`) — they
+ * are the same children, one room back.
  */
-export const BODY_Y = -CHILD_HEIGHT / 2;
-const BUBBLE_Y = -CHILD_HEIGHT - 18;
-/** The bubble's tail eats its bottom rows, so its hollow sits above centre. */
-const CANDY_Y = BUBBLE_Y - 5;
+export const bodyY = (scale: number): number => -childHeight(scale) / 2;
+const bubbleY = (scale: number): number => -childHeight(scale) - CHILD_BUBBLE_GAP;
+/**
+ * The bubble's tail eats its bottom rows, so its hollow sits two source rows
+ * above the sprite's own centre (`textures.ts`'s `BUBBLE`) — which is two rows
+ * whatever the sprite has been scaled to.
+ */
+const CANDY_LIFT = 2;
+const candyY = (scale: number): number => bubbleY(scale) - CANDY_LIFT * scale;
+/**
+ * Below the line, where nothing is measured off the child: the bar is a mark on
+ * the floor they stand on, at the height `layout.ts`'s `CHILD_UNDERFOOT` keeps
+ * clear for it. Its *width* is the exception — a bar wider than the child it
+ * belongs to reads as somebody else's — so that alone shrinks with them.
+ */
 const BAR_Y = 12;
-
-const BAR_WIDTH = 34;
+const BAR_SHARE = 34 / childHeight(CHILD_SCALE);
+const barWidth = (scale: number): number => Math.round(childHeight(scale) * BAR_SHARE);
 const BAR_HEIGHT = 5;
 
 /** Below this much patience left the face gives it away before the bar does. */
@@ -131,6 +138,17 @@ export class CustomerView {
    * that is depends on the layout, so it is handed in rather than fixed.
    */
   private offstage: number;
+  /**
+   * How big this one is drawn, and the rows and the bar width that follow from
+   * it. Held rather than recomputed: `draw` runs per child per frame while
+   * these move only when the lane does — the same bargain `RushDoor` makes with
+   * the same numbers. `measure` is the one place they are all written.
+   */
+  private scale = 0;
+  private headRow = 0;
+  private bubbleRow = 0;
+  private candyRow = 0;
+  private barPx = 0;
   private x: number;
   private targetX: number;
   /** How far below the line they stand: nothing until they step out of it. */
@@ -164,12 +182,15 @@ export class CustomerView {
   /** What they asked for, kept so the send-off can be thrown in that color. */
   private wanted: ColorMask = RAW;
 
-  constructor(scene: Phaser.Scene, front: Vec2, offstage: number, cheers: Burst) {
+  constructor(scene: Phaser.Scene, queue: QueueFrame, cheers: Burst) {
+    const { front, offstage, scale } = queue;
+
     this.scene = scene;
     this.cheers = cheers;
     this.footY = front.y;
     this.frontX = front.x;
     this.offstage = offstage;
+    this.measure(scale);
     this.x = offstage;
     this.targetX = offstage;
 
@@ -180,7 +201,7 @@ export class CustomerView {
       key: TextureKey,
       tint: number,
       depth: number,
-    ): Phaser.GameObjects.Image => makeSprite(scene, key, tint, depth, off, CHILD_SCALE);
+    ): Phaser.GameObjects.Image => makeSprite(scene, key, tint, depth, off, scale);
 
     this.bubble = sprite(TextureKey.Bubble, BUBBLE_TINT, HudDepth.Slot);
     this.want = makeDrawn(
@@ -188,18 +209,21 @@ export class CustomerView {
       { key: TextureKey.Candy, depth: HudDepth.Icon, glyphDepth: HudDepth.Glyph },
       off,
     );
+    // The order is authored against the roomiest child there is, and shrinks
+    // with them from there — the same way the rack's candy shrinks with its slot.
+    scaleDrawn(this.want, scale / CHILD_SCALE);
     this.body = sprite(TextureKey.Customer, CHILD_TINT, HudDepth.Icon);
     // Tinted like the skin it sits on: the features are drawn in the detail
     // gray, so the same tint lands them a step darker than the face.
     this.face = sprite(FACES[Mood.Waiting], CHILD_TINT, HudDepth.Glyph);
 
     this.barTrack = scene.add
-      .rectangle(off.x, front.y + BAR_Y, BAR_WIDTH, BAR_HEIGHT, BORDER)
+      .rectangle(off.x, front.y + BAR_Y, this.barPx, BAR_HEIGHT, BORDER)
       .setDepth(HudDepth.Icon);
     // Anchored at its left edge, so draining shortens it rather than shrinking
     // it toward the middle.
     this.barFill = scene.add
-      .rectangle(off.x, front.y + BAR_Y, BAR_WIDTH, BAR_HEIGHT, GLYPH_TINT)
+      .rectangle(off.x, front.y + BAR_Y, this.barPx, BAR_HEIGHT, GLYPH_TINT)
       .setOrigin(0, 0.5)
       .setDepth(HudDepth.Glyph);
 
@@ -219,20 +243,22 @@ export class CustomerView {
    * walks everyone to their slot every frame, so they slide across rather than
    * jump.
    *
-   * A child already spoken for is the exception, and the reason `front` is
-   * handed over rather than only the row it sits on. They are off the queue's
-   * books the moment the serve lands (`CustomerQueue.depart`), so nothing walks
+   * A child already spoken for is the exception, and the reason the whole
+   * window is handed over rather than only the row it sits on. They are off
+   * the queue's books the moment the serve lands (`CustomerQueue.depart`), so nothing walks
    * them anywhere any more — and one still on their way up the line is now
    * walking for the whole of it (see `leave`). Their place is carried along by
    * however far the line itself moved, or they would walk to a coordinate the
    * last layout owned and react to their candy standing in it.
    */
-  relocate(front: Vec2, offstage: number): void {
+  relocate(queue: QueueFrame): void {
+    const { front, offstage, scale } = queue;
     const leftFor = this.offstage;
     const lineMovedBy = front.x - this.frontX;
     this.frontX = front.x;
     this.footY = front.y;
     this.offstage = offstage;
+    if (scale !== this.scale) this.rescale(scale);
 
     if (this.targetX === leftFor) this.targetX = offstage;
     else if (this.leaving) this.targetX += lineMovedBy;
@@ -241,6 +267,43 @@ export class CustomerView {
     // The patience bar hangs off the standing line rather than off the walk, so
     // nothing would move it until the next arrival without this.
     this.draw(this.stepping);
+  }
+
+  /**
+   * Redrawn at what the new lane can afford. Guarded on the scale actually
+   * changing rather than run from every layout pass: `Scale.RESIZE` fires one
+   * of those per frame of a window drag, and the scale steps in whole
+   * multiples, so it moves a handful of times across a drag that moves the line
+   * a thousand.
+   */
+  private rescale(scale: number): void {
+    // Read before the new size lands, because it is a fraction of the old one.
+    const drained = this.shownBarWidth < 0 ? 1 : this.shownBarWidth / this.barPx;
+
+    this.measure(scale);
+    this.body.setScale(scale);
+    this.face.setScale(scale);
+    // The bubble may be mid-breath, and `breathe` swells from the resting size:
+    // settling it here is what stops the next breath starting from the old one.
+    this.bubble.setScale(scale);
+    this.breathing = false;
+    scaleDrawn(this.want, scale / CHILD_SCALE);
+    this.barTrack.setDisplaySize(this.barPx, BAR_HEIGHT);
+    // The fill is carried across at the fraction it was showing rather than
+    // left for `render` to put right: a child already spoken for is off the
+    // queue's books (`CustomerQueue.depart`), so `render` is never called on
+    // them again and their bar would keep the old size's pixels to the end.
+    this.shownBarWidth = Math.round(this.barPx * drained);
+    this.barFill.setDisplaySize(this.shownBarWidth, BAR_HEIGHT);
+  }
+
+  /** Everything the scale settles, written together so it cannot half-move. */
+  private measure(scale: number): void {
+    this.scale = scale;
+    this.headRow = bodyY(scale);
+    this.bubbleRow = bubbleY(scale);
+    this.candyRow = candyY(scale);
+    this.barPx = barWidth(scale);
   }
 
   /** A child walks on from off-screen and heads for their place in line. */
@@ -290,9 +353,10 @@ export class CustomerView {
     // turns at a fraction of the bar, the alarm at a count of seconds.
     this.alarmed = patience.remainingMs <= CRITICAL_MS;
 
-    // 34 px over 35 s is a pixel a second, so all but one frame in sixty would
-    // redraw the identical bar.
-    const width = Math.round(BAR_WIDTH * left);
+    // A full-size bar is 34 px over 35 s, which is a pixel a second — so all
+    // but one frame in sixty would redraw the identical bar, and fewer still
+    // once a small screen has drawn it shorter.
+    const width = Math.round(this.barPx * left);
     if (width === this.shownBarWidth) return;
 
     this.shownBarWidth = width;
@@ -337,7 +401,7 @@ export class CustomerView {
 
     if (this.farewell === Mood.Served) {
       this.cheers.fire(
-        { x: this.x, y: this.footY + BUBBLE_Y },
+        { x: this.x, y: this.footY + this.bubbleRow },
         colorInfo(this.wanted).hex,
       );
     }
@@ -402,13 +466,13 @@ export class CustomerView {
     // Whole pixels: the standing line is drawn art, and half a pixel of lane
     // would soften the one sprite the player is meant to read a face off.
     const floor = this.footY + Math.round(this.lane) + (stepping ? -1 : 0);
-    this.body.setPosition(this.x, floor + BODY_Y);
-    this.face.setPosition(this.x, floor + BODY_Y);
-    this.bubble.setPosition(this.x, floor + BUBBLE_Y);
+    this.body.setPosition(this.x, floor + this.headRow);
+    this.face.setPosition(this.x, floor + this.headRow);
+    this.bubble.setPosition(this.x, floor + this.bubbleRow);
     this.breathe();
-    place(this.want, this.x, floor + CANDY_Y);
+    place(this.want, this.x, floor + this.candyRow);
     this.barTrack.setPosition(this.x, this.footY + BAR_Y);
-    this.barFill.setPosition(this.x - BAR_WIDTH / 2, this.footY + BAR_Y);
+    this.barFill.setPosition(this.x - this.barPx / 2, this.footY + BAR_Y);
   }
 
   /**
@@ -428,7 +492,7 @@ export class CustomerView {
       if (!this.breathing) return;
 
       this.breathing = false;
-      this.bubble.setScale(CHILD_SCALE);
+      this.bubble.setScale(this.scale);
       return;
     }
 
@@ -437,7 +501,7 @@ export class CustomerView {
     // reads as receding, which is the opposite of what it is for.
     const phase = 1 - Math.cos((this.scene.time.now / BREATH_MS) * Math.PI * 2);
     this.breathing = true;
-    this.bubble.setScale(CHILD_SCALE * (1 + (BREATH_AMOUNT * phase) / 2));
+    this.bubble.setScale(this.scale * (1 + (BREATH_AMOUNT * phase) / 2));
   }
 
   private hide(): void {

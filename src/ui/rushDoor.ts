@@ -3,8 +3,8 @@ import type Phaser from 'phaser';
 import { RUSH_CROWD } from '../core/difficulty';
 import { CHILD_TINT, HudDepth, makeSprite } from '../render/drawn';
 import { TextureKey } from '../render/textures';
-import { BODY_Y, CHILD_SCALE } from './customerView';
-import type { Frame } from './layout';
+import { bodyY } from './customerView';
+import { QUEUE_PITCH, type Frame } from './layout';
 
 /**
  * The rush, telegraphed (design §7, §11): children gathering in the shop
@@ -39,10 +39,13 @@ import type { Frame } from './layout';
 const CROWD = RUSH_CROWD;
 
 /**
- * How tightly they stand. Well under the queue's own pitch on purpose: a line
- * at the queue's spacing is another queue, and what this has to say is *crowd*.
+ * How tightly they stand, as a share of the queue's own pitch. Well under it on
+ * purpose: a line at the queue's spacing is another queue, and what this has to
+ * say is *crowd*. A share rather than a distance because the queue's step is
+ * fitted to the lane (`layout.ts`'s `queueRun`) — a fixed huddle would read as a
+ * crowd beside a roomy line and as one child beside a tight one.
  */
-const HUDDLE = 26;
+const HUDDLE_SHARE = 26 / QUEUE_PITCH;
 
 /**
  * A silhouette rather than another child. They are behind the shop's own wall
@@ -67,6 +70,9 @@ export class RushDoor {
 
   private footY = 0;
   private door = 0;
+  /** How far off the standing line their heads are drawn — the queue's own. */
+  private head = 0;
+  private huddle = 0;
   /**
    * Which way is *into* the shop from the door: the queue's own pitch runs the
    * other way, from the window toward the door, so this is its negation.
@@ -83,15 +89,13 @@ export class RushDoor {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    // Sized in `applyFrame` with everything else about them: the doorway is
+    // never drawn before the first layout pass has said how big a child is.
     this.figures = Array.from({ length: CROWD }, () =>
-      makeSprite(
-        scene,
-        TextureKey.Customer,
-        CHILD_TINT,
-        HudDepth.Doorway,
-        { x: 0, y: 0 },
-        CHILD_SCALE,
-      ).setVisible(false),
+      makeSprite(scene, TextureKey.Customer, CHILD_TINT, HudDepth.Doorway, {
+        x: 0,
+        y: 0,
+      }).setVisible(false),
     );
   }
 
@@ -107,6 +111,9 @@ export class RushDoor {
     this.footY = queue.front.y;
     this.door = queue.door;
     this.intoShop = queue.pitch >= 0 ? -1 : 1;
+    this.head = bodyY(queue.scale);
+    this.huddle = Math.round(Math.abs(queue.pitch) * HUDDLE_SHARE);
+    for (const figure of this.figures) figure.setScale(queue.scale);
   }
 
   /**
@@ -147,10 +154,10 @@ export class RushDoor {
         .setVisible(true)
         .setAlpha(MAX_ALPHA * presence)
         .setPosition(
-          this.door + this.intoShop * index * HUDDLE,
+          this.door + this.intoShop * index * this.huddle,
           // Stood on the queue's own line, at the same height off it a child in
           // the line is drawn: they are the same children, one room back.
-          this.footY + BODY_Y + bob,
+          this.footY + this.head + bob,
         );
     }
   }

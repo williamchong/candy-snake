@@ -2,7 +2,7 @@ import { CHOP_BLOCK_HEIGHT, CHOP_BLOCK_TOP, COLS, ROWS } from '../core/board';
 import { STARTING_LIVES } from '../core/game';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
-import { CELL_SIZE } from '../render/textures';
+import { CELL_SIZE, TEXTURE_SIZE } from '../render/textures';
 
 /**
  * Screen geometry, and the only file that holds any (architecture §9). Every
@@ -90,24 +90,7 @@ export interface HudFrame {
     readonly axis: Axis;
     readonly slot: number;
   };
-  /**
-   * The window end of the queue, the step from one child to the next, and where
-   * a child waits before they arrive and after they go. `pitch` is signed: the
-   * line runs away from the window, which is rightward in landscape and
-   * leftward in portrait, and `offstage` is past the frame edge on that side.
-   *
-   * `door` is the same end of the line brought back just *inside* the frame:
-   * where the crowd gathering before a rush stands (design §7's telegraph). It
-   * is the only thing in the queue deliberately drawn half off the edge —
-   * a doorway is a thing you see part of — so it is a measurement rather than
-   * an inset the widget picks, and it is swept per viewport like the rest.
-   */
-  readonly queue: {
-    readonly front: Vec2;
-    readonly pitch: number;
-    readonly offstage: number;
-    readonly door: number;
-  };
+  readonly queue: QueueFrame;
   /**
    * Where the pause control sits (design §10's third HUD button, at the same
    * 44 px `TAB_SIZE` floor as the other two). Just a centre, like the mute tab.
@@ -148,6 +131,37 @@ export interface HudFrame {
     readonly radius: number;
     readonly node: number;
   };
+}
+
+/**
+ * The window end of the queue, the step from one child to the next, how big a
+ * child in it is drawn, and where one waits before they arrive and after they
+ * go. `pitch` is signed: the line runs away from the window, which is rightward
+ * in landscape and leftward in portrait, and `offstage` is past the frame edge
+ * on that side.
+ *
+ * `scale` is here rather than in `customerView.ts` for the same reason the
+ * rack's `slot` is here rather than in `shelfStrip.ts`: how big a thing is drawn
+ * is how much room it needs, and the room is what this file is fitting.
+ *
+ * `door` is the same end of the line brought back just *inside* the frame:
+ * where the crowd gathering before a rush stands (design §7's telegraph). It
+ * is the only thing in the queue deliberately drawn half off the edge —
+ * a doorway is a thing you see part of — so it is a measurement rather than
+ * an inset the widget picks, and it is swept per viewport like the rest.
+ */
+/** What `queueRun` fits: the step, and how big a child that step can afford. */
+interface QueueRun {
+  readonly pitch: number;
+  readonly scale: number;
+}
+
+export interface QueueFrame {
+  readonly front: Vec2;
+  readonly pitch: number;
+  readonly scale: number;
+  readonly offstage: number;
+  readonly door: number;
 }
 
 export interface Frame {
@@ -278,25 +292,124 @@ const MIN_SHELF_PITCH = 18;
 /** How much of its own step a slot fills, leaving the rest as the gap. */
 const SLOT_RATIO = 40 / SHELF_PITCH;
 
-const QUEUE_PITCH = 84;
+/**
+ * The most children who can ever be waiting at once, and so the number the lane
+ * has to hold: `difficulty.ts` tops `maxQueue` out at 4, which is the same
+ * ceiling the combo meter counts its pips against.
+ */
+export const QUEUE_SLOTS = COMBO_PIPS;
 
-/** How far into the serving lane the child at the window stands, from its near edge. */
-const QUEUE_INSET = 42;
+/**
+ * The step from one child to the next, at its roomiest — the desktop pitch.
+ * Exported because the doorway crowd huddles at a share of it (`ui/rushDoor.ts`)
+ * and a share of a number you cannot see is a copy waiting to drift.
+ */
+export const QUEUE_PITCH = 84;
+
+/**
+ * How big a child is drawn, as a multiple of the 16 px source. Bigger than the
+ * board's 2× because a face is the whole point of that sprite and the queue is
+ * what the player glances at rather than steers by — and a ceiling rather than
+ * a fixed size, for the reasons `queueRun` gives.
+ */
+export const CHILD_SCALE = 3;
+/** Below this the face stops carrying, which is the only thing a child is for. */
+const MIN_CHILD_SCALE = 2;
+
+/** How tall — and, being a square sprite, how wide — a child is drawn. */
+export const childHeight = (scale: number): number => TEXTURE_SIZE * scale;
+
+/**
+ * A source cell of air between one child and the next, which is what decides
+ * which whole scale a step can afford. A line drawn shoulder to shoulder is a
+ * crowd rather than a queue, and the doorway already has the crowd
+ * (`ui/rushDoor.ts`).
+ */
+const CHILD_GAP = TEXTURE_SIZE;
+/**
+ * The floor the two agree on: the smallest child, with their air. It is a floor
+ * and not a fit — under 522 px of landscape width the lane can no longer pay
+ * for four of these, and the tail of the queue goes back over the frame edge.
+ * Nothing that ships is down there (the smallest phone sideways is 568),
+ * and a queue drawn on top of itself would be worse than one that runs off.
+ */
+const MIN_QUEUE_PITCH = childHeight(MIN_CHILD_SCALE) + CHILD_GAP;
+
+/** The gap over a child's head that their bubble hangs in (`customerView.ts`). */
+export const CHILD_BUBBLE_GAP = 18;
 
 /**
  * How much room a child needs above the line they stand on: their own height,
  * the gap over their head and the bubble that sits in it — `customerView.ts`'s
- * `BUBBLE_Y` plus half a bubble. What the row of hearts has to keep clear of,
- * and measured rather than eyeballed because on a short screen the hearts land
- * exactly on it.
+ * `bubbleY` plus half a bubble, which at any scale is one and a half of them.
+ * What the row of hearts has to keep clear of, and measured rather than
+ * eyeballed because on a short screen the hearts land exactly on it.
  */
-export const CHILD_HEADROOM = 90;
+export const childHeadroom = (scale: number): number =>
+  1.5 * childHeight(scale) + CHILD_BUBBLE_GAP;
 /**
  * And below it: the patience bar draining at their feet, and the lane a child
  * steps down into on their way out before they walk off — `customerView.ts`'s
  * `BAR_Y` and its `LEAVING_LANE`, whichever reaches further, which is the lane.
+ * Both are measured from the standing line rather than off the child, so unlike
+ * the headroom this one does not flex with how big they are drawn.
  */
 export const CHILD_UNDERFOOT = 22;
+
+/**
+ * Sizes the queue to the lane and the kitchen it has been given, the way
+ * `shelfRun` sizes the rack: the step and the children shrink together rather
+ * than the tail of the line standing off the edge of the screen.
+ *
+ * Two bounds, because there were two ways for a child to be drawn too big.
+ * The lane is the one that loses a queue: it is a share of the width
+ * (`columnWidth`), so a window small enough to embed — an itch.io frame, say —
+ * leaves room that four children at the desktop pitch run clean out of, and
+ * what is lost is how far ahead the player can read the queue, which is what
+ * design §5 asks them to plan against.
+ *
+ * The cell is the one that looks wrong. `MAX_ZOOM` says the HUD is authored at
+ * one size and does not step *up* with a zoomed kitchen; stepping down is a
+ * different matter, because below the authored cell everything else on screen
+ * does — the board, the rack's slots, the wheel's jars — and a child left at
+ * their full size stops being half again a board sprite and starts being twice
+ * one, towering over the shop they are queueing in.
+ *
+ * The scale steps in whole multiples and never between them: these are 16 px
+ * sprites, and half a source pixel is the crawl `MAX_ZOOM` refuses on the board.
+ */
+const queueRun = (lane: number, cell: number): QueueRun => {
+  const pitch = clamp(Math.floor(lane / QUEUE_SLOTS), MIN_QUEUE_PITCH, QUEUE_PITCH);
+  // The kitchen's own scale is `cell / CELL_SIZE` (`boardFrame`), so the second
+  // bound is the authored child taken down by however much the board was.
+  const fits = Math.min(
+    (pitch - CHILD_GAP) / TEXTURE_SIZE,
+    CHILD_SCALE * (cell / CELL_SIZE),
+  );
+
+  return { pitch, scale: clamp(Math.floor(fits), MIN_CHILD_SCALE, CHILD_SCALE) };
+};
+
+/**
+ * The line itself: it starts half a step into the lane, so the run of four
+ * fills that lane evenly rather than from a fixed inset the last child then
+ * overshoots, and it runs *away* from the window. `into` is which way that is —
+ * rightward beside the board, leftward beneath it — and it is the one place the
+ * sign rule is written, rather than once per orientation.
+ */
+const queueLine = (
+  run: QueueRun,
+  window: Vec2,
+  into: 1 | -1,
+  offstage: number,
+  door: number,
+): QueueFrame => ({
+  front: { x: window.x + into * Math.round(run.pitch / 2), y: window.y },
+  pitch: into * run.pitch,
+  scale: run.scale,
+  offstage,
+  door,
+});
 
 /**
  * Sizes the rack to the run it has been given. Six slots at the desktop pitch
@@ -319,8 +432,9 @@ const OFFSTAGE_MARGIN = 60;
  * the edge and not back from `offstage`, which is a walk-on distance and has no
  * business moving a doorway (design §7).
  *
- * A child is drawn 48 px across — 24 either side of the centre this positions —
- * so 6 leaves about two thirds of the nearest one showing.
+ * A child is drawn `childHeight(scale)` across — half of that either side of the
+ * centre this positions — so 6 leaves most of the nearest one showing, and more
+ * of them the smaller a narrow lane has drawn them.
  */
 const DOOR_INSET = 6;
 
@@ -476,6 +590,10 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   // The column hugs the board rather than the frame edge, so the window stays
   // beside the bench however much slack a wide window leaves over.
   const columnX = board.x + board.width + GUTTER;
+  // The serving lane is what is left of the width once the kitchen has had its
+  // share: the column the children queue down, from the board's edge to the
+  // frame's. It is what four of them have to fit in, and so what sizes them.
+  const queue = queueRun(insets.left + availW - columnX, cell);
 
   // Tight under the score rather than clear of it: the hearts are the ceiling
   // the window hangs from on a short screen, so every pixel spent above them is
@@ -505,7 +623,7 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
   const footY = Math.min(
     Math.max(
       rowCentreY(board, cell, CHOP_BLOCK_TOP + CHOP_BLOCK_HEIGHT - 1),
-      livesAt.y + LIVES_CLEARANCE + CHILD_HEADROOM,
+      livesAt.y + LIVES_CLEARANCE + childHeadroom(queue.scale),
     ),
     insets.top + availH - rackMin - GUTTER / 2 - CHILD_UNDERFOOT,
   );
@@ -576,12 +694,13 @@ const landscapeFrame = (view: Viewport, insets: Insets): Frame => {
         ...shelf,
         axis: 'column',
       },
-      queue: {
-        front: { x: columnX + QUEUE_INSET, y: footY },
-        pitch: QUEUE_PITCH,
-        offstage: view.width + OFFSTAGE_MARGIN,
-        door: view.width - DOOR_INSET,
-      },
+      queue: queueLine(
+        queue,
+        { x: columnX, y: footY },
+        1,
+        view.width + OFFSTAGE_MARGIN,
+        view.width - DOOR_INSET,
+      ),
       mute: { x: tabX, y: muteY },
       pause: { x: pauseX, y: tabY },
       sheet: {
@@ -624,9 +743,9 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
   // Everything in the strip lines up with the board's own edges rather than the
   // frame's, so the HUD reads as belonging to the kitchen above it.
   const right = board.x + board.width;
-  // Enough of a step that four children are on screen at once, and no wider
-  // than the landscape pitch.
-  const queuePitch = Math.min(QUEUE_PITCH, Math.floor((board.width - 60) / 4));
+  // Upright the lane the queue runs back along is the board's own width, so
+  // that is what sizes it — the same fit the landscape column is given.
+  const queue = queueRun(board.width, cell);
   // Laid across the board's own width rather than down a column, so the run it
   // has to fit in is that width.
   const shelf = shelfRun(board.width);
@@ -715,14 +834,15 @@ const portraitFrame = (view: Viewport, insets: Insets): Frame => {
         ...shelf,
         axis: 'row',
       },
-      queue: {
-        front: { x: right - QUEUE_INSET, y: stripTop + QUEUE_ROW },
-        // The window is at the right-hand end, so the line runs back to the
-        // left and the door is off that edge.
-        pitch: -queuePitch,
-        offstage: -OFFSTAGE_MARGIN,
-        door: DOOR_INSET,
-      },
+      // The window is at the right-hand end, so the line runs back to the left
+      // and the door is off that edge.
+      queue: queueLine(
+        queue,
+        { x: right, y: stripTop + QUEUE_ROW },
+        -1,
+        -OFFSTAGE_MARGIN,
+        DOOR_INSET,
+      ),
       // On the wheel's other shoulder, mirroring the sheet's tab. Upright there
       // is width to spare where landscape had none, so the pair straddles the
       // panel instead of stacking — and a tab at either end of the band is two

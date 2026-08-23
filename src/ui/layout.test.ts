@@ -5,12 +5,10 @@ import { STARTING_LIVES } from '../core/game';
 import { SHELF_SLOTS } from '../core/shelf';
 import type { Vec2 } from '../core/types';
 import { CELL_SIZE } from '../render/textures';
-// Loads under Node because its Phaser import is type-only and so erased —
-// the exception CLAUDE.md carves out for the engine-free rule.
-import { CHILD_HEIGHT } from './customerView';
 import {
   centredColumn,
-  CHILD_HEADROOM,
+  childHeadroom,
+  childHeight,
   CHILD_UNDERFOOT,
   COMBO_PIP,
   COMBO_PIPS,
@@ -23,6 +21,7 @@ import {
   LIVES_CLEARANCE,
   menuPlan,
   PARADE_GROWTH,
+  QUEUE_SLOTS,
   scoreboard,
   SCORE_SIZE,
   TEXT_MARGIN,
@@ -287,7 +286,7 @@ describe('layout', () => {
     const { hud, orientation } = layout(view);
     if (orientation !== 'landscape') return;
 
-    expect(hud.queue.front.y - CHILD_HEADROOM).toBeGreaterThanOrEqual(
+    expect(hud.queue.front.y - childHeadroom(hud.queue.scale)).toBeGreaterThanOrEqual(
       hud.lives.at.y + LIVES_CLEARANCE,
     );
   });
@@ -321,7 +320,7 @@ describe('layout', () => {
     }
     // Upright the rack is the row above the strip's child rather than below,
     // so it is the bubble over their head that has to clear it.
-    expect(shelf.at.y + shelf.slot / 2 + CHILD_HEADROOM).toBeLessThanOrEqual(
+    expect(shelf.at.y + shelf.slot / 2 + childHeadroom(queue.scale)).toBeLessThanOrEqual(
       queue.front.y,
     );
   });
@@ -395,6 +394,33 @@ describe('layout', () => {
     expect(hud.queue.front.x).toBeLessThan(view.width);
   });
 
+  it.each(VIEWPORTS)('stands the whole queue on screen on %s', (_name, view) => {
+    // What the fitted pitch buys. The serving lane is a share of the width, so
+    // a window small enough to embed — an itch.io frame — had four children at
+    // the desktop pitch walking clean off the edge of it, and how long the
+    // queue is is what design §5 asks the player to plan against.
+    //
+    // Swept rather than universal: `MIN_QUEUE_PITCH` is a floor, so under
+    // 522 px of landscape width the tail does go back over the edge. Every
+    // viewport a phone or an embed can actually be is above that, which is what
+    // this list is.
+    const { queue } = layout(view).hud;
+    const half = childHeight(queue.scale) / 2;
+    const tail = queue.front.x + (QUEUE_SLOTS - 1) * queue.pitch;
+
+    expect(Math.min(queue.front.x, tail) - half).toBeGreaterThanOrEqual(0);
+    expect(Math.max(queue.front.x, tail) + half).toBeLessThanOrEqual(view.width);
+  });
+
+  it.each(VIEWPORTS)('leaves air between one child and the next on %s', (_name, view) => {
+    // A line drawn shoulder to shoulder is the doorway crowd, which is a
+    // different thing being said (design §7). The step shrinks first and the
+    // children only once the step can no longer pay for them.
+    const { queue } = layout(view).hud;
+
+    expect(Math.abs(queue.pitch)).toBeGreaterThan(childHeight(queue.scale));
+  });
+
   it.each(VIEWPORTS)('cuts the doorway crowd on the frame edge on %s', (_name, view) => {
     const { queue } = layout(view).hud;
 
@@ -410,7 +436,7 @@ describe('layout', () => {
     // frame running through them. Off the view's own constant, so a child drawn
     // at a different scale moves this with it.
     const edge = downLine > 0 ? view.width : 0;
-    expect(Math.abs(queue.door - edge)).toBeLessThan(CHILD_HEIGHT / 2);
+    expect(Math.abs(queue.door - edge)).toBeLessThan(childHeight(queue.scale) / 2);
   });
 
   it('hangs the cheat sheet off the far corner in landscape', () => {

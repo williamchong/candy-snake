@@ -1,12 +1,12 @@
 import type Phaser from 'phaser';
 
-import type { Customer, Vec2 } from '../core/types';
+import type { Customer } from '../core/types';
 import { fountain } from '../render/burst';
 import { HudDepth } from '../render/drawn';
 import { Burst, type BurstConfig } from '../render/effects';
 import { TextureKey } from '../render/textures';
-import { CHILD_SCALE, CustomerView, type Mood } from './customerView';
-import type { Frame } from './layout';
+import { CustomerView, type Mood } from './customerView';
+import { CHILD_SCALE, type Frame, type QueueFrame } from './layout';
 
 /**
  * The send-off a served child gets, thrown from the bubble their order was in.
@@ -18,7 +18,11 @@ import type { Frame } from './layout';
  *
  * One pool for the whole queue rather than one per child: several children can
  * be served inside one another's send-off, and a pool each would be a pool each
- * for every view ever built.
+ * for every view ever built. Which is also why the confetti is authored at the
+ * roomiest a child is ever drawn and left there while they shrink: `Burst`
+ * reads its scale off this config once, in its constructor, and offers no way
+ * to change it — and a pip is small enough that being a size too big for a
+ * shrunken child reads as confetti either way.
  */
 const CHEER: BurstConfig = {
   key: TextureKey.Pip,
@@ -46,14 +50,20 @@ export class CustomerQueue {
   private readonly views: CustomerView[] = [];
   private readonly waiting = new Map<number, CustomerView>();
 
-  /** Where the child at the head of the queue stands: the window end. */
-  private front: Vec2 = { x: 0, y: 0 };
   /**
-   * The step from one child to the next. Signed: the line runs away from the
-   * window, which is rightward beside the board and leftward beneath it.
+   * The window: where the head of the queue stands, the step from one child to
+   * the next — signed, because the line runs away from the window, rightward
+   * beside the board and leftward beneath it — and how big they are drawn.
+   * Held whole rather than picked apart, because it is handed on whole to every
+   * view (`CustomerView.relocate`).
    */
-  private pitch = 0;
-  private offstage = 0;
+  private queue: QueueFrame = {
+    front: { x: 0, y: 0 },
+    pitch: 0,
+    scale: CHILD_SCALE,
+    offstage: 0,
+    door: 0,
+  };
   private readonly cheers: Burst;
 
   constructor(scene: Phaser.Scene) {
@@ -70,12 +80,8 @@ export class CustomerQueue {
    * caught by a turn of the phone slides across rather than jumping.
    */
   applyFrame(frame: Frame): void {
-    const { front, pitch, offstage } = frame.hud.queue;
-
-    this.front = front;
-    this.pitch = pitch;
-    this.offstage = offstage;
-    for (const view of this.views) view.relocate(front, offstage);
+    this.queue = frame.hud.queue;
+    for (const view of this.views) view.relocate(this.queue);
     // A send-off is thrown at the bubble it left, and that bubble has just
     // moved. The children slide across to their new places; confetti in the air
     // has nothing left to slide *from*, so it is cut rather than stranded where
@@ -149,13 +155,13 @@ export class CustomerQueue {
   }
 
   private build(): CustomerView {
-    const view = new CustomerView(this.scene, this.front, this.offstage, this.cheers);
+    const view = new CustomerView(this.scene, this.queue, this.cheers);
     this.views.push(view);
     return view;
   }
 
   /** The head of the queue stands at the window; the rest line up behind. */
   private standingX(slot: number): number {
-    return this.front.x + slot * this.pitch;
+    return this.queue.front.x + slot * this.queue.pitch;
   }
 }
