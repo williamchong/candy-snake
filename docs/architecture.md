@@ -327,11 +327,19 @@ which is what the `muted` setting (§10) is applied to.
   default scale argument of `makeSprite`) and `boardView.ts`, and would break
   the accessibility glyphs, which are baked at their display size on purpose.
   `cell` is still chosen as a whole number, so `CELL_SIZE * scale` is exact.
-- The board is never scaled *up* past the size its sprites are authored at: a
-  large window gets more room around the kitchen, not a bigger kitchen.
+- Above the authored size the cell **steps rather than slides**: a window with
+  room for it gets a whole multiple of the authored cell (2× and no further,
+  `MAX_ZOOM`), never a fractional one. Fractional upscaling makes some source
+  pixels wider than others and sets the strand's soft edge crawling as the board
+  slides under it, and a large window used to spend all of that room on air —
+  a 512 px kitchen adrift in a 1500 px one. Below the authored size the cell
+  still takes whatever whole pixel fits: there is no choice down there.
 - HUD regions anchor around the board, and the HUD is **not** scaled with it —
   it is a parallel scene with its own camera, so text stays readable and touch
-  targets stay full size however far the board has had to shrink.
+  targets stay full size however far the board has had to shrink. That cuts both
+  ways now the board can grow: on a monitor big enough for a 2× kitchen the
+  children and the rack beside it stay at their authored size, which is a
+  deliberate open question rather than a settled one.
   - **Landscape:** customers + shelf + score in the right column, beside the
     chopping block's wall (design §10), reading bench → child → rack: the
     standing line is the block's own last row, and the rack takes the column

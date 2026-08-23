@@ -601,8 +601,14 @@ export const generateTextures = (scene: Phaser.Scene): void => {
  * Images like every other sprite instead of carrying a Text object per segment,
  * and Phaser backs every Text with its own canvas.
  *
- * Drawn white so a tint can ink them dark, and baked at their display size so
- * `pixelArt: true`'s nearest-neighbour filtering samples them 1:1.
+ * Drawn white so a tint can ink them dark, and baked at the size the HUD shows
+ * them, which is the size the board shows them at 1:1 as well. A window with
+ * room for a 2× kitchen (`layout.ts`'s `MAX_ZOOM`) scales the board's container
+ * and these with it, so on one of those the symbols on the strand are a whole
+ * doubling of baked text rather than text baked twice as large. That is the one
+ * thing the zoom costs, and it costs it in the house style — a symbol nearest-
+ * neighboured to double size is a blockier symbol, not a blurred one — so it is
+ * spent rather than paid for with a re-bake on every resize.
  */
 export const generateGlyphTextures = (scene: Phaser.Scene): void => {
   COLORS.forEach((info, color) => {

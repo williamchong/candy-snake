@@ -164,12 +164,19 @@ const clamp = (value: number, low: number, high: number): number =>
 /** Below this the board stops being steerable; it is a floor, not a target. */
 const MIN_CELL = 12;
 /**
- * The board is never drawn larger than its sprites are authored at. Scaling
- * pixel art past 1:1 only softens it, and it would blow up the chrome widths
- * with it — so a big desktop window gets more room around the kitchen rather
- * than a bigger kitchen.
+ * How far past 1:1 a big window may take the kitchen. Scaling pixel art up is
+ * only safe in **whole multiples** — a cell of 47 makes some source pixels three
+ * screen pixels wide and others two, and the strand's soft edge crawls as the
+ * board slides under it — so above the authored size the cell steps rather than
+ * slides, and `cellFor` picks the largest step that fits.
+ *
+ * Two, not more: the HUD around the kitchen is authored at one size and does
+ * not step with it, and past double the board stops reading as the thing the
+ * children are queueing at and starts reading as the whole screen. A window
+ * with room for a third step gets the air instead.
  */
-const MAX_CELL = CELL_SIZE;
+const MAX_ZOOM = 2;
+const MAX_CELL = CELL_SIZE * MAX_ZOOM;
 
 /** Breathing room between the board and anything else, including the frame. */
 const GUTTER = 16;
@@ -396,16 +403,18 @@ const wheelRun = (spanW: number, spanH: number): Wheel => {
 };
 
 /**
- * The largest whole-pixel cell that fits the rectangle the board has been left,
- * capped at the authored size. Whole pixels rather than a fractional best fit
- * because the cell is what every position on the board is a multiple of.
+ * The largest cell that fits the rectangle the board has been left. Whole pixels
+ * rather than a fractional best fit, because the cell is what every position on
+ * the board is a multiple of — and whole *multiples of the authored cell* once
+ * there is room for more than one, which is what keeps a scaled-up kitchen as
+ * crisp as a 1:1 one (see `MAX_ZOOM`).
  */
-const cellFor = (width: number, height: number): number =>
-  clamp(
-    Math.min(Math.floor(width / COLS), Math.floor(height / ROWS)),
-    MIN_CELL,
-    MAX_CELL,
-  );
+const cellFor = (width: number, height: number): number => {
+  const fits = Math.min(Math.floor(width / COLS), Math.floor(height / ROWS));
+  if (fits < CELL_SIZE) return Math.max(fits, MIN_CELL);
+
+  return Math.min(Math.floor(fits / CELL_SIZE) * CELL_SIZE, MAX_CELL);
+};
 
 /** Centres a run of `size` in `space`, never pushing it off the near edge. */
 const centre = (origin: number, space: number, size: number): number =>

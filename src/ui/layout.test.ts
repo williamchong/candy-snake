@@ -39,6 +39,7 @@ const DESKTOP: Viewport = { width: 960, height: 640 };
 const VIEWPORTS: ReadonlyArray<readonly [string, Viewport]> = [
   ['the desktop frame', DESKTOP],
   ['a wide desktop window', { width: 1440, height: 900 }],
+  ['a big monitor', { width: 2560, height: 1440 }],
   ['a tablet, landscape', { width: 1024, height: 768 }],
   ['a tablet, portrait', { width: 768, height: 1024 }],
   ['a phone, landscape', { width: 844, height: 390 }],
@@ -191,14 +192,38 @@ const onScreen = (rect: Rect, view: Viewport): boolean =>
 
 describe('layout', () => {
   it('keeps the desktop frame drawing the board at its authored size', () => {
-    // The board is never scaled up past 1:1, so the frame the game was built
-    // at is still the frame it draws at — nothing about the responsive pass
-    // resamples the desktop build.
+    // The kitchen steps up only where there is room for a whole second step,
+    // and this frame has none — so the frame the game was built at is still the
+    // frame it draws at, and nothing about the responsive pass resamples it.
     const { board, cell } = layout(DESKTOP);
 
     expect(cell).toBe(CELL_SIZE);
     expect(board.scale).toBe(1);
     expect(board).toMatchObject({ width: 512, height: 512 });
+  });
+
+  it('gives a window with the room for it a bigger kitchen', () => {
+    // The kitchen used to stop at 1:1 and spend everything past it on air,
+    // which on a large monitor left a small board adrift in an empty room.
+    const { cell, board } = layout({ width: 2560, height: 1440 });
+
+    expect(cell).toBe(2 * CELL_SIZE);
+    expect(board.scale).toBe(2);
+  });
+
+  it('scales the kitchen in whole steps or not at all', () => {
+    // Pixel art scaled by a fraction makes some source pixels wider than
+    // others, and the strand's soft edge crawls as the board slides under it.
+    // Below the authored size there is no choice — a cell has to fit whatever
+    // room is left — but above it there is, and it is always a whole multiple.
+    for (let width = 320; width <= 3840; width += 16) {
+      for (const height of [width, Math.round(width * 0.6), Math.round(width * 1.6)]) {
+        const { cell } = layout({ width, height });
+
+        if (cell > CELL_SIZE) expect(cell % CELL_SIZE).toBe(0);
+        expect(cell).toBeLessThanOrEqual(2 * CELL_SIZE);
+      }
+    }
   });
 
   it('puts the serving column beside the bench wall in landscape', () => {
