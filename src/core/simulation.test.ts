@@ -1294,41 +1294,61 @@ describe('the reference players, after the ramp went in', () => {
     });
 
     // Whether the maker doing more work is *paid* less for it used to be an
-    // invariant, asked of the same four. It is a proportion now, so it is asked
-    // of the draw that can carry one (`SWEEP`, and see its own note on why four
-    // cannot) — and the proportion is **2 of 16**, with the combo bonus in.
+    // invariant, asked of the same four. It is a proportion, so it is asked of
+    // the draw that can carry one — and for six sittings that was read as
+    // `SWEEP`, which is the mistake this file has now made three times about
+    // three different statistics. Sixteen seeds size a proportion the way
+    // `SWEEP`'s own note says; they do not size *this* one, because it is a
+    // proportion of a comparison between two runs rather than of one run's
+    // events, and the two arms re-roll independently. **Measured 15 of 64**,
+    // against 3 of 16 on `SWEEP` for the same build — and at a twin constant of
+    // 0.5 the two draws read 2 of 16 against 23 of 64, which is 12% and 36% of
+    // the same game. The figure quoted here for two sittings was "2 of 16",
+    // stale as well as narrow. So the number that carries the open finding now
+    // comes off `WIDE`, like the median above and for the same reason.
     //
-    // It read 1 of 16 for two sittings, on a window that refills giving a fixed
-    // bundle more targets to land on. Raising the bot ceiling took it back to
-    // zero, and that is the more useful number: the seed the batcher used to
-    // win is gone, but it is gone from a bot that now builds a batch of three
-    // at the bench instead of two, plans past the window, and still loses on
-    // every seed. Five sittings held this open on the grounds that the harness
-    // could not be asked. Asked properly, the answer did not change.
+    // It read 1 of 16 for two sittings before that, on a window that refills
+    // giving a fixed bundle more targets to land on. Raising the bot ceiling
+    // took it back to zero, and that is the more useful number: the seed the
+    // batcher used to win is gone, but it is gone from a bot that now builds a
+    // batch of three at the bench instead of two, plans past the window, and
+    // still loses on every seed of the narrow draw. Five sittings held this
+    // open on the grounds that the harness could not be asked. Asked properly,
+    // the answer did not change.
     //
     // The combo bonus (design §9) was the sitting that tried to close it, and
     // did not. Two of sixteen is inside the re-roll: bonus points feed the ramp
     // like any others, so each constant swept is a *different run*, and the
     // proportion came back 0, 2, 0, 1, 1, 2 at 10, 15, 25, 40, 60 and 100.
     // Excluding the bonus from the ramp feed makes the runs identical and the
-    // arithmetic legible: mean batcher score then climbs 16.93 points per point
-    // of bonus — the same slope across 0→15, 15→40 and 40→100 — off 4932
-    // against the grinder's flat ~13060. Closing that 8126-point gap this way
-    // needs a bonus near 480, against a tier-3 serve worth 50. The gap is not a
-    // rate the bonus can raise; it is that the grinder does not die. See the
-    // plan's measurement record.
+    // arithmetic legible: mean batcher score then
+    // climbs 16.93 points per point of bonus — the same slope across 0→15,
+    // 15→40 and 40→100 — off 4932 against the grinder's flat ~13060. Closing
+    // that 8126-point gap this way needs a bonus near 480, against a tier-3
+    // serve worth 50. The gap is not a rate the bonus can raise; it is that the
+    // grinder does not die. See the plan's measurement record.
     //
-    // Closing the finding means this number crossing the halfway mark and the
-    // assertion inverting with it — not the assertion being deleted.
-    const sweptGrinders = target(grinderGoal, SWEEP);
-    const ahead = target(batcherGoal, SWEEP).filter(
+    // **The bound is the halfway mark, because that is what the claim is.** A
+    // tighter one is available — 15 of 64 is 23% — and is deliberately not
+    // taken: it would fail on the re-roll any spawn-moving change causes and
+    // read as the finding closing when nothing had closed. Closing it means
+    // this number crossing halfway and the assertion inverting with it, not
+    // the assertion being deleted. The twin sweep recorded in the plan is the
+    // only arm that has ever crossed it (34 of 64, at a cost the plan prices).
+    const sweptGrinders = target(grinderGoal, WIDE);
+    const ahead = target(batcherGoal, WIDE).filter(
       (batcher, seed) => batcher.game.state.score > sweptGrinders[seed]!.game.state.score,
     );
     expect(
-      ahead.length * 4,
-      `the batching maker outscored the grinder on ${ahead.length} of ${SWEEP.length} seeds`,
-    ).toBeLessThanOrEqual(SWEEP.length);
-  });
+      ahead.length * 2,
+      `the batching maker outscored the grinder on ${ahead.length} of ${WIDE.length} seeds`,
+    ).toBeLessThan(WIDE.length);
+    // The grinder over `WIDE` is this test's own cost — every other sweep reads
+    // it off `SWEEP` and the memo is per (bot, seed) — and it is the longest
+    // run in the project, since the grinder outlives the ticks on seeds where
+    // the batcher does not. Hence a budget past the 5 s default, which the
+    // median above does not need: that one pays only for the batcher.
+  }, 20_000);
 
   it('pays a maker who takes the pair the window offers', () => {
     // The finding the pair arm was built to settle, and it comes out the other
