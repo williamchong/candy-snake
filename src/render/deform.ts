@@ -1,33 +1,20 @@
-import { StrandPiece, type StrandSprite } from './strand';
+import { ROPE_NEAR, TEXTURE_SIZE } from './textures';
 
 /**
  * How a piece of the strand is scaled while it is being drawn out. A candy
  * snake is pulled sugar: the maker hauls on it and it goes thin, which is the
  * same fact about the material that `melt.ts` shades the seams for (design §2).
  *
- * Pure by design, like `strand.ts` and `melt.ts` beside it: this is invented
- * arithmetic with an invariant hiding in it — see `deformX` — which is the kind
- * of thing that is wrong in a way a screenshot does not show, so it is kept
- * where Node can test it (architecture §11).
- */
-
-/**
- * Which way a rope piece can be drawn out, in its *own* frame.
+ * Every piece is authored running east–west, turned by whole right angles, and
+ * laid along the way its segment travels (`strand.ts`) — and a sprite's scale
+ * is applied after its rotation, so the sprite's own x is along the rope
+ * whichever way the rope runs on the board. There is one direction to be drawn
+ * out in, and every piece here has it.
  *
- * Every piece is authored running east–west and turned by whole right angles
- * (`strand.ts`), and a sprite's scale is applied after its rotation — so for
- * anything with two ends facing each other, the sprite's own x is along the
- * rope whichever way the rope actually runs on the board. An elbow is the
- * exception, and the only one: it is being pulled two ways at once.
+ * Pure by design, like `strand.ts` and `melt.ts` beside it: this is invented
+ * arithmetic, which is the kind of thing that is wrong in a way a screenshot
+ * does not show, so it is kept where Node can test it (architecture §11).
  */
-export const PullShape = {
-  Lengthwise: 'lengthwise',
-  Elbow: 'elbow',
-} as const;
-export type PullShape = (typeof PullShape)[keyof typeof PullShape];
-
-export const pullShapeOf = (sprite: StrandSprite): PullShape =>
-  sprite.piece === StrandPiece.Corner ? PullShape.Elbow : PullShape.Lengthwise;
 
 /**
  * How far a piece stretches at the height of a move, as a fraction of its own
@@ -101,20 +88,28 @@ export const swallowAmount = (remainingMs: number): number => {
 
 /**
  * The scale a piece takes along the sprite's own x, as a multiple of resting.
- *
- * **It never goes below 1**, whatever is being done to the piece. A rope piece
- * drawn shorter than its cell opens a gap at the joint with its neighbour, and
- * a strand with gaps in it is the row of beads the continuous rope exists to
- * replace. An elbow cannot lengthen — it has no single direction to lengthen
- * in — so it takes the across factor on both axes instead, and the shortfall
- * that leaves at the bend is covered by the overhang of the straight beside it.
+ * The pull only ever lengthens: a rope piece drawn shorter than its cell opens
+ * a gap at the joint with its neighbour, and a strand with gaps in it is the
+ * row of beads the continuous rope exists to replace. That is why the swallow
+ * is not an argument here — it swells the rope across and nowhere else.
  */
-export const deformX = (shape: PullShape, pull: number, swallow: number): number =>
-  shape === PullShape.Elbow ? deformY(pull, swallow) : 1 + pull;
+export const deformX = (pull: number): number => 1 + pull;
 
 /**
- * The scale across the rope, which takes no shape: every piece is exactly as
- * wide as the one it meets, which is what keeps the silhouette from stepping
+ * How long a rope piece is drawn along itself at rest, as a multiple of its
+ * cell. Every piece lies along the way it travels (`strand.ts`), so at a bend
+ * two of them cross at the corner cell rather than one elbow covering it — and
+ * a bar that stopped exactly at its cell edge would stop a flank's width short
+ * of the bar it crosses, leaving a hairline of floor at the outside of the turn
+ * on the frames either end of a move. Read off the rope's own inset rather than
+ * written as a number: re-author the rope a pixel wider and an overlap written
+ * out here would be wrong with nothing to catch it.
+ */
+export const JOINT_OVERLAP = 1 + (2 * ROPE_NEAR) / TEXTURE_SIZE;
+
+/**
+ * The scale across the rope. One answer for every piece, so each is exactly as
+ * wide as the one it meets — which is what keeps the silhouette from stepping
  * where the rope bends.
  */
 export const deformY = (pull: number, swallow: number): number =>

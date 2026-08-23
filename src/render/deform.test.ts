@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Vec2 } from '../core/types';
 import {
-  PullShape,
+  JOINT_OVERLAP,
   SWALLOW_MS,
   deformX,
   deformY,
   pullAmount,
-  pullShapeOf,
   swallowAmount,
 } from './deform';
-import { strandSpriteAt } from './strand';
-
-const at = (x: number, y: number): Vec2 => ({ x, y });
+import { ROPE_NEAR, TEXTURE_SIZE } from './textures';
 
 /** Where the pull is strongest, so a test can ask for the worst case. */
 const HARDEST = pullAmount(0.5, 0);
@@ -21,30 +17,6 @@ const HARDEST = pullAmount(0.5, 0);
 const EVERY_PULL = Array.from({ length: 11 }, (_step, tenth) =>
   Array.from({ length: 9 }, (_back, fromHead) => pullAmount(tenth / 10, fromHead)),
 ).flat();
-
-describe('pullShapeOf', () => {
-  it('draws a straight piece out along itself, whichever way it was turned', () => {
-    // Every piece is authored east–west and turned by whole right angles, so
-    // the sprite's own x is along the rope however the rope runs on the board.
-    const eastWest = strandSpriteAt(at(4, 4), at(5, 4), at(3, 4));
-    const northSouth = strandSpriteAt(at(4, 4), at(4, 3), at(4, 5));
-
-    expect(pullShapeOf(eastWest)).toBe(PullShape.Lengthwise);
-    expect(pullShapeOf(northSouth)).toBe(PullShape.Lengthwise);
-  });
-
-  it('draws the loose end out along the rope it hangs off', () => {
-    expect(pullShapeOf(strandSpriteAt(at(4, 4), at(5, 4), undefined))).toBe(
-      PullShape.Lengthwise,
-    );
-  });
-
-  it('gives an elbow no length, because it is pulled two ways at once', () => {
-    expect(pullShapeOf(strandSpriteAt(at(4, 4), at(5, 4), at(4, 5)))).toBe(
-      PullShape.Elbow,
-    );
-  });
-});
 
 describe('pullAmount', () => {
   it('leaves the strand at rest at either end of a move', () => {
@@ -100,12 +72,9 @@ describe('deformX / deformY', () => {
   it('only ever lengthens a piece along the rope, never shortens it', () => {
     // A rope piece drawn shorter than its cell opens a gap at the joint, and a
     // strand with gaps in it is the row of beads the rope exists to replace.
-    // True under a swallow as well, which is why the swell is across only.
-    for (const pull of EVERY_PULL) {
-      for (const swallow of [0, 0.5, 1]) {
-        expect(deformX(PullShape.Lengthwise, pull, swallow)).toBeGreaterThanOrEqual(1);
-      }
-    }
+    // The swallow does not appear here at all, which is that rule taken one
+    // step further: the swell is across the rope only.
+    for (const pull of EVERY_PULL) expect(deformX(pull)).toBeGreaterThanOrEqual(1);
   });
 
   it('narrows a piece across the rope as it lengthens', () => {
@@ -117,25 +86,17 @@ describe('deformX / deformY', () => {
     for (const pull of EVERY_PULL) expect(deformY(pull, 0)).toBeGreaterThan(0.5);
   });
 
-  it('takes the same off an elbow both ways, so it has no length of its own', () => {
-    // Which also leaves it exactly as wide as the straight piece it meets, so
-    // the silhouette does not step where the rope bends.
-    expect(deformX(PullShape.Elbow, HARDEST, 0)).toBe(deformY(HARDEST, 0));
-  });
-
-  it("covers an elbow's shortfall with the overhang of the piece beside it", () => {
-    // The straight grows past the cell boundary by more than the elbow's arm
-    // retreats from it, so no gap can open at a bend however hard the pull.
-    for (const pull of EVERY_PULL) {
-      const overhang = (deformX(PullShape.Lengthwise, pull, 0) - 1) / 2;
-      const shortfall = (1 - deformX(PullShape.Elbow, pull, 0)) / 2;
-      expect(overhang).toBeGreaterThanOrEqual(shortfall);
-    }
+  it('overlaps the joint by the width of a flank, so a bend cannot open', () => {
+    // A turn is two pieces crossing at the corner cell, and a piece that
+    // stopped at its cell edge would stop a flank short of the one it crosses.
+    // Asked of the art rather than of a number written here twice: the overlap
+    // has to cover the rope's inset, whatever that inset is drawn as.
+    expect((JOINT_OVERLAP - 1) / 2).toBeGreaterThanOrEqual(ROPE_NEAR / TEXTURE_SIZE);
   });
 
   it('swells the strand across where a cube went into it', () => {
     expect(deformY(0, 1)).toBeGreaterThan(1);
-    expect(deformX(PullShape.Lengthwise, 0, 1)).toBe(1);
+    expect(deformX(0)).toBe(1);
   });
 
   it('lets a piece be pulled and swallow at once', () => {
@@ -148,8 +109,7 @@ describe('deformX / deformY', () => {
   });
 
   it('leaves a sprite at its resting size when nothing is happening to it', () => {
-    expect(deformX(PullShape.Lengthwise, 0, 0)).toBe(1);
-    expect(deformX(PullShape.Elbow, 0, 0)).toBe(1);
+    expect(deformX(0)).toBe(1);
     expect(deformY(0, 0)).toBe(1);
   });
 });

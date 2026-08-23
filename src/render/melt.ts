@@ -54,13 +54,10 @@ export const mixTint = (from: number, to: number, t: number): number => {
  */
 const STRAND_MELT = 0.35;
 
-/** Two arms meeting at one vertex get equal say in it. */
-const EVEN = 0.5;
-
 /**
- * Which vertices of a quad an edge owns. An edge shares each of its corners
- * with the edge it meets there, which is what lets a corner piece carry color
- * around the bend: the vertex where both arms meet takes a little of each.
+ * Which vertices of a quad an edge owns. Every rope piece lies along the way it
+ * travels (`strand.ts`), so its two arms are opposite edges of the quad and no
+ * vertex is ever on both.
  */
 const SIDE_CORNERS: Record<Dir, readonly [number, number]> = {
   [Dir.Up]: [CornerIndex.TopLeft, CornerIndex.TopRight],
@@ -86,32 +83,21 @@ export const meltedTints = (
   tailward: ColorMask | undefined,
 ): CornerTints => {
   const flat = colorInfo(own).hex;
-  const arms: { side: Dir; hex: number }[] = [];
+  const tints: [number, number, number, number] = [flat, flat, flat, flat];
 
-  if (headward !== undefined) {
-    arms.push({ side: sprite.headArm, hex: colorInfo(headward).hex });
-  }
-  if (sprite.tailArm !== undefined && tailward !== undefined) {
-    arms.push({ side: sprite.tailArm, hex: colorInfo(tailward).hex });
-  }
-
-  const corner = (index: number): number => {
-    // The arms are averaged before the melt rather than melted one after the
-    // other: melting twice would pull a shared vertex in twice as far as the
-    // rest of the piece, and would depend on which arm went first.
-    let beyond: number | undefined;
-    for (const arm of arms) {
-      if (!SIDE_CORNERS[arm.side].includes(index)) continue;
-      beyond = beyond === undefined ? arm.hex : mixTint(beyond, arm.hex, EVEN);
-    }
-
-    return beyond === undefined ? flat : mixTint(flat, beyond, STRAND_MELT);
+  // Written from the arms rather than searched for from each corner: there are
+  // at most two arms and always four corners, so this mixes each end's blend
+  // once instead of once per vertex it lands on. The whole strand is shaded on
+  // every move (`boardView.syncToState`), which is often enough to care.
+  const melt = (side: Dir, beyond: ColorMask): void => {
+    const hex = mixTint(flat, colorInfo(beyond).hex, STRAND_MELT);
+    for (const index of SIDE_CORNERS[side]) tints[index] = hex;
   };
 
-  return [
-    corner(CornerIndex.TopLeft),
-    corner(CornerIndex.TopRight),
-    corner(CornerIndex.BottomLeft),
-    corner(CornerIndex.BottomRight),
-  ];
+  if (headward !== undefined) melt(sprite.headArm, headward);
+  if (sprite.tailArm !== undefined && tailward !== undefined) {
+    melt(sprite.tailArm, tailward);
+  }
+
+  return tints;
 };

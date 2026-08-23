@@ -81,33 +81,20 @@ describe('meltedTints', () => {
     expect(blueSide[CornerIndex.TopLeft]).toBe(mixTint(hex(BLUE), hex(RED), 0.35));
   });
 
-  it('carries both colors into the vertex where an elbow bends', () => {
-    // Head east, tail south: the authored corner piece, unrotated.
-    const elbow = strandSpriteAt(at(5, 5), at(6, 5), at(5, 6));
-    const tints = meltedTints(RAW, elbow, RED, YELLOW);
+  it('melts a turning piece by its own ends, not by where its neighbours sit', () => {
+    // The strand turns here — head south, tail west — but the piece is a bar
+    // laid along the way its sugar travels, so it still has two ends and the
+    // one nearer the head still leans into whatever is beyond it. That the
+    // neighbour ahead is off to one side changes nothing: the two bars cross at
+    // the corner cell, so the ends meet there anyway.
+    const turning = strandSpriteAt(at(5, 5), at(5, 6), at(4, 5));
+    const tints = meltedTints(RAW, turning, RED, YELLOW);
 
-    // The inner vertex is on both arms, so it takes the mean of the two.
-    expect(tints[CornerIndex.BottomRight]).toBe(
-      mixTint(hex(RAW), mixTint(hex(RED), hex(YELLOW), 0.5), 0.35),
-    );
-    // The vertex on neither arm is untouched.
-    expect(tints[CornerIndex.TopLeft]).toBe(hex(RAW));
-    // And one on a single arm takes only that arm's color.
+    expect(turning.angle).toBe(0);
+    expect(turning.headArm).toBe(Dir.Right);
     expect(tints[CornerIndex.TopRight]).toBe(mixTint(hex(RAW), hex(RED), 0.35));
+    expect(tints[CornerIndex.BottomRight]).toBe(mixTint(hex(RAW), hex(RED), 0.35));
+    expect(tints[CornerIndex.TopLeft]).toBe(mixTint(hex(RAW), hex(YELLOW), 0.35));
     expect(tints[CornerIndex.BottomLeft]).toBe(mixTint(hex(RAW), hex(YELLOW), 0.35));
-  });
-
-  it("melts a turned piece by its own corners rather than the board's", () => {
-    // Same shape as the elbow above but rotated a quarter turn: head south,
-    // tail west. The arms land on the authored east and south edges again, so
-    // the tints come out identical — the gradient turns with the sprite.
-    const turned = strandSpriteAt(at(5, 5), at(5, 6), at(4, 5));
-    const tints = meltedTints(RAW, turned, RED, YELLOW);
-
-    expect(turned.angle).toBe(90);
-    expect(tints[CornerIndex.BottomRight]).toBe(
-      mixTint(hex(RAW), mixTint(hex(RED), hex(YELLOW), 0.5), 0.35),
-    );
-    expect(tints[CornerIndex.TopLeft]).toBe(hex(RAW));
   });
 });

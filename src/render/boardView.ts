@@ -30,9 +30,8 @@ import {
   deformX,
   deformY,
   pullAmount,
-  pullShapeOf,
   swallowAmount,
-  PullShape,
+  JOINT_OVERLAP,
   SWALLOW_MS,
 } from './deform';
 import { Burst, knock, type BurstConfig } from './effects';
@@ -128,29 +127,20 @@ interface Placed {
   readonly pos: Vec2;
   readonly color?: ColorMask;
   /**
-   * Overrides the pool's texture for this item. The strand needs it: which
-   * piece of rope a cell draws depends on where its neighbours are, so one
-   * pool stamps straights, elbows and the end cap (see `strand.ts`).
+   * Overrides the pool's texture for this item. The strand needs it: one pool
+   * stamps both the running rope and the end cap (see `strand.ts`).
    */
   readonly key?: TextureKey;
   /** Rotation in degrees, for pieces authored in one orientation and turned. */
   readonly angle?: number;
   /** Per-corner tints, for sprites drawn as a gradient rather than flat. */
   readonly melt?: CornerTints;
-  /**
-   * Which way this piece may be drawn out as it travels, or absent for anything
-   * that must not deform at all. The head leaves it out: it is the maker rather
-   * than sugar — the thing doing the pulling is not the thing being pulled —
-   * and scaling it unevenly would smear the two dots it has for eyes.
-   */
-  readonly pull?: PullShape;
 }
 
 /** A sprite mid-slide between the cell it left and the cell it is entering. */
 interface Sliding extends Drawn {
   from: Vec2;
   to: Vec2;
-  pull: PullShape | undefined;
   /**
    * Scene time the swallow ends at, or 0 for a sprite that is not swallowing.
    * A deadline rather than a tween: `draw` already writes this sprite's scale
@@ -175,6 +165,19 @@ interface PoolConfig extends DrawnConfig {
    * either — it is frozen by definition.
    */
   readonly slides: boolean;
+  /**
+   * Whether these sprites may be drawn out as they travel. The strand is: it is
+   * sugar being hauled on. The head is not — it is the maker rather than the
+   * sugar, and scaling it unevenly would smear the two dots it has for eyes —
+   * and neither is anything that does not move at all.
+   */
+  readonly pulls?: boolean;
+  /**
+   * How long a sprite is drawn along its own x at rest, as a multiple of its
+   * cell. Only the strand asks for anything but its cell — see
+   * `JOINT_OVERLAP`, which is the whole of the reason.
+   */
+  readonly overlap?: number;
 }
 
 const cellToPixel = (cell: Vec2): Vec2 => ({
@@ -207,11 +210,25 @@ class SpritePool {
    */
   private active = 0;
 
+  /**
+   * The scale along a sprite's own x with nothing being done to it: the pool's
+   * `overlap`, spent once here rather than per sprite per frame — `deform` is
+   * the one write in this file that runs at frame rate.
+   */
+  private readonly restX: number;
+
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly root: Phaser.GameObjects.Container,
     private readonly config: PoolConfig,
-  ) {}
+  ) {
+    this.restX = PIXEL_SCALE * (config.overlap ?? 1);
+  }
+
+  /** The size a sprite sits at with nothing being done to it. */
+  private rest(entry: Sliding): void {
+    entry.image.setScale(this.restX, PIXEL_SCALE);
+  }
 
   /**
    * Points each sprite at its new cell and recolors it. Call once per grid
@@ -240,11 +257,10 @@ class SpritePool {
       // Only the sprite turns. The glyph riding on it stays upright, because a
       // symbol the player has to read must not rotate with the rope (design §4).
       entry.image.setAngle(item.angle ?? 0);
-      // Only `draw` ever writes scale, and only for a sprite carrying a pull
-      // shape — so this is what stops one handed back to the pool as a
+      // Only `draw` ever writes scale, and only in a pool that may be drawn
+      // out — so this is what stops a sprite handed back to the pool as a
       // different segment from inheriting the stretch the last one was wearing.
-      entry.image.setScale(PIXEL_SCALE);
-      entry.pull = item.pull;
+      this.rest(entry);
       entry.swallowUntil = 0;
       entry.deformed = false;
       show(entry, true);
@@ -282,9 +298,7 @@ class SpritePool {
         entry.from.x + (entry.to.x - entry.from.x) * progress,
         entry.from.y + (entry.to.y - entry.from.y) * progress,
       );
-      if (entry.pull !== undefined) {
-        this.deform(entry, entry.pull, index, progress, now);
-      }
+      if (this.config.pulls) this.deform(entry, index, progress, now);
     }
   }
 
@@ -297,20 +311,14 @@ class SpritePool {
    *
    * `fromHead` is the pool's own loop index, which means distance from the
    * maker for the strand and nothing at all for any other pool — those are
-   * spared by carrying no pull shape rather than by knowing that.
+   * spared by their own config rather than by this knowing about them.
    *
    * The write is on `entry.image` and never through `place` or `scaleDrawn`:
    * the glyph riding on it must not deform, for exactly the reason `retarget`
    * above already gives for rotation — a symbol the player has to read must
    * stay readable (design §4).
    */
-  private deform(
-    entry: Sliding,
-    shape: PullShape,
-    fromHead: number,
-    progress: number,
-    now: number,
-  ): void {
+  private deform(entry: Sliding, fromHead: number, progress: number, now: number): void {
     const pull = pullAmount(progress, fromHead);
     const swallow = swallowAmount(entry.swallowUntil - now);
 
@@ -318,13 +326,13 @@ class SpritePool {
       // One write on the frame it settles, and none on the frames after it.
       if (!entry.deformed) return;
       entry.deformed = false;
-      entry.image.setScale(PIXEL_SCALE);
+      this.rest(entry);
       return;
     }
 
     entry.deformed = true;
     entry.image.setScale(
-      PIXEL_SCALE * deformX(shape, pull, swallow),
+      this.restX * deformX(pull),
       PIXEL_SCALE * deformY(pull, swallow),
     );
   }
@@ -354,7 +362,6 @@ class SpritePool {
       ...drawn,
       from: at,
       to: at,
-      pull: undefined,
       swallowUntil: 0,
       deformed: false,
     };
@@ -461,9 +468,10 @@ const splitByFate = (
 };
 
 /**
- * Resolves the strand into rope pieces. Each segment is drawn from where its
- * neighbours sit — the segment ahead of it (the head, for the first) and the
- * one behind (nothing, for the loose end) — which is what makes the body one
+ * Resolves the strand into rope pieces. The piece and its rotation come from
+ * the segment *behind* — the cell this one has just left, and so the way it is
+ * travelling (`strand.ts`). The segment ahead is read only for the melt, which
+ * is a question about color rather than shape: which is what makes the body one
  * continuous pull of sugar rather than a row of beads (design §2).
  */
 const strandPieces = ({ head, body }: SnakeState): Placed[] =>
@@ -480,7 +488,6 @@ const strandPieces = ({ head, body }: SnakeState): Placed[] =>
       key: STRAND_TEXTURES[sprite.piece],
       angle: sprite.angle,
       melt: meltedTints(segment.color, sprite, ahead?.color, behind?.color),
-      pull: pullShapeOf(sprite),
     };
   });
 
@@ -570,6 +577,8 @@ export class BoardView {
       depth: Depth.Segment,
       slides: true,
       glyphDepth: Depth.SegmentGlyph,
+      pulls: true,
+      overlap: JOINT_OVERLAP,
     });
     this.head = new SpritePool(scene, this.root, {
       key: TextureKey.Head,

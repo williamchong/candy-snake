@@ -87,7 +87,7 @@ candy-snake/
     ├── render/
     │   ├── textures.ts        # runtime-generated candy/strand/jar textures
     │   ├── drawn.ts           # sprite + symbol glyph pairing, shared with ui/
-    │   ├── strand.ts          # segment neighbours → rope piece + rotation (pure)
+    │   ├── strand.ts          # segment travel → rope piece + rotation (pure)
     │   ├── melt.ts            # where two colours meet along the rope (pure)
     │   ├── deform.ts          # the pull, and the swallow: per-frame scale (pure)
     │   ├── burst.ts           # where a burst throws; the knock's budget (pure)
@@ -242,11 +242,17 @@ BootScene ──► MenuScene ──► GameScene (+ UIScene launched in paralle
   along that border and two segments meet with no seam. And `RIM_WIDTH` is 2,
   matching the doubled 8×8 sprites' edge — a one-pixel rim here would read as a
   second art style sitting next to the first.
-- **The strand is drawn as continuous rope.** `render/strand.ts` maps a
-  segment's neighbours to a piece (straight / elbow / end cap) and a rotation,
-  so one elbow map serves all four turns. It is pure TypeScript with no Phaser
-  import — wrap-aware, so the strand stays unbroken across a service door — so
-  the geometry is unit-tested in Node like the core is (§11).
+- **The strand is drawn as continuous rope.** `render/strand.ts` maps a segment
+  to a piece (a bar, or the end cap) and a rotation. The rotation is the way the
+  segment is **travelling** — read off the cell the segment behind it stands in,
+  which is the cell this one just left — never the way its neighbours happen to
+  sit: a piece bent to the destination carries its bend up to a whole cell from
+  the corner it belongs to while it slides, which is what once broke every turn
+  into loose boxes (design §2). A turn is two bars crossing at the corner cell,
+  each drawn a flank's width longer than its cell so the crossing cannot open.
+  It is pure TypeScript with no Phaser import — wrap-aware, so the strand stays
+  unbroken across a service door — so the geometry is unit-tested in Node like
+  the core is (§11).
 - **The view interpolates; the core does not.** `Game.moveProgress()` reports
   how far the snake stands between cells (0…1) and `BoardView.render` slides
   sprites that fraction of the way, so the simulation stays discrete and
@@ -385,8 +391,8 @@ definition.
   incl. streak caps. Deterministic via seeded `rng.ts`. Beyond `core/`, this
   covers the pure modules the Phaser layer leans on — `input/directionQueue.ts`
   and `render/strand.ts` (rope pieces, rotations, wrapped neighbours),
-  `render/melt.ts`, `render/deform.ts` (the pull never shortens a piece; an
-  elbow's shortfall is covered by its neighbour's overhang),
+  `render/melt.ts`, `render/deform.ts` (the pull never shortens a piece, and a
+  piece overlaps its joint by enough to cover the flank it crosses at a turn),
   `render/burst.ts` (a knock never exceeds its pixel budget on any viewport),
   `audio/tones.ts` (no cue clips, none starts or ends part-way up a waveform,
   the serve chime stops climbing where the streak bonus does, the bed's loop

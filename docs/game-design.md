@@ -66,10 +66,22 @@ the candy sitting on it.
 The body was a chain of identical lozenges, each carrying a soft edge on all
 four sides, so every joint between two segments showed a seam — and a seamed
 chain of beads reads as a snake game however the mechanics behave. Each cell
-now draws a rope piece instead — **straight, elbow, or end cap** — chosen from
-where its neighbours sit, and rotated. The soft edge runs along the rope's
+now draws a rope piece instead — **a bar, or the end cap** — laid along the way
+that segment is travelling, and rotated. The soft edge runs along the rope's
 flanks only, never across a joint, so the strand is unbroken and a color change
 simply runs along it.
+
+A turn is **two bars crossing at the corner cell**, not one elbow covering it.
+That is the second half of the same revision, and it was learned the hard way:
+a piece bent to where its neighbours will *end up* carries its bend up to a
+whole cell away from the corner it belongs to for the whole of a move, and the
+strand spent every turn reading as a handful of loose boxes. A segment is one
+cell of rope centred however far it has travelled, so it only straddles the
+bend for an instant at either end of a move and is a plain bar for the middle
+of it — and two bars crossing draw the same silhouette an elbow would, in the
+right place at every point of the slide. Each piece is drawn a flank's width
+longer than its cell so the crossing cannot open a hairline at the outside of
+the turn.
 
 Everything else above still holds. The strand keeps the same flat
 fill-plus-soft-edge in the same palette — no gloss, no interior shading — and

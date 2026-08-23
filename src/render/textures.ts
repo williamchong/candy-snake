@@ -23,7 +23,6 @@ export const TextureKey = {
   Head: 'head',
   Segment: 'segment',
   StrandStraight: 'strand-straight',
-  StrandCorner: 'strand-corner',
   StrandTail: 'strand-tail',
   Sugar: 'sugar',
   Dye: 'dye',
@@ -48,7 +47,6 @@ export type TextureKey = (typeof TextureKey)[keyof typeof TextureKey];
 /** The rope pieces `strand.ts` names, resolved to the textures baked here. */
 export const STRAND_TEXTURES: Record<StrandPiece, TextureKey> = {
   [StrandPiece.Straight]: TextureKey.StrandStraight,
-  [StrandPiece.Corner]: TextureKey.StrandCorner,
   [StrandPiece.Tail]: TextureKey.StrandTail,
 };
 
@@ -189,23 +187,16 @@ const shade = (shape: Shape): string[] =>
 /**
  * The rope's flanks. One transparent pixel either side keeps the strand a hair
  * narrower than its cell, so a turn reads as a rope bending rather than as the
- * floor being tiled over.
+ * floor being tiled over. It is also what a piece is drawn that hair longer
+ * than its cell to cover, since a turn is now two bars crossing — see
+ * `JOINT_OVERLAP`.
  */
-const ROPE_NEAR = 1;
+export const ROPE_NEAR = 1;
 const ROPE_FAR = TEXTURE_SIZE - 2;
 const onRope = (across: number): boolean => within(across, ROPE_NEAR, ROPE_FAR);
 
 /** Rope running east–west; rotated a right angle for north–south. */
 const STRAIGHT = shade((_x, y) => onRope(y));
-
-/**
- * Rope turning east→south. Both arms run to their own edge so the piece meets
- * its neighbours exactly where a straight one would; the notch left at the
- * inside of the bend is the turn's short side.
- */
-const CORNER = shade(
-  (x, y) => (onRope(y) && x >= ROPE_NEAR) || (onRope(x) && y >= ROPE_NEAR),
-);
 
 /** The loose end: rope leaving east, rounded off to the west. */
 const TAIL = shade(
@@ -572,7 +563,6 @@ const FLOOR = Array.from({ length: ROWS }, (_row, y) =>
 /** Typed by TextureKey, so a new key without a pixel map is a compile error. */
 const PIXEL_MAPS: Record<TextureKey, string[]> = {
   [TextureKey.StrandStraight]: STRAIGHT,
-  [TextureKey.StrandCorner]: CORNER,
   [TextureKey.StrandTail]: TAIL,
   [TextureKey.Segment]: upscale(SEGMENT),
   [TextureKey.Pip]: upscale(PIP),

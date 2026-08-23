@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { Dir } from '../core/types';
+import { Dir, OPPOSITE } from '../core/types';
 import { StrandPiece, strandSpriteAt } from './strand';
 
 const at = (x: number, y: number) => ({ x, y });
@@ -23,45 +23,48 @@ describe('strandSpriteAt', () => {
     });
   });
 
-  it('turns the corner piece to each of the four elbows', () => {
-    const elbows = [
-      { head: at(6, 5), tail: at(5, 6), angle: 0 }, // east + south, as authored
-      { head: at(5, 6), tail: at(4, 5), angle: 90 }, // south + west
-      { head: at(4, 5), tail: at(5, 4), angle: 180 }, // west + north
-      { head: at(5, 4), tail: at(6, 5), angle: 270 }, // north + east
+  it('lays a turning segment along the way it is travelling', () => {
+    // A segment enters its cell from wherever the segment behind it stands, so
+    // that — not the head, which at a bend is off to one side — is the axis the
+    // piece is drawn on. Each of the four elbows, read as the piece that
+    // carries the sugar into the corner cell.
+    const turns = [
+      { head: at(6, 5), tail: at(5, 6), angle: 90, headArm: Dir.Left }, // in from the south
+      { head: at(5, 6), tail: at(4, 5), angle: 0, headArm: Dir.Right }, // in from the west
+      { head: at(4, 5), tail: at(5, 4), angle: 90, headArm: Dir.Right }, // in from the north
+      { head: at(5, 4), tail: at(6, 5), angle: 0, headArm: Dir.Left }, // in from the east
     ];
 
-    for (const { head, tail, angle } of elbows) {
-      // Every one of these turns clockwise from head to tail, which is how the
-      // piece is authored — so each lands on the drawn arms unrotated.
+    for (const { head, tail, angle, headArm } of turns) {
       expect(strandSpriteAt(at(5, 5), head, tail)).toEqual({
-        piece: StrandPiece.Corner,
+        piece: StrandPiece.Straight,
         angle,
-        headArm: Dir.Right,
-        tailArm: Dir.Down,
+        headArm,
+        tailArm: OPPOSITE[headArm],
       });
     }
   });
 
-  it('draws the same elbow whichever side the head is on', () => {
-    // Which neighbour leads and which trails changes nothing about the shape
-    // the rope makes through the cell — only about which of its two arms is
-    // the head end, which is why the arms swap where the angle does not.
-    for (const elbow of [
-      [at(6, 5), at(5, 6)],
-      [at(5, 6), at(4, 5)],
-      [at(4, 5), at(5, 4)],
-      [at(5, 4), at(6, 5)],
-    ] as const) {
-      const [first, second] = elbow;
-      const led = strandSpriteAt(at(5, 5), first, second);
-      const trailed = strandSpriteAt(at(5, 5), second, first);
+  it('crosses the two pieces at a bend rather than bending either of them', () => {
+    // The corner cell is covered by the piece arriving in it and the piece
+    // leaving it, on perpendicular axes. That is what holds a turn together
+    // while both are mid-slide: each bar is where its own sugar actually is,
+    // and neither carries a bend a whole cell from the corner it belongs to.
+    const intoTheCorner = strandSpriteAt(at(5, 5), at(5, 6), at(4, 5));
+    const outOfIt = strandSpriteAt(at(5, 6), at(5, 7), at(5, 5));
 
-      expect(trailed.piece).toBe(led.piece);
-      expect(trailed.angle).toBe(led.angle);
-      expect(trailed.headArm).toBe(led.tailArm);
-      expect(trailed.tailArm).toBe(led.headArm);
-    }
+    expect(intoTheCorner.piece).toBe(StrandPiece.Straight);
+    expect(outOfIt.piece).toBe(StrandPiece.Straight);
+    expect(Math.abs(intoTheCorner.angle - outOfIt.angle)).toBe(90);
+  });
+
+  it('reads the piece off the segment behind, wherever the head has gone', () => {
+    // Same cell, same cell behind, head anywhere adjacent: the sugar came in on
+    // one axis and is drawn on it either way.
+    const straightOn = strandSpriteAt(at(5, 5), at(6, 5), at(4, 5));
+    const turning = strandSpriteAt(at(5, 5), at(5, 4), at(4, 5));
+
+    expect(turning).toEqual(straightOn);
   });
 
   it('caps the loose end, pointing its rope at the segment ahead', () => {
