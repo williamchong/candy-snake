@@ -339,7 +339,10 @@ which is what the `muted` setting (§10) is applied to.
   targets stay full size however far the board has had to shrink. That cuts both
   ways now the board can grow: on a monitor big enough for a 2× kitchen the
   children and the rack beside it stay at their authored size, which is a
-  deliberate open question rather than a settled one.
+  deliberate open question rather than a settled one. *Downward* it is settled:
+  a widget whose drawn size is a measurement takes that measurement from
+  `layout.ts` and shrinks with the kitchen — the rack, the wheel, and now the
+  queue — while what a thumb or an eye needs at full size does not.
   - **Landscape:** customers + shelf + score in the right column, beside the
     chopping block's wall (design §10), reading bench → child → rack: the
     standing line is the block's own last row, and the rack takes the column
@@ -355,6 +358,15 @@ which is what the `muted` setting (§10) is applied to.
 - The rack sizes itself to the run it is given: six slots at the desktop pitch
   need most of a laptop's height, which a phone held sideways has not got, so
   pitch and slot shrink together rather than running off the screen.
+- The queue does the same, against two bounds (`queueRun`), because there were
+  two ways for a child to be drawn too big. The **lane** — the serving column,
+  itself a share of the width — is the one that loses a queue: four children at
+  the desktop pitch walked off the edge of any window small enough to embed, and
+  what is lost is how far ahead the player can read the queue (design §5). The
+  **cell** is the one that looks wrong: below the authored cell everything else
+  on screen steps down, so a child left at their full size stops being half
+  again a board sprite and starts towering over the shop. The scale steps in
+  whole multiples for the same reason `MAX_ZOOM` does.
 - The serving side stays on the block's wall in both orientations: the block's
   cells are a game rule, so they must never depend on the layout.
 - Mobile page hardening: `touch-action: none` on the canvas,
