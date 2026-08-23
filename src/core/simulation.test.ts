@@ -930,9 +930,10 @@ const TARGET_TICKS = 30_000;
 const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
 
 /**
- * Wider still, and only the **median** is asked of it — because sixteen turns
- * out not to be enough for that either, which is a thing this file has now
- * learned twice about two different statistics.
+ * Wider still, because sixteen turns out not to be enough — a thing this file
+ * has now learned **three times about three statistics**. It carried only the
+ * median until the twin-arm sweep; the batcher-against-grinder proportion the
+ * open finding hangs on now comes off it too, for the reason that test states.
  *
  * A proportion needed sixteen where four would not do (`SWEEP` above). A median
  * needs sixty-four: measured on the same build, the batching maker's death
@@ -952,9 +953,15 @@ const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
  * resolve less than that or the assertion fails on the draw rather than on the
  * game.
  *
- * It costs about a second of suite time — ~14 ms a seed, and this is the
- * largest single test in the project — paid only by the batcher, since the
- * grinder outlives the sweep on most seeds and has no median to speak of.
+ * **What it costs, now that two tests read it.** The median's batcher runs are
+ * ~48 ms a seed and the open finding's grinder runs ~57 ms — the grinder is the
+ * dearer of the two because it outlives the ticks on seeds where the batcher
+ * dies half way. The memo is per (bot, seed), so each arm is played once and
+ * the two tests are ~3.1 s and ~2.7 s: about six seconds of the file's ten, and
+ * the price of every median and proportion here being read off a draw that can
+ * resolve it. The figure this note carried before — "about a second, ~14 ms a
+ * seed, paid only by the batcher" — was measured when the batcher was the only
+ * arm that paid, and was low by three times even then.
  */
 const WIDE = [...SWEEP, ...Array.from({ length: 48 }, (_unused, at) => 1_000 + at * 37)];
 
@@ -1317,13 +1324,14 @@ describe('the reference players, after the ramp went in', () => {
     // the answer did not change.
     //
     // The combo bonus (design §9) was the sitting that tried to close it, and
-    // did not. Two of sixteen is inside the re-roll: bonus points feed the ramp
+    // did not. Two of sixteen — that sitting's own reading, before the draw
+    // widened — is inside the re-roll: bonus points feed the ramp
     // like any others, so each constant swept is a *different run*, and the
     // proportion came back 0, 2, 0, 1, 1, 2 at 10, 15, 25, 40, 60 and 100.
     // Excluding the bonus from the ramp feed makes the runs identical and the
-    // arithmetic legible: mean batcher score then
-    // climbs 16.93 points per point of bonus — the same slope across 0→15,
-    // 15→40 and 40→100 — off 4932 against the grinder's flat ~13060. Closing
+    // arithmetic legible: mean batcher score then climbs 16.93 points per point
+    // of bonus — the same slope across 0→15, 15→40 and 40→100 — off 4932
+    // against the grinder's flat ~13060. Closing
     // that 8126-point gap this way needs a bonus near 480, against a tier-3
     // serve worth 50. The gap is not a rate the bonus can raise; it is that the
     // grinder does not die. See the plan's measurement record.
@@ -1331,23 +1339,43 @@ describe('the reference players, after the ramp went in', () => {
     // **The bound is the halfway mark, because that is what the claim is.** A
     // tighter one is available — 15 of 64 is 23% — and is deliberately not
     // taken: it would fail on the re-roll any spawn-moving change causes and
-    // read as the finding closing when nothing had closed. Closing it means
-    // this number crossing halfway and the assertion inverting with it, not
-    // the assertion being deleted. The twin sweep recorded in the plan is the
-    // only arm that has ever crossed it (34 of 64, at a cost the plan prices).
-    const sweptGrinders = target(grinderGoal, WIDE);
+    // read as the finding closing when nothing had closed. It is a strict
+    // majority that has to stay behind, so an even split of 32 fails too: at
+    // 32 nothing has crossed halfway, but nothing is behind on more than half
+    // either, and this test only ever claimed the second.
+    //
+    // The twin sweep recorded in the plan crosses it on every arm it swept above
+    // a twin constant of 0.6, so crossing is not by itself the achievement. What
+    // makes the 34 of 64 the plan quotes the one worth naming is the death
+    // target: it and the patience −13% arm are the only two that also land the
+    // batcher's median inside the 4–6 window above, and that one pays for it
+    // with a quarter of the grinder's score. The rest buy the inversion by
+    // letting runs live longer, which is the game getting easier rather than
+    // batching getting paid.
+    //
+    // The grinder over `WIDE` is this test's own cost — every other sweep reads
+    // it off `SWEEP`, and the memo is per (bot, seed), so this is the only site
+    // that pays for the other 48. At ~57 ms a seed that is ~2.7 s in the file
+    // and ~6.7 s run alone, which is what the budget below is for: the 5 s
+    // default fails the `-t` invocation CLAUDE.md documents. The median test
+    // needs no budget because its batcher runs are memoised by the time it asks.
+    //
+    // Two neighbours are owed the same widening and did not get it here, so
+    // they are written down rather than left to be rediscovered. `'offers the
+    // pair a single cut can feed'` is grinder-only and would now cost **nothing**
+    // — its 64 runs are already played by the time it asks — and its own note
+    // says `SWEEP` once hid a seed that sat under its floor. `'pays a maker who
+    // takes the pair the window offers'` needs 48 new pair-maker runs, and its
+    // floor of 12 sits two seeds under a `SWEEP` reading of 14, which is the
+    // same margin this test was failing on.
+    const wideGrinders = target(grinderGoal, WIDE);
     const ahead = target(batcherGoal, WIDE).filter(
-      (batcher, seed) => batcher.game.state.score > sweptGrinders[seed]!.game.state.score,
+      (batcher, seed) => batcher.game.state.score > wideGrinders[seed]!.game.state.score,
     );
     expect(
-      ahead.length * 2,
+      ahead.length,
       `the batching maker outscored the grinder on ${ahead.length} of ${WIDE.length} seeds`,
-    ).toBeLessThan(WIDE.length);
-    // The grinder over `WIDE` is this test's own cost — every other sweep reads
-    // it off `SWEEP` and the memo is per (bot, seed) — and it is the longest
-    // run in the project, since the grinder outlives the ticks on seeds where
-    // the batcher does not. Hence a budget past the 5 s default, which the
-    // median above does not need: that one pays only for the batcher.
+    ).toBeLessThan(WIDE.length / 2);
   }, 20_000);
 
   it('pays a maker who takes the pair the window offers', () => {
