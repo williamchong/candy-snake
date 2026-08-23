@@ -2874,6 +2874,94 @@ of thing that only shows up when someone reads the diff cold:
   writing module scope from a hot function is what defeats V8's inlining. It is
   recorded in the docblock so the next reader does not helpfully repair it.
 
+### What the turning pass fixed — the bend was a whole cell from the corner
+
+**The strand came apart at every turn, and the shape was never the bug.** Each
+segment was drawn as the piece its *destination* called for — an elbow, where
+the strand turned — and then slid from the cell it left to that destination. So
+for the whole 200 ms of a move the elbow's bend sat up to a whole cell away from
+the corner it described: its short arm hung out over bare floor, and the piece
+ahead of it stood off diagonally. That is what read as "disconnected boxes",
+and it is why the corner was only ever correct on the two frames a move begins
+and ends.
+
+**The rope's real shape mid-slide is not an elbow.** A segment is one cell of
+rope centred `progress` of a cell past the cell it left, so it contains the
+vertex behind it only while `progress ≤ 0.5` and the vertex ahead only after —
+and at exactly a half it is a straight bar spanning two cell centres. A bend
+exists for an instant at either end of a move and not in between.
+
+**So every piece is now laid along the way it travels**, read off the cell the
+segment behind it stands in, and a turn is the two bars crossing at the corner
+cell. That draws the same silhouette the elbow map did — the authored elbow was
+already a full bar unioned with a full perpendicular one — but draws it in the
+right place at every point of the slide, because each bar is where its own sugar
+actually is. Checked in a scratch Phaser harness at four progress values, since
+neither Vitest nor the smoke driver can see a mid-slide frame.
+
+**What it took out.** `StrandPiece.Corner` and its texture, `PullShape` and
+`pullShapeOf` (with one direction to be drawn out in, an elbow's two-way case
+has nothing left to describe), and the vertex-averaging branch in `melt.ts` —
+a bar's two arms are opposite edges of the quad, so no vertex is ever on both.
+What it put in is one constant: `JOINT_OVERLAP`, a flank's width at either end,
+without which the outside of a turn shows a two-pixel hairline of floor on the
+frames either end of a move — the one place two crossing bars fall short of one
+elbow. It is read off `ROPE_NEAR` rather than written out, because it is a
+measurement of the rope's own inset and re-authoring the rope a pixel wider
+would otherwise leave it wrong with nothing to catch it.
+
+**Two things the review found afterwards.** `meltedTints` was left searching for
+an arm from each of the four corners, which is the shape the removed averaging
+branch needed; it now writes from the arms instead, mixing each end's blend once
+rather than once per vertex it lands on. And the strand pool's resting length
+was being recomputed from its config on every deformed sprite on every frame —
+it is a constant per pool and is now spent once, in the constructor.
+
+### What the reading pass changed — two things the HUD was not saying
+
+**The combo meter counted without pricing.** Four pips say a batch fed three
+children and cannot say what the third one paid, and the bonus is flat (+15 a
+head, design §9) rather than a multiplier — so it is the one term in the score
+a player can neither see land nor work out. The meter now draws the figure the
+serve earned off the end of the run, riding the same hold-and-fade. It reads
+`comboBonus` out of `scoring.ts` rather than keeping the rate, so the HUD cannot
+come to disagree with the score. Design §11's "no prose" survives intact: it is
+a number beside a number, and it is deliberately not written as a `×` — that
+would be a lie about which mechanic the pips count.
+
+**Room for it was found rather than taken.** The figure hangs off the right of
+the run and the run stays where it was centred. Reserving the label by widening
+what the row centres walks the pips into the score on a 320 px phone upright,
+which the layout sweep caught; the slack that actually exists is to the right of
+the pips. The anchor is `layout.ts`'s like every other coordinate in the HUD —
+the meter measuring its own would be a number the row was never fitted for — and
+`comboRect` builds its box off that anchor, so the sweep proves the figure's
+room on every viewport rather than proving the run's twice.
+
+**And it is priced off the lit run, not the raw count.** The pips clamp at four
+because the window's ceiling is four; the figure did not, so a rule change that
+raised that ceiling would have shown four pips beside a fifth child's bonus, in
+a space fitted for the fourth's.
+
+**A child was reacting to a candy they had not reached.** `leave` played the
+whole ending at once — face, bubble, bar, depth — while `step` held only the
+confetti back for the walk-up. So a child served the instant they arrived, off a
+rack that already held their candy (design §5), walked the length of the queue
+already smiling and holding nothing. The ending is now *booked* by `leave` and
+*played* by `react`, which `step` calls on the frame they reach their place. The
+serve itself is unchanged and still settles the moment the core says so — this
+is only what the child does about it. One catch came with it: the exit test at
+the foot of `step` keyed off `leaving`, which is now true for the whole walk up,
+and had to key off `reacted` instead or a child arriving at the window vanished
+on the spot.
+
+**Deferring it widened a hole in `relocate`.** A booked child is off the queue's
+books, so nothing walks them to a new slot when the line moves; their target was
+a coordinate the last layout owned, and a window dragged mid-serve left them
+walking to it and reacting there. The window used to be one reaction beat and is
+now the whole walk up, so `relocate` takes the standing line's anchor and
+carries a booked child's target along by however far that line moved.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
