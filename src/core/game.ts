@@ -748,7 +748,7 @@ export class Game {
       // Drawn only now that a child is actually arriving, so the seeded run of
       // orders does not depend on how often `step` was called — or taken off
       // the front of the doorway, which is that same draw made a turn earlier.
-      level?.want ?? this.takeWant(stage),
+      level?.want ?? this.rollWant(stage),
       window.patienceMs,
     );
     this.nextCustomerId += 1;
@@ -763,24 +763,22 @@ export class Game {
   }
 
   /**
-   * What the arriving child asks for: the order the doorway has been showing,
-   * or a fresh draw when there is nothing queued there.
+   * The order the doorway has been showing, or a fresh draw when there is
+   * nothing queued there.
    *
-   * At `previewDepth` 0 the doorway is always empty, so this is `rollWant` at
+   * At `previewDepth` 0 the doorway is always empty, so this is `orderWant` at
    * the call site it has always been at and the seeded stream is untouched.
    * That is what makes the shipped game the control arm rather than one more
    * arm of the sweep — the mistake this record has made about every lever it
    * has measured so far.
+   *
+   * Mercy is settled before this is ever reached (`rollWant`), so a previewed
+   * order is never spent on a child who turned out to want brown: it stays
+   * queued and arrives a turn late instead.
    */
-  private takeWant(stage: StageConfig): ColorMask {
+  private takePreviewed(stage: StageConfig): ColorMask {
     const [previewed, ...rest] = this.state.upcoming;
-    if (previewed === undefined) return this.rollWant(stage);
-
-    // Mercy pre-empts rather than replaces: the order the doorway showed stays
-    // queued for the child behind this one, so nothing the player was shown is
-    // thrown away — it just arrives a turn late (`mercyWant`).
-    const mercy = this.mercyWant();
-    if (mercy !== undefined) return mercy;
+    if (previewed === undefined) return this.orderWant(stage);
 
     this.state.upcoming = rest;
     return previewed;
@@ -825,7 +823,7 @@ export class Game {
    * are served the moment they walk up — the cleanup is the whole visit.
    */
   private rollWant(stage: StageConfig): ColorMask {
-    return this.mercyWant() ?? this.orderWant(stage);
+    return this.mercyWant() ?? this.takePreviewed(stage);
   }
 
   /**
@@ -956,6 +954,12 @@ export class Game {
     // `admitCustomer`, the first real child would find nothing queued and be
     // drawn on the spot — so the one arrival the preview exists to get ahead of
     // is the one arrival it would have missed. A no-op at depth 0.
+    //
+    // This is the handover's to do because the handover is where the endless
+    // game starts *for a real run*. A game built without the opening levels —
+    // tests and the balancing sims — never reaches here, and fills on its first
+    // arrival instead; it has no handover to hang this on and nothing before
+    // the first child to get ahead of.
     this.fillPreview(stage);
   }
 

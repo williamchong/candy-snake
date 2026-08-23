@@ -136,7 +136,7 @@ export interface GameState {
   customers: Customer[];
   /**
    * Orders drawn but not yet at the window, in arrival order — what the
-   * doorway is showing (design §5, §11). Empty unless `GameConfig.previewDepth`
+   * doorway is showing. Empty unless `GameConfig.previewDepth`
    * asks for lead time, which is what keeps a run without the preview drawing
    * the same orders in the same places it always did.
    *
@@ -221,7 +221,7 @@ export interface GameConfig {
   readonly twinChance?: number;
   /**
    * How many arrivals ahead the window shows its colors — the doorway telling
-   * the maker *what* is coming and not only how many (design §5, §11). 0 is the
+   * the maker *what* is coming and not only how many. 0 is the
    * game as it shipped, and is a control rather than another arm: at 0 nothing
    * is drawn early, so the seeded run of orders is the one a game without this
    * feature played, cell for cell. `orders.ts`'s `TWIN_CHANCE` earns its zero
@@ -230,6 +230,10 @@ export interface GameConfig {
    * It is here rather than in `StageConfig` because it is not a difficulty knob
    * the ramp interpolates — it is a rule about when the player is told, and the
    * whole point of the measurement is that it does not move the curve.
+   *
+   * Deliberately absent from the design docs: it was measured and does not
+   * ship, so there is no §5 or §11 rule to cite. See the plan's preview sweep
+   * for what it cost and why the doorway stays silent about color.
    *
    * Why the maker would want it: the balancing sim has said for six sittings
    * that building a ladder for demand *at* the window pays and building one for

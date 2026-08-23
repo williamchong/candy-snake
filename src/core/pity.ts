@@ -46,7 +46,7 @@ const reachableFrom = (base: ColorMask, color: ColorMask): boolean =>
  * worst case is needing the order's primaries outright.
  *
  * **A previewed order counts, and it has to.** `state.upcoming` is demand the
- * doorway has already shown the player (design §5), and a shown order the board
+ * doorway has already shown the player, and a shown order the board
  * will not stock is worse than no preview at all: the maker builds toward a jar
  * that never comes and spends the lead time circling. The tenth sitting paid a
  * whole sweep to learn this in the other direction — its speculative rungs had
@@ -54,17 +54,27 @@ const reachableFrom = (base: ColorMask, color: ColorMask): boolean =>
  * stocked to lay. The promise is what turns a preview into something worth
  * acting on, so the two ship together or neither does.
  */
+/**
+ * Every order the kitchen owes a candy: the window, then the doorway.
+ *
+ * Exported for the same reason `orders.ts`'s `echoable` is — the balancing sim
+ * plans a ladder against this same pool, and a second copy of the rule over
+ * there would be a place for the maker's belief and the board's promise to
+ * drift apart. They have to be the same list: the harness may only treat a
+ * previewed want like a waiting one *because* the promise below covers it.
+ */
+export const demandedWants = (state: GameState): ColorMask[] => [
+  ...state.customers.map((customer) => customer.want),
+  ...state.upcoming,
+];
+
 export const starvedPrimaries = (state: GameState): Primary[] => {
   const onMap = new Set<ColorMask>(
     state.pickups.flatMap((pickup) => (pickup.kind === 'dye' ? [pickup.primary] : [])),
   );
 
   const starved = new Set<Primary>();
-  const ordered = [
-    ...state.customers.map((customer) => customer.want),
-    ...state.upcoming,
-  ];
-  for (const want of ordered) {
+  for (const want of demandedWants(state)) {
     if (state.shelf.some((candy) => candy.color === want)) continue;
 
     // The most-mixed segment that is still on the way to this order. Raw floors
