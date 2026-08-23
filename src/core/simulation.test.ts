@@ -5,6 +5,7 @@ import {
   PRIMARIES,
   colorInfo,
   mixCount,
+  TIER_ORDER,
   noServes,
   primariesOf,
   type ColorTier,
@@ -13,6 +14,7 @@ import {
 import { RAMP, SPEED_RUNGS } from './difficulty';
 import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
 import { TIERS, echoable, type StageConfig } from './orders';
+import { demandedWants } from './pity';
 import { SHELF_SLOTS } from './shelf';
 import { ordersLeft, stockedPrimaries, stocksSugar } from './tutorial';
 import {
@@ -416,7 +418,7 @@ const bestLadder = (
 ): Ladder => {
   /**
    * The window *and* the doorway. `state.upcoming` is empty unless the run
-   * pins `previewDepth` (design §5), so this is the maker the harness has
+   * pins `previewDepth`, so this is the maker the harness has
    * always run until the moment an arm asks for lead time — which is what
    * makes the preview one number's difference rather than a fourth bot.
    *
@@ -430,7 +432,7 @@ const bestLadder = (
    * not, `promised` below would vouch for jars the board had never undertaken
    * to lay, and the maker would circle for them.
    */
-  const wants = [...state.customers.map((customer) => customer.want), ...state.upcoming];
+  const wants = demandedWants(state);
   const openings =
     Math.max(stage.maxQueue - wants.length, 0) +
     Math.max(SHELF_SLOTS - state.shelf.length, 0);
@@ -1639,6 +1641,10 @@ const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
 
   const minutes = (run: RunResult): number => run.game.state.elapsedMs / 60_000;
 
+  /** Children handed a candy per minute alive — asked of either maker. */
+  const servePerMin = (runs: readonly RunResult[]): string =>
+    mean(runs.map((run) => run.game.state.served / minutes(run))).toFixed(1);
+
   it('measures every arm on the wide draw', () => {
     // Filtered and then insisted on, so a typo in the arm list fails loudly
     // rather than printing an empty table that reads like a finished sweep.
@@ -1665,13 +1671,14 @@ const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
       // Delivered demand, pooled over the draw — design §7's column is a share
       // of orders and not of runs, so the tiers are summed before they are
       // divided rather than averaged per run.
-      const tiers = batchers.reduce(
-        (totals, run) => {
-          for (const tier of [1, 2, 3] as const) totals[tier] += run.orderedByTier[tier];
-          return totals;
-        },
-        { 1: 0, 2: 0, 3: 0 },
-      );
+      const tiers = batchers.reduce((totals, run) => {
+        for (const tier of TIER_ORDER) totals[tier] += run.orderedByTier[tier];
+        return totals;
+      }, noServes());
+      // Mercy browns are counted but kept out of the denominator: design §7's
+      // column is a mix of the tiers it weights, and brown is not one of them
+      // (design §4). Printed all the same — the preview defers a mercy child
+      // rather than dropping them, so this is the bucket where that would show.
       const orders = tiers[1] + tiers[2] + tiers[3];
 
       return {
@@ -1686,36 +1693,35 @@ const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
         choppedPerMin: mean(batchers.map((run) => run.chopped / minutes(run))).toFixed(1),
         // Candy made against children actually handed one: the two come apart
         // exactly when a maker is producing but not producing *in time*.
-        servedPerMin: mean(
-          batchers.map((run) => run.game.state.served / minutes(run)),
-        ).toFixed(1),
+        servedPerMin: servePerMin(batchers),
         // The grinder cannot read the doorway, so this column is the control on
         // the control: if it moves with depth, the preview is buying something
         // through a channel other than the maker's plan — the likeliest being
         // the pity promise now pre-stocking jars for orders still at the door.
-        grinderServedPerMin: mean(
-          grinders.map((run) => run.game.state.served / minutes(run)),
-        ).toFixed(1),
+        grinderServedPerMin: servePerMin(grinders),
         staled: Math.round(mean(batchers.map((run) => run.staled))),
         broken: sum(batchers.map((run) => run.broken)),
         segments: mean(batchers.map((run) => run.meanSegments)).toFixed(2),
         t1: ((100 * tiers[1]) / orders).toFixed(1),
         t2: ((100 * tiers[2]) / orders).toFixed(1),
         t3: ((100 * tiers[3]) / orders).toFixed(1),
+        mercy: tiers.mistake,
       };
     });
 
-    const base = rows[0];
+    // The control is depth 0, not whatever was typed first — `SWEEP_PREVIEW=1,0`
+    // would otherwise print drift against depth 1 under a header saying control.
+    const base = rows.find((row: { depth: number }) => row.depth === 0);
     console.log(`\n${WIDE.length} seeds an arm, ${TARGET_TICKS} ticks a run\n`);
     console.log(
-      '| depth | ahead | median | grinder | g serve/min | batcher | chop/min | serve/min | staled | broken | segs | T1 | T2 | T3 |',
+      '| depth | ahead | median | grinder | g serve/min | batcher | chop/min | serve/min | staled | broken | segs | T1 | T2 | T3 | mercy |',
     );
     console.log(
-      '| ----- | ----- | ------ | ------- | ----------- | ------- | -------- | --------- | ------ | ------ | ---- | -- | -- | -- |',
+      '| ----- | ----- | ------ | ------- | ----------- | ------- | -------- | --------- | ------ | ------ | ---- | -- | -- | -- | ----- |',
     );
     for (const row of rows) {
       console.log(
-        `| ${row.depth} | ${row.ahead}/${WIDE.length} | ${row.median} | ${row.grinder} | ${row.grinderServedPerMin} | ${row.batcher} | ${row.choppedPerMin} | ${row.servedPerMin} | ${row.staled} | ${row.broken} | ${row.segments} | ${row.t1} | ${row.t2} | ${row.t3} |`,
+        `| ${row.depth} | ${row.ahead}/${WIDE.length} | ${row.median} | ${row.grinder} | ${row.grinderServedPerMin} | ${row.batcher} | ${row.choppedPerMin} | ${row.servedPerMin} | ${row.staled} | ${row.broken} | ${row.segments} | ${row.t1} | ${row.t2} | ${row.t3} | ${row.mercy} |`,
       );
     }
 
@@ -1732,7 +1738,5 @@ const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
         );
       }
     }
-
-    expect(rows).toHaveLength(depths.length);
   }, 3_600_000);
 });

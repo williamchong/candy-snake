@@ -3160,6 +3160,13 @@ across the first three arms and only drifts at the deepest. So the preview did
 more of the run building and less of it handing things over, and the children it
 was building *for* walk out while it does.
 
+One column added late says the same thing from a third angle. Mercy customers —
+the children who take a brown off your hands, and who only appear once the ramp
+has settled — fall 75, 47, 34, 13 across the arms. The preview does not turn
+them away (a mercy child pre-empts the doorway and the shown order arrives a
+turn late); there is simply less run left for them to arrive in, and fewer
+mistakes racked for them to clear.
+
 That is `planLadder`'s own comment, measured from the other side: *"what kills a
 maker is not waste but the time spent building before anybody is handed
 anything."* The economy charges for the time before the first hand-over, and no
@@ -3199,8 +3206,9 @@ cannot see why it is there. The promise the preview needed to be worth acting on
 is the tenth sitting's lesson) turns out to be a small difficulty reduction paid
 to every player.
 
-That is worth separating from the verdict. It flatters the grinder by about 4%
-and so widens the gap the batcher is being measured across — but the batcher's
+That is worth separating from the verdict. It flatters the grinder by 4.4%,
+5.2% and 5.9% as the doorway deepens, and so widens the gap the batcher is
+being measured across — but the batcher's
 *own* score falls 8 814 → 3 137 in the same table, and no amount of grinder
 handicap accounts for losing 64% of your own run. The finding survives its own
 confound. A future arm that wants the promise without the difficulty reduction

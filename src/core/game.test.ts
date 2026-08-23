@@ -1005,6 +1005,43 @@ describe('Game order preview', () => {
   });
 
   /**
+   * Mercy pre-empts the doorway; it must not *consume* it. `mercyWant` reads
+   * facts about now — a brown on the rack, a settled ramp — so it is settled at
+   * the window rather than previewed; the order the doorway was showing has to
+   * survive that and arrive on the child behind.
+   *
+   * Written because reordering the two statements in `rollWant` left the whole
+   * suite green: no other preview test ever puts a brown on the rack, so the
+   * branch had no cover at all.
+   */
+  it('holds the previewed order back when a mercy child jumps the queue', () => {
+    const game = previewing(1);
+    let mercies = 0;
+
+    // Past `SETTLED_MS` (60 s of ramp), with a brown always going spare — the
+    // two conditions the mercy path needs before its roll can ever come up.
+    // The queue is cleared as well, or nobody serves these children, the lives
+    // run out and the run is over before the ramp has settled.
+    for (let tick = 0; tick < 20_000; tick += 1) {
+      game.state.shelf = [{ color: BROWN, bornAt: 0 }];
+      game.state.customers = [];
+      const showing = game.state.upcoming[0];
+
+      for (const event of game.step(20, NO_TURNS)) {
+        if (event.type !== 'customer-arrived') continue;
+        if (event.customer.want !== BROWN) continue;
+
+        mercies += 1;
+        // The brown child was never in the doorway, and took nothing from it.
+        expect(game.state.upcoming[0]).toBe(showing);
+      }
+    }
+
+    // Or the assertion above never ran and the test proves nothing.
+    expect(mercies, 'no mercy customer ever arrived').toBeGreaterThan(0);
+  });
+
+  /**
    * An opening level's orders are the level's own (design §7), so there is
    * nothing to draw ahead of them — and drawing one anyway would spend the
    * seeded stream on a want no child is ever going to ask for.
@@ -1263,6 +1300,40 @@ describe('Game opening levels', () => {
     // level laid stays where it is, because nothing on this board teleports and
     // the stocked set only ever grows (design §7).
     expect(jarsOn(game)).toEqual(laid);
+  });
+
+  /**
+   * The doorway has to be full *before* the first endless child, or the one
+   * arrival the preview exists to get ahead of is the one it misses. The fill
+   * therefore hangs off `finishOpeningLevel` rather than off the next arrival.
+   *
+   * Written because deleting that call left the whole suite green: every other
+   * preview test runs with the opening levels off, so nothing reached the
+   * handover at all.
+   */
+  it('fills the doorway at the handover, before the first endless child', () => {
+    const game = new Game({ ...DEFAULT_CONFIG, seed: 1, previewDepth: 2 });
+
+    // Nothing to show while the levels run: their orders are the level's own.
+    expect(game.state.upcoming).toEqual([]);
+
+    // Stopped one chop short of `serveLevels`, the way the handover test below
+    // is: the last level's serve is what trips `finishOpeningLevel`, and the
+    // moment being asserted is the one right after it and before the beat that
+    // brings the first endless child.
+    serveLevels(game, game.tutorial.length - 1);
+    chopBatch(game, orderOf(game));
+
+    expect(game.state.tutorialIndex).toBe(game.tutorial.length);
+    // Full already, and the window still empty — nobody has arrived to fill it.
+    expect(game.state.customers).toEqual([]);
+    expect(game.state.upcoming).toHaveLength(2);
+
+    // And the child who does arrive is the one it was showing.
+    const shown = game.state.upcoming[0];
+    run(game, GAP_MOVES);
+
+    expect(game.state.customers[0]?.want).toBe(shown);
   });
 
   it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {
