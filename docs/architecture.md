@@ -100,6 +100,7 @@ candy-snake/
     │   ├── shelfStrip.ts      # the six candy slots, under the window
     │   ├── parade.ts          # the menu's parade, on screen: sprites and a band
     │   ├── text.ts            # one answer to "what does screen text look like"
+    │   ├── wordmark.ts        # the shop's sign: the name, one candy color a letter
     │   ├── cheatSheet.ts      # the mixing wheel, and when it shows itself
     │   ├── muteTab.ts         # the audio toggle, beside the sheet's own tab
     │   └── layout.ts          # responsive anchoring (portrait/landscape)

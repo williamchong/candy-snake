@@ -214,6 +214,18 @@ has to earn its palette rather than pick pretty values:
   exception is momentary: the head borrows a jar's hue for the length of its
   pickup flash (§4). A borrowed hue is readable precisely *because* the head
   never otherwise has one, and it must always end back at its own value.
+- **The rule binds the kitchen, which is where hue means something.** On the
+  board a color is the thing the player mixes and matches, so anything else
+  wearing one is a candy that cannot be served. The menu is not the board: it
+  holds nothing to match, and its parade already walks six of the eight past.
+  So the game's name is lettered in those same six, in the same wheel order
+  (§11), and the play screen keeps the rule whole. Two conditions come with it —
+  the letters take their colors from `core/colors.ts` like everything else, so
+  the sign can never show a hue the palette does not hold; and each is outlined
+  in the symbols' own ink, because the palette is tuned to stay separable from
+  *itself* on a pale floor rather than to be legible as text against a pale
+  ground. Form is carried by the ink, color rides inside it — the division
+  every sprite on the board already makes.
 - **Raw is off-white, so a raw strand and a sugar cube share a color.** That
   is correct — they are the same material. Size and symbol separate them.
 - Symbols are the fallback wherever two pastels read alike, which is why they
@@ -963,6 +975,13 @@ High scores (top 10, with date) persist in `localStorage`.
   the combo's payout, and both are numbers. Everything else — what a child
   wants, how long they will wait, how they took it — is carried by a drawn
   thing, because the HUD is read in glances taken from steering.
+- **The menu's sign is drawn, not written.** The one heading big enough to be
+  a picture is set one candy color per letter, running the palette's wheel
+  order and wrapping — the same rainbow the parade carries past a few lines
+  below, read left to right instead of walked. The front of a candy shop is the
+  one screen in the game whose job is to look like candy, and a gray word over
+  a rainbow strand was the shop's sign in someone else's font. It is the §4
+  exception, and it stops at this screen: the HUD's own chrome stays inked.
 - **Screens:** Boot/loading → Menu (play, settings, high scores) → Game →
   Game Over (score breakdown, high-score entry-free — auto-saved, restart CTA).
   The breakdown reports the run's best batch beside its best streak, on the same

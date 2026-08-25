@@ -2073,6 +2073,55 @@ Nothing here is random and nothing here is audible: a fixed cast at fixed speeds
 needs no draw at all, and the menu is before the first gesture, which is before
 a browser will let a cue play.
 
+### What the sign pass added — the shop's name was in someone else's font
+
+The menu drew the parade's rainbow across the band and then set the game's own
+name above it in gray system sans. Every color the game owns was on the screen
+already; none of it was in the word.
+
+- **One candy color per letter, in the palette's wheel order.** `RAINBOW` in
+  `core/colors.ts` is now the single list of the six mixable states, red round
+  to purple: the parade's strand walks it (`render/parade.ts`) and the sign is
+  lettered in it (`ui/wordmark.ts`). One list, so the two cannot show different
+  rainbows — the same reason the palette itself has only one home (arch §7).
+  The cycle steps on letters and not on the space, so `Snake` carries on where
+  `Candy` stopped rather than skipping a color into the gap.
+- **It is the one place hue leaves the candies, and design §4 now says so.**
+  The constraint is a rule about the kitchen, where hue is what the player mixes
+  and matches; the menu holds no board and already walks six of the eight past.
+  The play screen is untouched — the hearts are still inked, the gear change is
+  still pale.
+- **Ink around the letter, color inside it.** The pastels are tuned to stay
+  separable from *each other* over a pale floor, not to be read as text against
+  the pale ground: not one of the six clears 1.4:1 against the menu's lilac, and
+  the two faintest over it — green at 1.01 and orange at 1.10 — are a word
+  nobody can read. So each letter carries a stroke in `GLYPH_TINT` and the fill
+  rides inside — the division every sprite already makes, a tinted body under its glyph, and the reason no new color value had
+  to be invented for the sign.
+- **A word is its own little layout problem.** A Phaser `Text` has exactly one
+  fill, so the sign is one object per letter, and both answers with a decision
+  in them are plain functions over numbers: which color a letter wears
+  (`ui/wordmark.ts`) and where it stands, which is screen geometry and so lives
+  in `ui/layout.ts` with the rest of it — `letterOffsets` is `centredColumn`
+  laid on its side, half a letter back from the trailing edge that one returns.
+  Equal cells would have printed the name as a ransom note — a proportional face
+  gives `C` and `y` quite different room — so each letter takes the middle of
+  its own advance. The advances have the stroke taken back off them first:
+  Phaser widens a stroked `Text` by exactly its thickness so the ink is not
+  clipped, and laying the word out on those widths spaces it by how heavily it
+  is outlined rather than by how it is cut. That was visible in the first
+  screenshot as a word that had come loose. The stroke goes back on once for the
+  fit, because half of it hangs past either end of the word and the margin is
+  what it hangs into.
+- **It is re-lettered only when the frame changes its size.** The menu already
+  guards the score table against `Scale.RESIZE` firing on every frame of a
+  window drag; the sign has its own guard on the one input it has, and is
+  otherwise re-centred like the parade.
+
+Checked at 960×640, 390×844 and 844×390, with an empty table and a full one —
+the sign shrinks to the frame the way `fitLine` shrinks a line, and nothing
+below it moved.
+
 ### What the combo-meter pass measured — the bonus is legible and does not close the finding
 
 Candidate one, built and measured. The mechanic works exactly as specified:

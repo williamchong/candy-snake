@@ -42,7 +42,9 @@ Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `audio/tones.ts` and `audio/kitchen.ts` (the cue table, the sample maths and
 the stagger bookkeeping — the smoke driver cannot hear, so anything checkable
 under Node is worth checking),
-`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free) and
+`ui/layout.ts` (all screen geometry, which is why it stays Phaser-free,
+including where each letter of the menu's sign stands),
+`ui/wordmark.ts` (which color a letter of that sign wears) and
 the pure half of `persist/storage.ts` (parsing and ranking; the functions that
 reach for `localStorage` are guarded and left to the smoke driver).
 A type-only `import type Phaser` does not count against that: it is erased
