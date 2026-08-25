@@ -5,12 +5,22 @@ import { GLYPH_TINT } from '../render/drawn';
 import { TEXT_MARGIN } from './layout';
 
 /**
+ * A palette number as CSS, which is the one form a Phaser text style takes.
+ * `core/colors.ts` and `render/drawn.ts` both keep their colors as plain
+ * numbers, so this is where a number becomes a string — once, rather than at
+ * every place that writes one.
+ */
+export const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
+
+/**
  * The same ink the accessibility symbols are stamped in, written as CSS — one
  * value in two syntaxes rather than two values that can drift. Text is chrome,
  * so like every other non-candy element it is separated by value and spends no
- * hue (design §4, palette constraints).
+ * hue (design §4, palette constraints). The menu's sign is the one exception
+ * the palette constraints allow, and it wears this ink around every letter
+ * rather than instead of a color (`ui/wordmark.ts`).
  */
-export const INK = `#${GLYPH_TINT.toString(16).padStart(6, '0')}`;
+export const INK = css(GLYPH_TINT);
 
 /**
  * Screen text, in one place so the HUD and the surrounding screens cannot pick
@@ -35,10 +45,22 @@ export const textStyle = (
  * shrinking.
  */
 export const fitLine = (line: Phaser.GameObjects.Text, width: number): void => {
+  line.setScale(1);
+
+  const scale = fitScale(line.width, width);
+  if (scale < 1) line.setScale(scale);
+};
+
+/**
+ * What something `measured` wide has to be scaled by to sit inside `width` with
+ * its margins, or 1 if it already does. The margin rule has one home for the
+ * same reason the palette does: the menu's sign is fitted exactly this way and
+ * is eleven objects rather than one (`ui/wordmark.ts`).
+ */
+export const fitScale = (measured: number, width: number): number => {
   const room = width - 2 * TEXT_MARGIN;
 
-  line.setScale(1);
-  if (line.width > room) line.setScale(room / line.width);
+  return measured > room ? room / measured : 1;
 };
 
 export interface StackRow {

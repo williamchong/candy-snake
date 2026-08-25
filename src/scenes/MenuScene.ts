@@ -6,6 +6,7 @@ import { EXIT_GAP, menuPlan, type MenuPlan } from '../ui/layout';
 import { Parade } from '../ui/parade';
 import { onScreenCentre } from '../ui/responsive';
 import { TextStack, type StackRow } from '../ui/text';
+import { Wordmark } from '../ui/wordmark';
 import { SceneKey } from './keys';
 
 /**
@@ -21,7 +22,9 @@ import { SceneKey } from './keys';
  *
  * Between the tagline and the table walks the parade (`ui/parade.ts`), on the
  * frames with room to spare for one — the only part of this screen that shows
- * what the game looks like.
+ * what the game looks like. The name above it is drawn rather than written for
+ * the same reason: `ui/wordmark.ts` letters it in the six colors the parade
+ * carries past, so the shop's sign is made of the shop's own candy.
  */
 const TITLE = 'Candy Snake';
 const TAGLINE = 'Pull sugar · knead dye · chop candy';
@@ -50,16 +53,15 @@ const sameAs = (a: MenuPlan, b: MenuPlan | undefined): boolean =>
  */
 const rows = (scores: readonly ScoreEntry[], laid: MenuPlan): readonly StackRow[] => {
   const { size, title, top, pitch, shown } = laid;
-  const head: readonly StackRow[] = [
-    { text: TITLE, size, dy: title },
-    { text: TAGLINE, size: TAGLINE_SIZE, dy: title + size * 0.8 },
-  ];
+  // The sign is not a row — it owns its own letters (`ui/wordmark.ts`). What is
+  // still measured from where it sits is everything under it.
+  const head: StackRow = { text: TAGLINE, size: TAGLINE_SIZE, dy: title + size * 0.8 };
 
   // No table: a first run, or a frame with no room for one. Either way the head
   // keeps the offsets the frame gave it — falling back to a fixed layout here is
   // how the title ends up back off the top of the screen it was clamped for.
   if (shown === 0) {
-    return [...head, { text: PROMPT, size: PROMPT_SIZE, dy: top }];
+    return [head, { text: PROMPT, size: PROMPT_SIZE, dy: top }];
   }
 
   const table = scores.slice(0, shown).map((entry, index) => ({
@@ -71,7 +73,7 @@ const rows = (scores: readonly ScoreEntry[], laid: MenuPlan): readonly StackRow[
   }));
 
   return [
-    ...head,
+    head,
     { text: 'Best runs', size: HEADING_SIZE, dy: top - HEADING_LIFT },
     ...table,
     { text: PROMPT, size: PROMPT_SIZE, dy: top + (shown - 1) * pitch + EXIT_GAP },
@@ -86,6 +88,12 @@ export class MenuScene extends Phaser.Scene {
    * frame, so a window drag has no reason to rebuild it the way it can the text.
    */
   private parade: Parade | undefined;
+  /**
+   * The sign and the size it was lettered at. Nothing else about the layout can
+   * change what it is made of, so it outlives the rebuilds the table goes
+   * through and is simply re-centred like the parade.
+   */
+  private sign: { readonly mark: Wordmark; readonly size: number } | undefined;
 
   constructor() {
     super(SceneKey.Menu);
@@ -96,11 +104,13 @@ export class MenuScene extends Phaser.Scene {
     // Phaser reuses the scene instance, so these outlive `create` and would
     // otherwise point at objects destroyed on the way out to the last run.
     this.built = undefined;
+    this.sign = undefined;
     this.parade = new Parade(this);
 
     onScreenCentre(this, (centre, width, height) => {
       const laid = menuPlan(height, scores.length);
 
+      this.signFor(laid.size).centreOn(centre, width, laid.title);
       this.stackFor(scores, laid).centreOn(centre, width);
       this.parade?.centreOn(centre, width, laid.parade);
     });
@@ -115,6 +125,20 @@ export class MenuScene extends Phaser.Scene {
    */
   override update(time: number): void {
     this.parade?.update(time);
+  }
+
+  /**
+   * The sign, re-lettered only when the frame changed the size it is set in —
+   * the one thing about it a resize can touch. A word is a text object a
+   * letter, and `Scale.RESIZE` fires on every frame of a window drag.
+   */
+  private signFor(size: number): Wordmark {
+    if (this.sign?.size === size) return this.sign.mark;
+
+    this.sign?.mark.destroy();
+    this.sign = { mark: new Wordmark(this, TITLE, size), size };
+
+    return this.sign.mark;
   }
 
   /**

@@ -18,6 +18,7 @@ import {
   HEADLINE_ROOM,
   hitsTab,
   layout,
+  letterOffsets,
   LIVES_CLEARANCE,
   menuPlan,
   PARADE_GROWTH,
@@ -833,6 +834,18 @@ describe('menuPlan', () => {
 
     expect(parade).toBeGreaterThan(title + size);
     expect(parade).toBeLessThan(top);
+  });
+});
+
+describe('letterOffsets', () => {
+  it('has nowhere to stand a word with no letters', () => {
+    expect(letterOffsets([])).toEqual([]);
+  });
+
+  it('gives each letter the middle of its own advance', () => {
+    // Widths 10, 20, 30 — 60 across, so the word runs from -30 to +30 and the
+    // letters sit at the middles of [-30,-20], [-20,0] and [0,30].
+    expect(letterOffsets([10, 20, 30])).toEqual([-25, -10, 15]);
   });
 });
 

@@ -1130,3 +1130,17 @@ export const centredColumn = (gaps: readonly number[]): readonly number[] => {
 
   return stacked.map((offset) => offset - half);
 };
+
+/**
+ * The same thing laid on its side, for the one row of things whose spacing is
+ * measured rather than chosen: where each letter of the menu's sign stands,
+ * given how wide each one is (`ui/wordmark.ts`). `centredColumn` fed widths
+ * returns each letter's trailing edge, so half a letter back from that is the
+ * middle of its own advance.
+ *
+ * Set out this way rather than on a fixed pitch because a proportional face
+ * gives `C` and `y` quite different room, and a grid of equal cells would print
+ * the name as a ransom note.
+ */
+export const letterOffsets = (widths: readonly number[]): readonly number[] =>
+  centredColumn(widths).map((edge, at) => edge - (widths[at] ?? 0) / 2);
