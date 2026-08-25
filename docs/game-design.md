@@ -221,11 +221,14 @@ has to earn its palette rather than pick pretty values:
   So the game's name is lettered in those same six, in the same wheel order
   (§11), and the play screen keeps the rule whole. Two conditions come with it —
   the letters take their colors from `core/colors.ts` like everything else, so
-  the sign can never show a hue the palette does not hold; and each is outlined
-  in the symbols' own ink, because the palette is tuned to stay separable from
-  *itself* on a pale floor rather than to be legible as text against a pale
-  ground. Form is carried by the ink, color rides inside it — the division
-  every sprite on the board already makes.
+  the sign can never show a hue the palette does not hold; and each is edged the
+  way a candy is, in a deeper shade of its own color. The palette is tuned to
+  stay separable from *itself* on a pale floor rather than to be legible as text
+  against a pale ground, so a flat pastel word all but disappears into the
+  menu's ground: the two faintest letters clear it by 1.01 and 1.10. The rim the art
+  direction already puts around every sprite (§2) is what carries them instead.
+  Not the symbols' dark ink: that reads, but it makes the name a piece of chrome
+  with candy poured into it rather than a thing pulled out of sugar.
 - **Raw is off-white, so a raw strand and a sugar cube share a color.** That
   is correct — they are the same material. Size and symbol separate them.
 - Symbols are the fallback wherever two pastels read alike, which is why they
