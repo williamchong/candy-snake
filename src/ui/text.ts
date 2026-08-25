@@ -17,8 +17,8 @@ export const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0'
  * value in two syntaxes rather than two values that can drift. Text is chrome,
  * so like every other non-candy element it is separated by value and spends no
  * hue (design §4, palette constraints). The menu's sign is the one exception
- * the palette constraints allow, and it wears this ink around every letter
- * rather than instead of a color (`ui/wordmark.ts`).
+ * those constraints allow, and it does not use this: a letter of it is edged in
+ * a deeper shade of its own candy color, the way a sprite is (`ui/wordmark.ts`).
  */
 export const INK = css(GLYPH_TINT);
 

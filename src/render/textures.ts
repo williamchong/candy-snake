@@ -67,6 +67,26 @@ const FILL = '9';
 const SOFT_EDGE = 'A';
 const TRANSPARENT = '.';
 
+/** The gray the soft edge is authored in, as a share of full white. */
+const SOFT_EDGE_LEVEL = 0xcf / 0xff;
+
+/**
+ * A candy color as its own soft edge: what the gray rim below becomes once
+ * Phaser multiplies it by that tint, which is what gives every sprite on the
+ * board a deeper shade of itself around its fill (design §2).
+ *
+ * Exported for the one thing that draws a candy without a texture — the menu's
+ * sign, whose letters are outlined this way so a word reads like the rope does
+ * (`ui/wordmark.ts`). Derived from the palette rather than tabulated beside it,
+ * or the sign and the strand would be one edited hex apart.
+ */
+export const softEdge = (hex: number): number => {
+  const shade = (shift: number): number =>
+    Math.round(((hex >> shift) & 0xff) * SOFT_EDGE_LEVEL) << shift;
+
+  return shade(16) | shade(8) | shade(0);
+};
+
 /**
  * One fixed 16-color palette for the whole game — pixel maps index into it by
  * character ('.' is transparent).

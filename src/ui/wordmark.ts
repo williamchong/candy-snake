@@ -2,8 +2,9 @@ import type Phaser from 'phaser';
 
 import { colorInfo, RAINBOW } from '../core/colors';
 import type { Vec2 } from '../core/types';
+import { softEdge } from '../render/textures';
 import { letterOffsets } from './layout';
-import { css, fitScale, INK, textStyle } from './text';
+import { css, fitScale, textStyle } from './text';
 
 /**
  * The shop's sign: the game's name with one candy color per letter, running
@@ -17,12 +18,13 @@ import { css, fitScale, INK, textStyle } from './text';
  * is the strand read left to right, which is as close to "in theme" as a word
  * can get, and the rule keeps the whole of the play screen it was written for.
  *
- * **Ink around every letter, color inside it.** The palette is tuned to stay
- * separable from *itself* on a pale floor, not to be read as text against the
- * pale ground: purple against the menu's lilac is barely a step. So the
- * letterform is carried by the same ink the accessibility symbols are stamped
- * in and the color rides inside it — the division every sprite on the board
- * already makes, a tinted body with its glyph in `GLYPH_TINT` over it.
+ * **Each letter is edged the way the rope is.** A candy on the board is a flat
+ * fill with a soft edge that is a deeper shade of its own color — the gray rim
+ * in the texture, multiplied by the tint (design §2) — and a letter outlined in
+ * `softEdge` is the same thing drawn with a pen instead of a sprite. The first
+ * cut used the symbols' dark ink instead, which does carry a pale color against
+ * a pale ground but makes the word a piece of chrome with candy poured into it.
+ * The sign is pulled sugar, so it is shaded like pulled sugar.
  *
  * One `Text` per letter, because a `Text` has exactly one fill. That leaves the
  * word its own little layout problem, and the two answers with a decision in
@@ -30,7 +32,11 @@ import { css, fitScale, INK, textStyle } from './text';
  * where it stands, in `layout.ts` with the rest of the screen's geometry.
  */
 
-/** Ink around a letter, as a share of its size — one soft edge, as §2 asks. */
+/**
+ * The edge around a letter, as a share of its size. Half of it is covered by
+ * the fill drawn over it, so what shows is a rim of about the same weight the
+ * rope carries at the size the sign is set in.
+ */
 const STROKE = 1 / 12;
 
 export interface Letter {
@@ -62,7 +68,7 @@ export class Wordmark {
     /** Where it stands relative to the middle of the word, in pixels. */
     readonly dx: number;
   }[];
-  /** How wide the word is with its ink on — what it has to be fitted against. */
+  /** How wide the word is with its edge on — what it has to be fitted against. */
   private readonly span: number;
 
   constructor(scene: Phaser.Scene, word: string, size: number) {
@@ -76,18 +82,18 @@ export class Wordmark {
           textStyle(size, {
             color: css(hex),
             fontStyle: 'bold',
-            stroke: INK,
+            stroke: css(softEdge(hex)),
             strokeThickness: stroke,
           }),
         )
         .setOrigin(0.5),
     );
 
-    // Phaser widens a stroked `Text` by exactly its thickness so the ink is not
-    // clipped, which is width the letter does not advance by: laying the word
-    // out on those numbers would space it by how heavily it is outlined rather
-    // than by how it is cut. The ink comes back on once for the whole word,
-    // which is what it actually costs — half a stroke past either end.
+    // Phaser widens a stroked `Text` by exactly its thickness so the edge is
+    // not clipped, which is width the letter does not advance by: laying the
+    // word out on those numbers would space it by how heavily it is edged
+    // rather than by how it is cut. The edge comes back on once for the whole
+    // word, which is what it actually costs — half a stroke past either end.
     const widths = drawn.map(({ width }) => width - stroke);
 
     const offsets = letterOffsets(widths);
