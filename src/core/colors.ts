@@ -15,6 +15,27 @@ export const PRIMARIES = [RED, YELLOW, BLUE] as const;
 export type Primary = (typeof PRIMARIES)[number];
 
 /**
+ * The six mixable colors in wheel order — red round to purple, the way a
+ * rainbow runs rather than the way the masks count. Raw is left out because it
+ * is the absence of a color and brown because it is the mistake one (design
+ * §4), which leaves exactly the second- and third-tier states a customer can
+ * order.
+ *
+ * It is an ordering of the palette, not a second copy of it: what reads it is
+ * the front of the shop — the parade's strand carries these past
+ * (`render/parade.ts`) and the sign is lettered in them (`ui/wordmark.ts`) —
+ * and one list is what keeps those two showing the same rainbow.
+ */
+export const RAINBOW = [
+  RED,
+  RED | YELLOW,
+  YELLOW,
+  YELLOW | BLUE,
+  BLUE,
+  RED | BLUE,
+] as const satisfies readonly ColorMask[];
+
+/**
  * Blending, never overwriting: a red segment eating blue becomes purple, and a
  * purple segment eating yellow becomes brown. Applying a primary a segment
  * already holds is a no-op, which is what makes brown absorbing.

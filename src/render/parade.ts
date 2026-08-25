@@ -1,4 +1,4 @@
-import { BLUE, RED, YELLOW } from '../core/colors';
+import { BLUE, RAINBOW, RED } from '../core/colors';
 import type { ColorMask, Vec2 } from '../core/types';
 import { CHILD_TINT, HEAD_TINT, NO_TINT } from './drawn';
 import { meltedTints, type CornerTints } from './melt';
@@ -27,22 +27,13 @@ import { CELL_SIZE, STRAND_TEXTURES, TextureKey } from './textures';
  */
 
 /**
- * The colors the strand carries past, head end first — a rainbow through every
- * second- and third-tier color the palette can make. Brown is left out on
- * purpose: it is the mistake color (design §4), and the front of the shop is
- * not the place to advertise one.
+ * The strand carries the palette's own wheel order past, head end first, and
+ * the sign overhead is lettered in it — one list, so the two cannot show
+ * different rainbows.
+ *
+ * The head, plus one cell per color behind it.
  */
-const STRAND_COLORS: readonly ColorMask[] = [
-  RED,
-  RED | YELLOW,
-  YELLOW,
-  YELLOW | BLUE,
-  BLUE,
-  RED | BLUE,
-];
-
-/** The head, plus one cell per color behind it. */
-const STRAND_CELLS = STRAND_COLORS.length + 1;
+const STRAND_CELLS = RAINBOW.length + 1;
 
 /**
  * The strand's cells as board cells, so `strandSpriteAt` can pick its pieces
@@ -186,10 +177,10 @@ const strandMembers = (): readonly ParadeMember[] => {
 
   return [
     head,
-    ...STRAND_COLORS.map((color, at) => {
+    ...RAINBOW.map((color, at) => {
       // `at` counts colors; `index` counts cells, and the head is cell zero.
       const index = at + 1;
-      const last = at === STRAND_COLORS.length - 1;
+      const last = at === RAINBOW.length - 1;
       const sprite = strandSpriteAt(
         cellAt(index),
         cellAt(index - 1),
@@ -200,7 +191,7 @@ const strandMembers = (): readonly ParadeMember[] => {
         walker: Walker.Strand,
         key: STRAND_TEXTURES[sprite.piece],
         tint: NO_TINT,
-        corners: meltedTints(color, sprite, STRAND_COLORS[at - 1], STRAND_COLORS[at + 1]),
+        corners: meltedTints(color, sprite, RAINBOW[at - 1], RAINBOW[at + 1]),
         color,
         depth: Depth.Strand,
         glyphDepth: Depth.StrandGlyph,
