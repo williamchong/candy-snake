@@ -39,6 +39,8 @@ Tests are colocated (`src/**/*.test.ts`) and cover the engine-free logic:
 `core/` plus the pure modules the Phaser layer leans on —
 `input/directionQueue.ts`, `input/swipe.ts`, `render/strand.ts`,
 `render/melt.ts`, `render/deform.ts`, `render/burst.ts`,
+the pure half of `render/textures.ts` (`softEdge`, which the menu's sign is
+outlined in and every sprite is rimmed in),
 `audio/tones.ts` and `audio/kitchen.ts` (the cue table, the sample maths and
 the stagger bookkeeping — the smoke driver cannot hear, so anything checkable
 under Node is worth checking),

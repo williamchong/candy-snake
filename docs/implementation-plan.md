@@ -2095,19 +2095,23 @@ already; none of it was in the word.
   separable from *each other* over a pale floor, not to be read as text against
   the pale ground: not one of the six clears 1.4:1 against the menu's lilac, and
   the two faintest over it — green at 1.01 and orange at 1.10 — are a word
-  nobody can read. A candy on the board answers this already: a flat fill with a
-  soft edge that is a deeper shade of its own color, which is the gray rim in the
-  texture multiplied by the tint (§2). `softEdge` in `render/textures.ts` applies
-  that same multiply to a number, so a letter is outlined in it and the sign is
-  shaded like the strand under it — derived from the palette, not tabulated
-  beside it, or the two would end up one edited hex apart.
+  nobody can read. A candy on the board answers this already: a flat fill with
+  a soft edge that is a deeper shade of its own color, which is the gray rim in
+  the texture once Phaser multiplies it by the tint (§2). `softEdge` applies
+  that same multiply to a number, so a letter wears the rim its sprite would
+  and the sign is shaded like the strand under it. It lives in
+  `render/textures.ts` beside the palette that gray is authored in — derived
+  rather than tabulated, or the two come apart one edited hex at a time — and
+  tinting the rim white gives the rim straight back, which is what its test
+  pins.
 
   The first cut used `GLYPH_TINT`, the symbols' dark ink, on the argument that
   form should be carried by ink and color ride inside it. It reads, and it was
-  wrong: an inked word is a piece of chrome with candy poured into it, and this
-  screen's whole job is to look like the thing the game makes. Flat, with no edge
-  at all, was tried and is worse than either — the green and yellow letters
-  simply are not there.
+  the wrong reading of this screen: an inked word is a piece of chrome with
+  candy poured into it, and the front of the shop is the one screen whose job
+  is to look like the thing the game makes. Flat, with no edge at all, is the
+  other way to take the ink off and is worse than either — the green and yellow
+  letters simply are not there.
 - **A word is its own little layout problem.** A Phaser `Text` has exactly one
   fill, so the sign is one object per letter, and both answers with a decision
   in them are plain functions over numbers: which color a letter wears
