@@ -21,10 +21,10 @@ import { css, fitScale, textStyle } from './text';
  * **Each letter is edged the way the rope is.** A candy on the board is a flat
  * fill with a soft edge that is a deeper shade of its own color — the gray rim
  * in the texture, multiplied by the tint (design §2) — and a letter outlined in
- * `softEdge` is the same thing drawn with a pen instead of a sprite. The first
- * cut used the symbols' dark ink instead, which does carry a pale color against
- * a pale ground but makes the word a piece of chrome with candy poured into it.
- * The sign is pulled sugar, so it is shaded like pulled sugar.
+ * `softEdge` is the same thing drawn with a pen instead of a sprite. Dark ink
+ * would carry a pale color against a pale ground more surely, and it makes the
+ * word a piece of chrome with candy poured into it. The sign is pulled sugar,
+ * so it is shaded the way pulled sugar is.
  *
  * One `Text` per letter, because a `Text` has exactly one fill. That leaves the
  * word its own little layout problem, and the two answers with a decision in

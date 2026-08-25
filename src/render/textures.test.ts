@@ -3,28 +3,28 @@ import { describe, expect, it } from 'vitest';
 import { COLORS } from '../core/colors';
 import { softEdge } from './textures';
 
+const channelsOf = (color: number): readonly number[] =>
+  [16, 8, 0].map((shift) => (color >> shift) & 0xff);
+
 describe('a candy color as its own soft edge', () => {
   it('shades a color by exactly what the sprite rim shades it by', () => {
-    // The rim is authored as #cfcfcf and Phaser's tint multiplies, so a white
-    // pixel of it takes the full color and this gray takes that much of it.
-    // Tinting the rim white must therefore give the rim back: the sign and the
-    // strand are shaded by one number, and this is where it is checked.
+    // The rim is authored as one gray and Phaser's tint multiplies, so a white
+    // pixel of a sprite takes the full color and a rim pixel takes this much of
+    // it. Tinting the rim white must therefore give the rim back: the sign and
+    // the strand are shaded by one number, and this is where that is checked.
     expect(softEdge(0xffffff)).toBe(0xcfcfcf);
   });
 
-  it('leaves every candy a darker version of itself, and nothing else', () => {
+  it('brings every candy back darker on every channel it had', () => {
     for (const { hex } of COLORS) {
-      const rim = softEdge(hex);
+      const was = channelsOf(hex);
 
-      for (let shift = 0; shift <= 16; shift += 8) {
-        const was = (hex >> shift) & 0xff;
-        const now = (rim >> shift) & 0xff;
-
-        // Darker on every channel it had one on, and no channel bleeding into
-        // the next — the failure a hand-rolled shift-and-or invites.
-        expect(now).toBeLessThanOrEqual(was);
-        expect(now).toBeGreaterThanOrEqual(0);
-      }
+      // Nothing in the palette is dark enough for the multiply to round back to
+      // where it started, so a channel that did not move is a channel that was
+      // never shaded.
+      channelsOf(softEdge(hex)).forEach((level, at) => {
+        expect(level).toBeLessThan(was[at] ?? 0);
+      });
     }
   });
 });

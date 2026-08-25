@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { COLS, ROWS } from '../core/board';
 import { COLORS, colorIndex } from '../core/colors';
 import type { ColorMask } from '../core/types';
+import { mixTint } from './melt';
 import { StrandPiece } from './strand';
 
 /**
@@ -67,25 +68,25 @@ const FILL = '9';
 const SOFT_EDGE = 'A';
 const TRANSPARENT = '.';
 
-/** The gray the soft edge is authored in, as a share of full white. */
-const SOFT_EDGE_LEVEL = 0xcf / 0xff;
+/** The gray the soft edge is authored in — the palette below writes it out. */
+const SOFT_EDGE_GRAY = 0xcf;
 
 /**
- * A candy color as its own soft edge: what the gray rim below becomes once
- * Phaser multiplies it by that tint, which is what gives every sprite on the
- * board a deeper shade of itself around its fill (design §2).
+ * A candy color as its own soft edge: what the gray rim becomes once Phaser
+ * multiplies it by that tint, which is what gives every sprite on the board a
+ * deeper shade of itself around its fill (design §2).
  *
  * Exported for the one thing that draws a candy without a texture — the menu's
  * sign, whose letters are outlined this way so a word reads like the rope does
- * (`ui/wordmark.ts`). Derived from the palette rather than tabulated beside it,
- * or the sign and the strand would be one edited hex apart.
+ * (`ui/wordmark.ts`). Taken from the gray the rim is authored in rather than
+ * tabulated beside it, or the sign and the strand would come apart one edited
+ * hex at a time.
+ *
+ * Multiplying a color by a gray is mixing it with black by what is left, so the
+ * arithmetic is `mixTint`'s rather than a second copy of it.
  */
-export const softEdge = (hex: number): number => {
-  const shade = (shift: number): number =>
-    Math.round(((hex >> shift) & 0xff) * SOFT_EDGE_LEVEL) << shift;
-
-  return shade(16) | shade(8) | shade(0);
-};
+export const softEdge = (hex: number): number =>
+  mixTint(0x000000, hex, SOFT_EDGE_GRAY / 0xff);
 
 /**
  * One fixed 16-color palette for the whole game — pixel maps index into it by
@@ -109,7 +110,7 @@ const PALETTE: Phaser.Types.Create.Palette = {
   '7': UNUSED,
   '8': '#9a9a9a', // sprite detail (eyes)
   [FILL]: '#ffffff',
-  [SOFT_EDGE]: '#cfcfcf',
+  [SOFT_EDGE]: `#${SOFT_EDGE_GRAY.toString(16).padStart(2, '0').repeat(3)}`,
   B: UNUSED,
   C: UNUSED,
   D: UNUSED,
