@@ -57,7 +57,7 @@ export const RAMP: readonly Anchor[] = [
     atMs: 60_000,
     mix: [10, 50, 40],
     maxQueue: 3,
-    patienceMs: 35_000,
+    patienceMs: 42_000,
     arrivalIntervalMs: 10_000,
     moveIntervalMs: 143,
   },
@@ -66,7 +66,7 @@ export const RAMP: readonly Anchor[] = [
     atMs: 180_000,
     mix: [5, 35, 60],
     maxQueue: 4,
-    patienceMs: 30_000,
+    patienceMs: 36_000,
     arrivalIntervalMs: 6_000,
     moveIntervalMs: 125,
   },
@@ -78,7 +78,7 @@ export const RAMP: readonly Anchor[] = [
     atMs: 420_000,
     mix: [5, 35, 60],
     maxQueue: 4,
-    patienceMs: 28_000,
+    patienceMs: 34_000,
     arrivalIntervalMs: 4_000,
     moveIntervalMs: 125,
   },
@@ -89,7 +89,7 @@ export const RAMP: readonly Anchor[] = [
     atMs: 900_000,
     mix: [5, 35, 60],
     maxQueue: 4,
-    patienceMs: 22_000,
+    patienceMs: 26_000,
     arrivalIntervalMs: 2_800,
     moveIntervalMs: 125,
   },
@@ -340,7 +340,7 @@ const RUSH_SHAPE: readonly {
  * intent stated as a measurement: a board that visibly changes, on a curve that
  * did not move.
  */
-const CALM_RATE = 0.95;
+const CALM_RATE = 0.65;
 const PEAK_RATE = 2.6;
 
 /**
@@ -464,6 +464,24 @@ export const spanAt = <T>(
 const RUSH_OPENS_AT = RUSH_SHAPE[1]!.at;
 
 /**
+ * Where in the cycle a ramp position falls, 0…1 — the tide's clock, said once.
+ *
+ * Both readers of the shape need it: `rushShape` to interpolate the intensity,
+ * and `rushMeterAt` to place the run against the edges it has solved for. Two
+ * copies is the drift this file keeps closing everywhere else (see
+ * `RUSH_FLOOR_FROM`) — and this pair would drift *silently*, because the gauge's
+ * edges are phases and would go on being compared against a phase computed a
+ * different way. The delivered rush would then stop lining up with the drawn
+ * one, which is the single property the whole gauge exists to guarantee.
+ *
+ * One `%` and no wrap back into range: every caller returns before this on
+ * `rampPosMs <= RUSH_FROM_MS`, so the operand cannot be negative, and `spanAt`'s
+ * docblock is entitled to say the phase never leaves [0,1).
+ */
+const rushPhaseAt = (rampPosMs: number): number =>
+  ((rampPosMs - RUSH_FROM_MS) / RUSH_PERIOD_MS + RUSH_OPENS_AT) % 1;
+
+/**
  * The tide's own shape, before the ease-in below is applied to it.
  *
  * Two positions are read rather than one: where the run is *within* the cycle
@@ -485,10 +503,7 @@ const RUSH_OPENS_AT = RUSH_SHAPE[1]!.at;
  * defeats the inlining.
  */
 const rushShape = (rampPosMs: number): number => {
-  // One `%` and no wrap back into range: both callers return before this on
-  // `rampPosMs <= RUSH_FROM_MS`, so the operand cannot be negative, and
-  // `spanAt`'s docblock is entitled to say the phase never leaves [0,1).
-  const phase = ((rampPosMs - RUSH_FROM_MS) / RUSH_PERIOD_MS + RUSH_OPENS_AT) % 1;
+  const phase = rushPhaseAt(rampPosMs);
   const grown = rushGrowth(rampPosMs);
   const { from, to, t } = spanAt(
     RUSH_SHAPE,
@@ -555,10 +570,18 @@ const rushGrowth = (rampPosMs: number): number =>
  * lull, 1 at a full peak, the swell and ebb in between, and everything scaled
  * back while the tide is still coming in.
  *
- * This is what the HUD draws (`Game.rush`), and it is the *delivered* figure
- * rather than the raw shape on purpose: a doorway that filled right up while
- * the first, half-strength tide was still easing in would be promising a flood
- * that is not coming.
+ * The *delivered* figure rather than the raw shape, on purpose: a tide that
+ * counted at full strength while it was still easing in would be promising a
+ * flood that is not coming.
+ *
+ * **Nothing in the game reads this any more, and it is kept deliberately.** The
+ * HUD drew it until the eleventh sitting and now draws `rushMeterAt`'s gauge;
+ * the two production readers left — `rushFloorAt` and `arrivalRateAt` — go
+ * through `arrivalTideAt` and `rushShape` below, off a ramp position they
+ * already hold. So this is the (clock, score) door onto the same curve, and
+ * what still comes through it is `difficulty.test.ts`, which checks the tide's
+ * shape here: the gauge's edges are solved against this curve, so a shape
+ * nothing can name is a shape nothing can check.
  *
  * Takes the same (clock, score) pair `stageAt` does, so where a run stands on
  * the ramp stays a question this file answers — the HUD asks how hard the rush
@@ -737,4 +760,130 @@ export const rushFloorAt = (endlessMs: number, endlessScore: number): number => 
   if (arrivalTideAt(pos) < RUSH_FLOOR_FROM) return 0;
 
   return rushGrowth(pos) >= 1 ? RUSH_FULL_QUEUE_FLOOR : RUSH_QUEUE_FLOOR;
+};
+
+/**
+ * What the tide is doing right now, in the two terms the HUD has to say out
+ * loud (design §11).
+ *
+ * `rush` above is the tide's *strength*, which is the right number for a
+ * doorway filling up and the wrong one for every question the chair actually
+ * asked of it: **am I in a rush, when does this one end, and when is the next
+ * one?** A scalar that rises and falls answers none of them, because a player
+ * reading 0.4 off a crowd cannot tell a swell from an ebb — the same figure
+ * means "brace" on the way up and "it is over" on the way down, and the shape
+ * is the only thing that distinguishes them.
+ *
+ * So this is the shape, reported as a gauge that fills toward a rush and drains
+ * through one. Between rushes `fill` climbs 0 → 1 and lands on the moment the
+ * next one starts; during a rush it falls 1 → 0 and lands on the moment this
+ * one ends. One bar, read the same way in both states, with `on` saying which
+ * of the two readings is in force.
+ */
+export interface RushMeter {
+  /**
+   * Whether a rush is running — and it is the *delivered* rush, tied to
+   * `rushFloorAt` binding rather than to a plateau in the shape table.
+   *
+   * That tie is the whole reason this is trustworthy. The rush the player is
+   * told about has to be the rush the game is imposing, or the HUD is drawing a
+   * second, decorative tide beside the real one; this file has already had to
+   * close that exact drift once, between the doorway's crowd and the floor
+   * under the window (`RUSH_FLOOR_FROM`). So "a rush is on" means the same
+   * thing here as it means in `admitCustomer`: the window is being held open.
+   */
+  readonly on: boolean;
+  /** The gauge, 0…1 — filling toward the next rush, or draining through this one. */
+  readonly fill: number;
+}
+
+/** No tide worth drawing: before the preview mark, and on a pinned stage. */
+export const RUSH_QUIET: RushMeter = { on: false, fill: 0 };
+
+/**
+ * Where the tide crosses the floor's threshold, and how far through that
+ * crossing a run stands.
+ *
+ * The edges are solved rather than searched for, which they can be because the
+ * shape is piecewise linear in phase: intensity climbs 0 → 1 across the swell
+ * and falls 1 → 0 across the ebb, so the phase at which it passes a threshold
+ * is one `lerp` on each side. Scanning the curve for the crossing would work
+ * too and is what this looked like first; it is rejected because it puts a loop
+ * on a getter the HUD reads every frame, and because a scan's answer depends on
+ * its step size, which is a second tuning knob nobody would ever be told about.
+ *
+ * **The threshold is divided by the swing rather than compared against the
+ * delivered figure**, and that is the one line here worth understanding. The
+ * delivered intensity is `shape × swing`, so asking where `shape × swing`
+ * crosses `RUSH_FLOOR_FROM` is asking where `shape` crosses
+ * `RUSH_FLOOR_FROM / swing` — the same question moved to the side of the
+ * equation the shape table is written on, where it is a straight interpolation.
+ * While the tide is still easing in, that quotient can exceed 1: the shape's own
+ * crest is not yet delivering enough to hold the window, and the honest reading
+ * would be "no rush this cycle at all". It is clamped to 1 instead, which puts
+ * `opens` at the crest and `shuts` at the end of the plateau — so in that regime
+ * the gauge calls the **plateau itself** the rush: 12 s of it at the preview
+ * shape, 20 s grown. Not an instant, and not a collapsed window; the two edges
+ * stay well apart (0.65 → 0.85 at the preview, 0.52 → 0.85 grown), which is
+ * also why nothing below can divide by zero.
+ *
+ * So the clamp degrades to "the rush is the part that was going to be flat out
+ * anyway", which is the right shape to show a player who is being told about a
+ * tide too weak to hold the window yet. It lasts about half a minute at the very
+ * start of the tide's life, against the alternative of a gauge that sits dead
+ * through the first swell the player is ever shown, and it corrects itself
+ * continuously as the swing winds on rather than snapping when it reaches 1.
+ */
+const rushEdges = (
+  rampPosMs: number,
+  swing: number,
+): { readonly opens: number; readonly shuts: number } => {
+  const grown = rushGrowth(rampPosMs);
+  const phaseOf = (point: (typeof RUSH_SHAPE)[number]): number =>
+    lerp(point.at, point.grown, grown);
+  const need = Math.min(RUSH_FLOOR_FROM / swing, 1);
+
+  return {
+    // Up the swell, from the end of the lull to the crest.
+    opens: lerp(phaseOf(RUSH_SHAPE[1]!), phaseOf(RUSH_SHAPE[2]!), need),
+    // And down the ebb, from the end of the peak to the end of the period.
+    shuts: lerp(phaseOf(RUSH_SHAPE[3]!), 1, 1 - need),
+  };
+};
+
+/**
+ * The gauge, at a point on the ramp — `Game.rushMeter`'s way in, and the same
+ * (clock, score) pair every other reader of this table takes.
+ *
+ * Like `rushAt` it does not clamp into the anchor table: the tide runs past the
+ * backstop, and a gauge frozen at whatever phase fifteen minutes lands on would
+ * leave the longest runs the only ones whose HUD had stopped telling the truth.
+ */
+export const rushMeterAt = (endlessMs: number, endlessScore: number): RushMeter => {
+  const pos = rampMs(endlessMs, endlessScore);
+  if (pos <= RUSH_FROM_MS) return RUSH_QUIET;
+
+  const swing = rushSwing(pos);
+  // Unreachable as the two lines stand — the guard above leaves `pos` strictly
+  // past `RUSH_FROM_MS`, so `rushSwing`'s numerator is strictly positive — and
+  // kept anyway, because `rushEdges` divides by this. It is the *guard above*
+  // that makes that divide safe, which is a thing one line knowing about
+  // another; this says so where the divide is, rather than leaving the next
+  // person to change `rushSwing`'s clamp to find out.
+  if (swing <= 0) return RUSH_QUIET;
+
+  const phase = rushPhaseAt(pos);
+  const { opens, shuts } = rushEdges(pos, swing);
+
+  if (phase >= opens && phase <= shuts)
+    return { on: true, fill: (shuts - phase) / (shuts - opens) };
+
+  // Between rushes, measured from the one that just finished to the one coming.
+  // Whichever side of the peak the phase falls, the span it is inside runs from
+  // a `shuts` to an `opens`; the wrap is carried by moving one of the two into
+  // the neighbouring period rather than by a second branch on the arithmetic.
+  const from = phase < opens ? shuts - 1 : shuts;
+  const to = phase < opens ? opens : opens + 1;
+
+  return { on: false, fill: (phase - from) / (to - from) };
 };

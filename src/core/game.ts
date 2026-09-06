@@ -2,13 +2,15 @@ import { COLS, ROWS, isChopBlock } from './board';
 import { BROWN, PRIMARIES, colorInfo, noServes, type Primary } from './colors';
 import { createCustomer, matchIndex, removeAt, tickPatience } from './customers';
 import {
+  RUSH_QUIET,
   SETTLED_MS,
   SPEED_RUNGS,
   rampMs,
-  rushAt,
   rushFloorAt,
+  rushMeterAt,
   speedRungOf,
   stageAt,
+  type RushMeter,
 } from './difficulty';
 import { rollOrder, TWIN_CHANCE, type StageConfig } from './orders';
 import {
@@ -62,6 +64,45 @@ export const STARTING_LIVES = 3;
 /** How often a child takes the brown one off your hands (design §7). */
 export const MERCY_CHANCE = 0.05;
 
+/**
+ * The shortest gap the endless window will put between two arrivals — the walk
+ * from the doorway to the counter, which nothing is allowed to skip.
+ *
+ * Two rules in `admitCustomer` bottom out well under this and one of them
+ * bottoms out at nothing. `arrivalGapMs` shortens the gap in proportion to how
+ * empty the window is, so at a grown peak an emptied window refills at 577 ms a
+ * child; and `belowFloor` does not wait out a gap at all, so serving the third
+ * of three children a running tide insists on puts the replacement at the
+ * counter *on the same step*. Both were built to keep the window full and both
+ * do — but what they deliver at the sharp end is a shop that refills by
+ * teleport, which the chair read back as Sisyphus.
+ *
+ * So the walk is a floor under every endless arrival, and the reason it is a
+ * floor rather than a longer interval is that it only ever binds where the
+ * complaint was: at the ordinary gaps of the anchor table it is nowhere near,
+ * and it takes nothing at all off a window that is merely busy. What it buys is
+ * a beat in which a serve *reads* before the next child is standing in the
+ * gap — which is a rule the game already had and only ever applied to the
+ * opening levels.
+ *
+ * **So it is that same number, and deliberately not a new one.** The tutorial's
+ * beat and this floor are one measurement asked twice: how long a child takes
+ * to walk from the door to the counter. The tutorial reads it as an *interval*,
+ * because a level's window is empty and the beat is the whole wait; the endless
+ * game reads it as a *floor*, because its window has a clock of its own and
+ * this only ever catches the gaps that fall under a walk. Written as two
+ * constants they would drift, and the first thing to drift would be the
+ * handover — where the endless game's first child is brought in on the
+ * tutorial's beat exactly (`finishOpeningLevel`), which a floor a fraction
+ * above it would silently push late.
+ *
+ * It still stops at the endless game, because the opening levels pace their own
+ * window: level 4 deliberately *halves* the beat so its pair reads as a pair,
+ * and a floor over the top would overrule the one place this game already got
+ * this right.
+ */
+export const WALK_IN_MS = TUTORIAL_ARRIVAL_GAP_MS;
+
 /** A real run: seeded, taught, and ramped by `core/difficulty.ts`. */
 export const DEFAULT_CONFIG: GameConfig = {
   seed: 1,
@@ -84,6 +125,19 @@ export class Game {
   /** Time the window has had room, against the current arrival gap. */
   private waitMs = 0;
   /**
+   * Time since the last child reached the window, against `WALK_IN_MS`.
+   *
+   * A second clock rather than a floor under `waitMs`, because the two count
+   * different things and one of them stands still: `waitMs` only runs while the
+   * window has room, and the rush floor skips it entirely. This one runs every
+   * step whatever the window holds, which is what makes it a rule about the
+   * *doorway* rather than about the queue.
+   *
+   * Starts at `Infinity` — no child has arrived yet, so the first one is not
+   * kept waiting for a door nobody has come through.
+   */
+  private sinceArrivalMs = Infinity;
+  /**
    * The last speed rung the run was told about. Held here rather than derived,
    * because the event is a one-shot and the rung is a level: without a memory
    * the announcement would either fire every step or not at all.
@@ -92,6 +146,16 @@ export class Game {
    * never news.
    */
   private announcedRung = 0;
+  /**
+   * Which side of the rush edge the run was last told it was on. A `boolean`
+   * where the rung above is a level, because this edge falls as well as rises —
+   * but held for the identical reason: a one-shot over a curve needs a memory or
+   * it is not a one-shot.
+   *
+   * Starts `false`, which is where every run starts: there is no tide at all
+   * until `RUSH_FROM_MS`, so the first crossing is always into a rush.
+   */
+  private announcedRush = false;
   /**
    * Time on the endless ramp, which only starts once the opening levels are
    * done (design §7) — so a player who takes their time learning does not find
@@ -198,35 +262,13 @@ export class Game {
   }
 
   /**
-   * How hard the rush is running right now, 0…1 — the tide `core/difficulty.ts`
-   * runs from the preview mark to the end of the run (design §7).
-   *
-   * It is read in two places, and they are the promise and the delivery. The
-   * HUD draws the door filling up *before* the children reach the window, which
-   * is the half that makes a rush something to play against rather than
-   * something to survive; and `admitCustomer` holds the window at `rushFloor`
-   * below, which is the half that makes the promise good against a maker fast
-   * enough to serve a mere rate away. The rest of the tide's effect is still
-   * inside `stage.arrivalIntervalMs`. A swell is continuous, so it is drawn from
-   * state every frame the way the patience bars are, rather than announced as a
-   * one-shot (architecture §7).
-   *
-   * A pinned stage has no tide, for the same reason it has no ramp.
-   */
-  get rush(): number {
-    if (this.config.stage !== undefined) return 0;
-
-    return rushAt(this.endlessMs, this.endlessScore);
-  }
-
-  /**
    * How many children the tide insists on having at the window right now — the
-   * delivery half of the promise `rush` draws (`rushFloorAt`).
+   * delivery half of the promise `rushMeter` draws (`rushFloorAt`).
    *
    * It is a getter beside `rush` rather than a call inside `admitCustomer` so
    * that the two halves of the tide are read the same way and guarded the same
    * way; and it goes to the table with the (clock, score) pair rather than with
-   * `this.rush`, because the floor needs to know how far along the ramp the
+   * the gauge, because the floor needs to know how far along the ramp the
    * *cycle* stands as well as how hard it is running — a preview tide and a full
    * one both crest at 1, and only the ramp position tells them apart.
    *
@@ -239,6 +281,23 @@ export class Game {
     if (this.config.stage !== undefined) return 0;
 
     return rushFloorAt(this.endlessMs, this.endlessScore);
+  }
+
+  /**
+   * The tide as a gauge rather than as a strength (`RushMeter`) — whether a rush
+   * is on, and how far it is from ending or from starting.
+   *
+   * A third reader of the same curve beside `rush` and `rushFloor`, and it is
+   * the one the player is actually told things by: the doorway draws the tide's
+   * *size*, which answers "something is coming" and none of the three questions
+   * the eleventh sitting asked — am I in one, when does it end, when is the
+   * next. Guarded and shaped exactly like the two above, so all three halves of
+   * the tide are read the same way and a pinned stage has none of them.
+   */
+  get rushMeter(): RushMeter {
+    if (this.config.stage !== undefined) return RUSH_QUIET;
+
+    return rushMeterAt(this.endlessMs, this.endlessScore);
   }
 
   /**
@@ -286,6 +345,33 @@ export class Game {
   }
 
   /**
+   * Says so when the tide crosses into a rush and when it comes back out
+   * (design §7, §11). The drawn half is `rushMeter`; this is the said half.
+   *
+   * Read off `rushMeter` rather than recomputed, for the reason `announceSpeed`
+   * reads off `stage`: two paths through the same curve are two things that can
+   * disagree, and the whole point of tying the announcement to `rushFloorAt`'s
+   * own threshold is that what the player is told is what the window is doing.
+   *
+   * Unlike the speed ladder this edge goes both ways, so the memory is the state
+   * itself rather than a high-water mark — and it starts on the quiet side,
+   * which every run does: the tide does not exist until `RUSH_FROM_MS`.
+   */
+  private announceRush(events: GameEvent[]): void {
+    if (this.config.stage !== undefined) return;
+    // The same guard `announceSpeed` carries, and for the same reason: the
+    // window can end the run on the way past, and an edge crossed on that step
+    // would land after `game-over` in a batch the scene walks in order.
+    if (this.state.over) return;
+
+    const { on } = this.rushMeter;
+    if (on === this.announcedRush) return;
+
+    this.announcedRush = on;
+    events.push({ type: 'rush-changed', on });
+  }
+
+  /**
    * How far the snake stands between its last cell and its next, 0…1.
    * Movement is discrete here but must not look it, so the view draws the
    * snake at this fraction of the way across. `extraMs` lets a caller add
@@ -330,6 +416,9 @@ export class Game {
     // After the window, not before it: a serve moves the score, the score moves
     // the ramp, and a rung reached by *this* step's serve belongs to this step.
     this.announceSpeed(events);
+    // And after the ladder, on the same reasoning: both read a curve the serve
+    // above has just moved, and the tide is the later of the two to be drawn.
+    this.announceRush(events);
 
     return events;
   }
@@ -709,6 +798,13 @@ export class Game {
             patienceMs: undefined,
           };
 
+    // Above the `maxQueue` guard, and the only clock here that is: the walk
+    // from the doorway happens whether or not the window has room, so time
+    // spent at a full window is time the next child has already spent walking.
+    // Counted before the guard rather than in `step` so that both arrival
+    // clocks stay in the one method that spends them.
+    this.sinceArrivalMs += dtMs;
+
     if (this.state.customers.length >= window.maxQueue) return;
 
     this.waitMs += dtMs;
@@ -730,6 +826,13 @@ export class Game {
       level === undefined && this.state.customers.length < this.rushFloor;
     const due = this.waitMs >= this.arrivalGapMs(window.intervalMs, window.maxQueue);
     if (!due && !belowFloor) return;
+    // And then the walk itself (`WALK_IN_MS`), which is the last word on both of
+    // the rules above. *Held back* rather than turned away: the clock has been
+    // paid and is not spent below, so the child arrives the moment the doorway
+    // is clear rather than starting the whole gap again — a floor on the shape
+    // of the arrivals, never a second interval added to them. The tutorial
+    // paces its own window and is exempt, the way it is exempt from the tide.
+    if (level === undefined && this.sinceArrivalMs < WALK_IN_MS) return;
     // Only an arrival the clock actually paid for spends it. A child the tide
     // insisted on is *extra*, and taking the clock with them would restart the
     // ordinary fill on every serve — which pins the window at the floor instead
@@ -752,6 +855,7 @@ export class Game {
       window.patienceMs,
     );
     this.nextCustomerId += 1;
+    this.sinceArrivalMs = 0;
     this.state.customers = [...this.state.customers, customer];
     events.push({ type: 'customer-arrived', customer });
 

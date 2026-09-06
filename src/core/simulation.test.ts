@@ -745,6 +745,13 @@ interface RunResult {
    */
   readonly gears: { readonly rung: number; readonly top: boolean }[];
   /**
+   * Every rush edge the run was told about, in order (design §7's tide). Here
+   * for the reason `gears` is: an unattended `Game` loses its lives long before
+   * the tide has run a cycle, so this harness is the only one that can watch a
+   * one-shot fire over a curve that rises and falls all run.
+   */
+  readonly rushes: boolean[];
+  /**
    * Every order that reached the window, split by tier — what demand the run
    * actually *delivered*, as against the T1/T2/T3 column design §7 asked for.
    *
@@ -786,6 +793,7 @@ const play = (
   let liveTicks = 0;
   let pairTicks = 0;
   const gears: { rung: number; top: boolean }[] = [];
+  const rushes: boolean[] = [];
   const orderedByTier = noServes();
 
   for (let tick = 0; tick < ticks; tick += 1) {
@@ -794,6 +802,7 @@ const play = (
       if (event.type === 'candy-staled') staled += 1;
       if (event.type === 'strand-broken') broken += 1;
       if (event.type === 'speed-raised') gears.push({ rung: event.rung, top: event.top });
+      if (event.type === 'rush-changed') rushes.push(event.on);
       if (event.type === 'customer-arrived') {
         orderedByTier[colorInfo(event.customer.want).tier] += 1;
       }
@@ -865,6 +874,7 @@ const play = (
     meanSegments: segmentSum / liveTicks,
     pairOffered: pairTicks / liveTicks,
     gears,
+    rushes,
     orderedByTier,
   };
 };
@@ -985,8 +995,9 @@ const SWEEP = [...SEEDS, 2, 3, 5, 7, 11, 13, 23, 31, 57, 88, 123, 777];
  * A proportion needed sixteen where four would not do (`SWEEP` above). A median
  * needs sixty-four: measured on the same build, the batching maker's death
  * reads **3.95 min across `SWEEP` and 4.21 across this draw** — a quarter of a
- * minute apart, which straddles the floor of the 4–6 window the ramp is aimed
- * at. Half the sittings recorded in the plan compared two medians sixteen seeds
+ * minute apart, which straddles the floor of the 4–6 window the ramp was aimed
+ * at when this was measured (it is 6–8 since the eleventh sitting; the point
+ * about draw width is unaffected, which is why the figures are left as read). Half the sittings recorded in the plan compared two medians sixteen seeds
  * wide and read the difference as a curve that moved; on this evidence some of
  * those differences were the draw.
  *
@@ -1030,9 +1041,10 @@ const PEAK_QUEUE = RAMP[RAMP.length - 1]!.maxQueue;
  * Two of the three findings that opened the phase are answered:
  *
  * - **Losing is possible now.** The maker who batches — the way the color
- *   system is meant to be played — dies inside the 4–6 minute window the plan
- *   is aiming at, where before neither bot could be touched. That window used
- *   to read 8–10; what moved it is in the plan, under the seventh sitting.
+ *   system is meant to be played — dies inside the minute window the plan is
+ *   aiming at, where before neither bot could be touched. That window has read
+ *   8–10, then 4–6, and 6–8 since the eleventh sitting; the argument behind
+ *   each move is in the plan, under the seventh and eleventh sittings.
  * - **The window is no longer the only constraint.** The ramp shortens the
  *   arrival interval past what either maker can keep up with, so the run ends
  *   on the queue rather than on the clock running out of customers.
@@ -1141,13 +1153,27 @@ describe('the reference players, after the ramp went in', () => {
     // of a change that moves an rng draw is a different run, not the same one
     // played harder.
     //
-    // The window reads 4–6 rather than the 8–10 it was written with, and the
-    // reason is not that the curve grew teeth. It is that nothing new arrives
-    // after the three-minute mark: max queue is done at 2 min, the order mix
-    // and the speed cap at 3, and past those only two numbers move — patience
-    // and the arrival interval — neither of which adds a thing to do. A target
-    // past the last of the levers was asking the ramp to hold attention with
-    // arithmetic. See the plan's seventh sitting.
+    // **The window reads 6–8, and the eleventh sitting is what moved it there.**
+    // It has now been 8–10 (as written), 4–6 (the seventh sitting) and this, and
+    // the round trip is worth reading as one argument rather than as indecision.
+    //
+    // The seventh sitting cut it to 4–6 on a structural point that still holds:
+    // nothing new arrives after the three-minute mark — max queue is done at
+    // 2 min, the order mix and the speed cap at 3 — so a target set past the
+    // last of the levers was asking the ramp to hold attention with arithmetic.
+    // What that argument settles is where the run should *end*. What it does not
+    // settle is how much room there is inside it, and the chair's report is that
+    // there is none: *too fast, no time to stock candy at all*.
+    //
+    // So the levers-run-out point is answered by the tide instead, which is the
+    // one thing on the curve still growing when they have all stopped, and the
+    // target goes back out to make room for a maker to build into it. Measured
+    // **7.05 min on `WIDE`**, against 5.22 before this pass. What bought it is
+    // the patience column, ×1.2 across the table, which is the lever that most
+    // directly pays for a ladder: patience is the time a candy has to be *made*
+    // in, and the arrival interval only says how much is being asked for. See
+    // the plan's eleventh sitting for the arms — the arrival column and the
+    // score rate were both tried first and neither could reach 6 alone.
     const sorted = [...deathsOf(WIDE)].sort((a, b) => a - b);
     const median =
       sorted.length % 2 === 1
@@ -1156,27 +1182,54 @@ describe('the reference players, after the ramp went in', () => {
     // Said once for both ends, since a median outside the window fails one of
     // them and the reader wants the same number either way.
     const measured = `median death at ${(median / 60_000).toFixed(1)} min`;
-    expect(median, measured).toBeGreaterThanOrEqual(4 * 60_000);
-    expect(median, measured).toBeLessThanOrEqual(6 * 60_000);
+    expect(median, measured).toBeGreaterThanOrEqual(6 * 60_000);
+    expect(median, measured).toBeLessThanOrEqual(8 * 60_000);
 
     // And the long tail stays a tail. Not a bound on the median twice over: a
     // draw could sit dead centre and still send a quarter of its runs past the
     // point the levers ran out, which is the thing the target is against.
     //
-    // Measured **2** of 64 — the same draw the median above is read from, so
-    // the two halves of this test are no longer measured on different
-    // populations. Against 3 of 16 for the serve count on the same
-    // (mercy-fixed) draw. That is the one thing keying on score bought here,
-    // and the interquartile range says it more plainly: 4.3–6.7 min under the
-    // serve count against 4.7–6.2 under score, so the distribution closed in
-    // from *both* ends. A score is a read on how well a run is going where a
-    // serve count reads only how long it has been going on, so the runs that
-    // used to get away are the ones the curve now catches.
-    const late = sorted.filter((ms) => ms > 7 * 60_000);
+    // The mark moves with the target — one minute past its top, as it has been
+    // since it was written, so widening the window cannot quietly buy the tail
+    // an amnesty it did not earn. At 6–8 that is **nine minutes**, and measured
+    // it is **6 of 62** closed-out runs, comfortably inside the quarter.
+    //
+    // The distribution behind that, on the same draw: min 1.36, q1 6.07,
+    // median 7.05, q3 7.83, max 9.92, with 62 of 64 seeds closed out at all.
+    // The interquartile range is 1.8 min wide against 1.5 before this pass, so
+    // the target moved out without the spread opening much — which is the thing
+    // to check when a curve is loosened, since the cheap way to a later median
+    // is a handful of runs that simply never end.
+    const late = sorted.filter((ms) => ms > 9 * 60_000);
     expect(
       late.length * 4,
       `${late.length} of ${sorted.length} closed-out runs passed seven minutes`,
     ).toBeLessThanOrEqual(sorted.length);
+  });
+
+  it('says when each rush starts and when it lets go, once each', () => {
+    // The one-shot over a curve that rises and falls (`announceRush`). A speed
+    // rung only ever climbs, so its announcement needs no hysteresis and a
+    // high-water mark is memory enough; this edge goes both ways, and the
+    // failure it is guarding against is the cue flapping on the frames either
+    // side of the threshold.
+    //
+    // What that would look like here is two `true`s in a row, so alternation is
+    // the assertion — and it is a stronger one than "fires sometimes": the
+    // doorway is drawn from the same threshold, so a flapping bell would be a
+    // crowd flickering in and out at the edge of the eye that is steering.
+    target(batcherGoal).forEach((run) => {
+      const { rushes } = run;
+
+      // A run of this length meets several tides, and the first edge it can
+      // ever cross is into one: there is no tide at all before `RUSH_FROM_MS`.
+      expect(rushes.length).toBeGreaterThanOrEqual(4);
+      expect(rushes[0]).toBe(true);
+      rushes.forEach((on, index) => {
+        if (index === 0) return;
+        expect(on, `edge ${index} of ${rushes.join(',')}`).toBe(!rushes[index - 1]);
+      });
+    });
   });
 
   it('climbs the whole speed ladder and says so, once per rung', () => {
@@ -1319,10 +1372,23 @@ describe('the reference players, after the ramp went in', () => {
     // under the *worst* seed rather than at the mean (batch 2.69, peak 5,
     // carried 1.71), since what has to be true for the evidence to mean
     // anything is that no seed is quietly still playing the old game.
+    //
+    // **The batch floor came down to 2.0 in the eleventh sitting, and the draw
+    // it is protecting against moved the other way.** With patience ×1.2 the
+    // whole of `SWEEP` reads 2.89-3.51 — above the old 2.69-3.4 at both ends,
+    // which is what more time to build is supposed to buy — except seed 88,
+    // which reads 2.08. That seed is not a maker that stopped batching: it
+    // carries the *most* of any seed here (2.27 against a 1.84-1.96 typical) and
+    // peaks at 8, so it is building longer strands and cutting them into more,
+    // smaller batches. Anything that moves an arrival moves every draw after it,
+    // and this is one seed's plan re-rolling around the new timings. The floor
+    // follows the doctrine above and goes under the worst rather than the
+    // second-worst, because a floor fitted to the draw's shoulders is a floor
+    // that fails on the next re-roll for no reason anybody can act on.
     target(batcherGoal, SWEEP).forEach((batcher, index) => {
       const seed = `seed ${SWEEP[index]}`;
       expect(batcher.peakSegments, seed).toBeGreaterThan(4);
-      expect(batcher.meanBatch, seed).toBeGreaterThan(2.4);
+      expect(batcher.meanBatch, seed).toBeGreaterThan(2.0);
       // Pinned beside the batch it is quoted with. `meanSegments` is what the
       // old ceiling test held *under* 2 on every seed; it is a different
       // question from `meanBatch` — what the maker drags around all run, not
@@ -1394,8 +1460,8 @@ describe('the reference players, after the ramp went in', () => {
     // The twin sweep recorded in the plan crosses it on every arm it swept above
     // a twin constant of 0.6, so crossing is not by itself the achievement. What
     // makes the 34 of 64 the plan quotes the one worth naming is the death
-    // target: it and the patience −13% arm are the only two that also land the
-    // batcher's median inside the 4–6 window above, and that one pays for it
+    // target: it and the patience −13% arm are the only two that also landed the
+    // batcher's median inside the window in force then (4–6), and that one pays
     // with a quarter of the grinder's score. The rest buy the inversion by
     // letting runs live longer, which is the game getting easier rather than
     // batching getting paid.
@@ -1455,7 +1521,7 @@ describe('the reference players, after the ramp went in', () => {
 
   it('holds the window at the floor while the tide runs, and still fills it', () => {
     // The floor's own assertion, and the only one that plays a real run past
-    // the rush — `game.test.ts` cannot: `Game.rush` is 0 for a pinned stage, and
+    // the rush — `game.test.ts` cannot: the tide is dead for a pinned stage, and
     // an unattended game loses its three lives to walkouts around the 50-second
     // mark. That is now just past `RUSH_FROM_MS` rather than well short of it,
     // and it does not help: 50 s of ramp is the exact frame the first tide first
@@ -1514,9 +1580,25 @@ describe('the reference players, after the ramp went in', () => {
 
       // A run has to actually meet the tide for the rest to mean anything.
       expect(sampled, `seed ${seed}`).toBeGreaterThan(1_000);
-      // The floor holds. Not 1.0: a serve empties a place and the next tick
-      // fills it, so a handful of single-tick dips are the mechanism working.
-      expect(held / sampled, `seed ${seed} held`).toBeGreaterThan(0.99);
+      // The floor holds — and it is **0.95 rather than the 0.999 this read
+      // before the eleventh sitting**, which is the walk-in gap showing up in
+      // the one measurement that can see it.
+      //
+      // The old number was that high because a serve emptied a place and the
+      // *next tick* filled it: the floor skips the arrival clock entirely, so
+      // the replacement child was already at the counter 20 ms later and the
+      // window was never observably under its floor. That is precisely the
+      // teleport the chair reported as Sisyphus, and `WALK_IN_MS` is the
+      // answer — a child now takes a second to cross the room, which at 20 ms a
+      // tick is fifty of them. Measured 0.9518-0.9732 across these seeds, so
+      // three to five per cent of a running tide is a doorway with somebody
+      // walking through it.
+      //
+      // The bound is set under the worst of those rather than at the mechanism's
+      // arithmetic limit, because how *often* a place is emptied is the maker's
+      // business and re-rolls with the seed; what must not happen is the floor
+      // quietly ceasing to bind, which at anything like this figure it has not.
+      expect(held / sampled, `seed ${seed} held`).toBeGreaterThan(0.93);
       // And it is a floor rather than a ceiling: the ordinary clock is still
       // filling the window past what the tide insists on, all the way to the
       // table's own cap.
@@ -1531,7 +1613,7 @@ describe('the reference players, after the ramp went in', () => {
     // proposed on the assumption it would not. The echo takes that to **58%**
     // across `WIDE` without moving the tier shares the table asks for
     // (`orders.test.ts` pins the marginals) and without moving the death target
-    // (the median above still lands inside 4–6 minutes).
+    // (the median above still lands inside the window the ramp is aimed at).
     //
     // Read off the grinder, which takes no pairs at all: this is a property of
     // the window, and measuring it on a maker that exploits it would fold the
@@ -1591,28 +1673,50 @@ describe('the reference players, after the ramp went in', () => {
     // dyed for. This is the arm that holds the first still — the planner, capped
     // to the grinder's own one segment.
     //
-    // It carries what the grinder carries and scores a third of what the
-    // grinder scores (3 625 against 12 892). Whatever the ladder costs, most of
-    // the gap the open finding names is not the ladder.
+    // It carries what the grinder carries and scores well under half what the
+    // grinder scores — 6 190 against 13 573 pooled over `SWEEP`, and 3 625
+    // against 12 892 before the eleventh sitting widened the patience column.
+    // Whatever the ladder costs, most of the gap the open finding names is not
+    // the ladder.
+    //
+    // **The score claim is pooled rather than per seed, and that is a
+    // correction the file has had to make twice before** (see `pairOffered`
+    // above, and the median that moved to `WIDE`). Per seed it is a
+    // sixteen-sample comparison of two noisy runs, and on seed 777 it inverted
+    // — solo 7 976 against grinder 7 029 — because *the grinder* had a bad run
+    // there, not because the solo had a good one: every other seed reads
+    // 0.44-0.69 of the grinder, and 7 029 is half what a grinder normally makes
+    // on this draw. A claim about which strategy is better is a claim about the
+    // draw, so it is asked of the draw.
+    //
+    // The per-seed guard stays, loosened to what it is actually for: catching a
+    // solo that has started to *win*, rather than one seed where the control
+    // stumbled. Measured worst 1.13.
     const grinders = target(grinderGoal, SWEEP);
     const solos = target(soloPlannerGoal, SWEEP);
+    const pooled =
+      sum(solos.map((run) => run.game.state.score)) /
+      sum(grinders.map((run) => run.game.state.score));
 
+    expect(pooled, `pooled solo/grinder ${pooled.toFixed(3)}`).toBeLessThan(0.6);
     solos.forEach((solo, seed) => {
       const grinder = grinders[seed]!;
       // Same strand, by construction and then by measurement.
       expect(solo.meanBatch, `seed ${SWEEP[seed]}`).toBeLessThan(1.5);
-      // And nothing like the same score.
+      // And on no seed does it run away with the run.
       expect(solo.game.state.score, `seed ${SWEEP[seed]}`).toBeLessThan(
-        grinder.game.state.score,
+        grinder.game.state.score * 1.25,
       );
     });
   });
 });
 
 /**
- * The preview sweep — the campaign behind the twelfth sitting, and the first
- * one in this record whose control arm is the shipped game rather than another
- * roll of it.
+ * The preview sweep — the campaign behind the plan's "the maker was never short
+ * of information" pass, and the first one in this record whose control arm is
+ * the shipped game rather than another roll of it. (It said "the twelfth
+ * sitting" until the eleventh was written, which is one more argument for
+ * naming a pass rather than counting ahead to one that has not happened.)
  *
  * Skipped unless `SWEEP_PREVIEW` is set, because it is minutes of arithmetic
  * and CI has no use for it: `SWEEP_PREVIEW=0,1,2 npx vitest run
@@ -1734,7 +1838,7 @@ const previewArms = import.meta.env.SWEEP_PREVIEW as string | undefined;
         console.log(
           `  depth ${row.depth}: ahead ${row.ahead}/${WIDE.length} (needs >${WIDE.length / 2}), ` +
             `grinder ${drift >= 0 ? '+' : ''}${drift.toFixed(1)}% (needs within 5%), ` +
-            `median ${row.median} (needs 4–6), T3 ${row.t3}`,
+            `median ${row.median} (needs 6–8), T3 ${row.t3}`,
         );
       }
     }

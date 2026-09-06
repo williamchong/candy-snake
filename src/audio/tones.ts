@@ -42,6 +42,8 @@ export const CueKey = {
   Walkout: 'cue-walkout',
   /** The strand changing gear — one rung of design §7's speed ladder. */
   Quicken: 'cue-quicken',
+  /** The shop's bell, at both edges of design §7's tide — pitched by which. */
+  Rush: 'cue-rush',
   /** The run ending. */
   Over: 'cue-over',
 } as const;
@@ -128,6 +130,14 @@ export const semitones = (steps: number): number => SEMITONE ** steps;
  * stack two copies exactly.
  */
 const ONE_SHOT: RepeatSpec = { stepMs: 40, maxSteps: 2, semitones: 0, voices: 4 };
+
+/**
+ * How far the shop's bell drops to say a rush is *over* — a perfect fifth, the
+ * plainest "and back down again" the ear has. Down rather than up because the
+ * peak letting go is a release, and because the pair then reads as a question
+ * answered rather than as two separate alarms.
+ */
+const RUSH_OVER_RATE = semitones(-7);
 
 /**
  * The eleven voices. Values are in the units they are heard in — milliseconds
@@ -322,6 +332,40 @@ export const CUES: Record<CueKey, CueSpec> = {
     // still well under the run ending. Wants an ear all the same: `peak` says
     // how loud a cue is and nothing about whether it is heard.
     gain: 0.38,
+    repeat: ONE_SHOT,
+  },
+  // The shop's doorbell, and it is the one cue in this table that is played at
+  // two pitches meaning two different things: a rush starting and the same rush
+  // letting go (`RUSH_OVER_RATE`). A bell rather than a fanfare because the
+  // fiction already has one — children come through a door — and because the
+  // thing being announced is *arrival*, which is what a shop bell is for.
+  //
+  // Struck and brittle, so it takes `ratios` off the harmonic series the way
+  // the candy cues do: 2.76 and 5.40 are the first two partials of a struck bar,
+  // which is the shape of a bell and is unreachable from `partials` alone. It
+  // bends up a whole tone over its own length, so the edge it announces has a
+  // direction even before the pitch says which edge it was.
+  //
+  // Loud, and placed against the table rather than picked: at this gain it
+  // renders to a peak of **0.371**, which puts it above everything in the game
+  // except the run ending (0.406) — the serve is 0.362, the life lost 0.327 and
+  // the gear change 0.287. That is deliberate and it is the one cue here whose
+  // loudness is the point: this is the announcement the eleventh sitting asked
+  // for by name, and a tide the player cannot hear arriving is the complaint it
+  // was asked about. Long for the same reason — 460 ms is over twice the gear
+  // change, and a rush is rarer than a rung once the ladder has capped. Wants
+  // an ear all the same: `peak` says how loud a cue is and nothing about
+  // whether it is heard.
+  [CueKey.Rush]: {
+    durationMs: 460,
+    hz: 523,
+    bend: 1.12,
+    partials: [1, 0.42, 0.22, 0.1],
+    ratios: [1, 2.76, 5.4, 8.93],
+    noise: 0.06,
+    band: [800, 6000],
+    attack: 0.012,
+    gain: 0.42,
     repeat: ONE_SHOT,
   },
   // The shop closing: the walkout's shape, lower and longer, with the partials
@@ -728,6 +772,14 @@ export const cueFor = (event: GameEvent): Play | undefined => {
       // Rungs count from 1 — rung 0 is the speed every run opens at and is
       // never announced — so the scale is indexed from the step below it.
       return { key: CueKey.Quicken, rate: scaled(QUICKEN_SCALE, event.rung - 1) };
+
+    // One bell, two pitches: up for the doors opening and a fifth below for the
+    // last child of the peak being let through. Same voice, because it is the
+    // same event at its two ends — a second cue would have to be *learned* as
+    // the partner of the first, where a pitch drop on a sound already heard is
+    // read as an answer to it.
+    case 'rush-changed':
+      return { key: CueKey.Rush, rate: event.on ? 1 : RUSH_OVER_RATE };
 
     case 'game-over':
       return { key: CueKey.Over, rate: 1 };

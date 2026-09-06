@@ -192,6 +192,16 @@ export class GameScene extends Phaser.Scene {
       case 'dye-spawned':
         return;
 
+      // The tide's edges belong to the HUD and are drawn there: the doorway is
+      // the gauge (`ui/rushDoor.ts`), and it is fed from state every frame the
+      // way the patience bars are rather than from this one-shot. What the
+      // one-shot carries is the *bell*, which `audio` takes off the same batch.
+      // Nothing on the board changes — design §2 makes comfort a constraint and
+      // a rush is a minute long, so it is the one announcement here that must
+      // not be a flash across the play field.
+      case 'rush-changed':
+        return;
+
       default:
         // A new GameEvent member becomes a type error here rather than
         // quietly going unrendered.

@@ -4,7 +4,7 @@ import { CHOP_BLOCK_CELLS, COLS, ROWS, cellKey, eq, stepCell } from './board';
 import { BLUE, BROWN, PRIMARIES, RED, YELLOW, noServes, type Primary } from './colors';
 import { createCustomer } from './customers';
 import { SPEED_RUNGS } from './difficulty';
-import { DEFAULT_CONFIG, Game, STARTING_LIVES } from './game';
+import { DEFAULT_CONFIG, Game, STARTING_LIVES, WALK_IN_MS } from './game';
 import { MIXING_STAGE, type StageConfig } from './orders';
 import { createRng } from './rng';
 import { scoreServe } from './scoring';
@@ -931,6 +931,37 @@ describe('Game serving window', () => {
       MIXING_STAGE.arrivalIntervalMs * 2,
     );
   });
+
+  it('still makes every child walk in, however short the gap has got', () => {
+    // The floor under the rule above (`WALK_IN_MS`). "Emptier fills faster" and
+    // the rush floor both bottom out well under a second — the floor at nothing
+    // at all — and a shop that refills by teleport is what the eleventh sitting
+    // reported back as Sisyphus. So no two children arrive closer than the walk
+    // from the door, whatever the arithmetic upstream asks for.
+    //
+    // At a 300 ms interval every gap this window computes is under the walk:
+    // 100 ms, 200 ms, 300 ms for the three slots. So the spacing that comes out
+    // is the walk itself, three times over, rather than the interval.
+    const game = newGame({ stage: { ...MIXING_STAGE, arrivalIntervalMs: 300 } });
+    const arrivedAt: number[] = [];
+
+    for (let elapsed = 0; elapsed < 4_000; elapsed += 10) {
+      const events = game.step(10, NO_TURNS);
+      for (const event of events) {
+        if (event.type === 'customer-arrived') arrivedAt.push(game.state.elapsedMs);
+      }
+    }
+
+    expect(arrivedAt).toHaveLength(MIXING_STAGE.maxQueue);
+    // Gaps, not stamps: when the *first* child lands is the interval's business
+    // and this rule has nothing to say about it.
+    const gaps = arrivedAt.slice(1).map((at, index) => at - arrivedAt[index]!);
+    for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(WALK_IN_MS);
+    // And it is a floor rather than a second interval stacked on top: the clock
+    // was paid while the child was walking, so they arrive the moment the
+    // doorway clears rather than starting the whole gap again.
+    for (const gap of gaps) expect(gap).toBe(WALK_IN_MS);
+  });
 });
 
 describe('Game order preview', () => {
@@ -1334,6 +1365,23 @@ describe('Game opening levels', () => {
     run(game, GAP_MOVES);
 
     expect(game.state.customers[0]?.want).toBe(shown);
+  });
+
+  it('leaves the opening levels to pace their own window', () => {
+    // Level 4 halves the beat so its two children read as a pair (design §7),
+    // which is under the walk — and the tutorial is exempt for exactly that
+    // reason: it is the one place the game already got this right, and a floor
+    // over the top would overrule it.
+    expect(TUTORIAL_ARRIVAL_GAP_MS / 2).toBeLessThan(WALK_IN_MS);
+
+    const game = opening();
+    serveLevels(game, game.tutorial.length - 1);
+    const level = game.openingLevel;
+
+    expect(level?.children).toBe(2);
+    // Both at the window inside one walk, which the endless rule would forbid.
+    run(game, Math.ceil(WALK_IN_MS / MOVE_MS));
+    expect(game.state.customers).toHaveLength(2);
   });
 
   it('hands over on the tutorial’s beat rather than a whole arrival interval', () => {

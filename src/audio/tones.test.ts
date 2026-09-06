@@ -211,6 +211,21 @@ describe('cueFor', () => {
     expect(Math.max(...rates)).toBeLessThan(2);
   });
 
+  it('answers the shop bell a fifth lower when the rush lets go', () => {
+    // One voice at two pitches, which is the whole of how the pair reads as a
+    // question and its answer rather than as two alarms (design §7's tide).
+    // Same key or the ear learns two sounds where the game has one event.
+    const opens = cueOf({ type: 'rush-changed', on: true });
+    const shuts = cueOf({ type: 'rush-changed', on: false });
+
+    expect(shuts.key).toBe(opens.key);
+    // A perfect fifth down: seven semitones, which is a rate of 2 ** (-7/12).
+    expect(shuts.rate).toBeCloseTo(opens.rate * 2 ** (-7 / 12));
+    // Down and not up. The peak letting go is a release, and a bell that rose
+    // to say a rush was over would be the same news as the one that started it.
+    expect(shuts.rate).toBeLessThan(opens.rate);
+  });
+
   it('stays silent for what the board already says', () => {
     // The same silences `GameScene.play` documents, plus the crumble: it fires
     // once per block of a severed strand and the crack has spoken for it.

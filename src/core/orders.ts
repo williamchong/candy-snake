@@ -62,7 +62,7 @@ export interface StageConfig {
 export const MIXING_STAGE: StageConfig = {
   mix: [10, 50, 40],
   maxQueue: 3,
-  patienceMs: 35_000,
+  patienceMs: 42_000,
   arrivalIntervalMs: 12_000,
   moveIntervalMs: 200,
 };

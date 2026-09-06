@@ -312,8 +312,8 @@ export type GameEvent =
    * Speed is the one that only ever showed up as a feeling, so it is the one
    * that has to be *said*: this is what the Quicken cue and the head's pulse
    * hang off. Nothing in the rules reads it — the new interval is already in
-   * `stage.moveIntervalMs` — which is exactly the arrangement `Game.rush` has
-   * with the doorway.
+   * `stage.moveIntervalMs` — which is exactly the arrangement `Game.rushMeter`
+   * has with the doorway.
    */
   | {
       readonly type: 'speed-raised';
@@ -329,6 +329,24 @@ export type GameEvent =
        */
       readonly top: boolean;
     }
+  /**
+   * The tide crossed into a rush, or back out of it (`core/difficulty.ts`'s
+   * `rushMeterAt`).
+   *
+   * The doorway has drawn the tide's *strength* since it was built, and a
+   * strength is a thing the player watches rather than a thing the game says.
+   * The eleventh sitting asked the three questions a watched crowd cannot
+   * answer — am I in a rush, does it end, when is the next one — and this is
+   * the first half of the answer: the two edges, said out loud at the moment
+   * they are crossed, the way a new speed rung is.
+   *
+   * It is a one-shot over a continuous curve, so it follows `speed-raised`
+   * exactly: `Game` remembers which side of the edge the run was last on,
+   * because without a memory an event over a threshold either fires every step
+   * or never. Nothing in the rules reads it — the floor is already binding in
+   * `admitCustomer` — which is the same arrangement `rush` has with the doorway.
+   */
+  | { readonly type: 'rush-changed'; readonly on: boolean }
   /** The run, as the score screen has to tell it — see `RunSummary`. */
   | ({ readonly type: 'game-over' } & RunSummary);
 

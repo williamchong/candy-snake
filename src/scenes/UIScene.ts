@@ -226,7 +226,7 @@ export class UIScene extends Phaser.Scene {
     // Real elapsed time, not the core's fixed slice: the children walk on the
     // display's clock, the way every other tween in the HUD does.
     this.queue.render(state.customers, delta);
-    this.door.render(this.core.rush);
+    this.door.render(this.core.rushMeter);
 
     if (state.lives !== this.shownLives) {
       this.shownLives = state.lives;

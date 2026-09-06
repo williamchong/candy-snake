@@ -11,6 +11,7 @@ import {
   RUSH_FULL_MS,
   RUSH_FLOOR_FROM,
   rushFloorAt,
+  rushMeterAt,
   SETTLED_MS,
   arrivalRateAt,
   rampMs,
@@ -435,12 +436,24 @@ describe('the difficulty curve', () => {
       // The non-stochastic half of "the rush got bigger", and the one worth
       // reaching for first: a longer peak against a shorter lull is more demand
       // per cycle by construction, with no seeds in it and nothing to re-roll.
-      // Measured over one period at 10 ms, the mean arrival rate goes **1.5275
-      // at the preview shape → 1.7475 grown**, 14% more demand a minute.
+      // Measured over one period at 10 ms, the mean arrival rate goes **1.5054
+      // at the preview shape → 1.5925 grown**, 5.8% more demand a minute.
+      //
+      // **Those two numbers used to be 1.5275 and 1.7475, and the eleventh
+      // sitting halved the gap between them on purpose.** Deepening the lull
+      // (`CALM_RATE` 0.95 → 0.65) is worth more to the preview column than to
+      // the grown one, because the preview's lull is 30 s long and the grown
+      // one's is 22 — so a cheaper lull pays the smaller tide more, and the
+      // growth reads as less. That is a real cost and it is paid for the swing
+      // *within* a cycle, which is the reading the chair was actually giving:
+      // lull to peak is now 0.65 → 2.6, a factor of four against the old 2.7,
+      // so the tide is far more legible as a tide even though it grows less
+      // across the run.
       //
       // What the sweep then has to say separately — and does, in the plan's
       // preview-tide sitting — is that a maker with stock in hand serves much of
-      // that surplus off the rack, so 14% more arrivals is not 14% harder.
+      // that surplus off the rack, so more arrivals is not proportionally
+      // harder.
       const meanRate = (from: number): number => {
         const samples = 600;
         let total = 0;
@@ -452,11 +465,95 @@ describe('the difficulty curve', () => {
       };
       const grown = meanRate(LAST.atMs + RUSH_PERIOD_MS * 3);
 
-      expect(grown).toBeGreaterThan(1.7);
-      expect(grown).toBeLessThan(1.8);
+      expect(grown).toBeGreaterThan(1.55);
+      expect(grown).toBeLessThan(1.65);
       // And strictly more than the same cycle read while it is still growing,
       // which is what makes it a growth rather than a step at one anchor.
       expect(grown).toBeGreaterThan(meanRate(RUSH_FROM_MS + RUSH_PERIOD_MS));
+    });
+
+    describe('the gauge the doorway is drawn from', () => {
+      /** One grown cycle, walked a tenth of a second at a time. */
+      const CYCLE = Array.from(
+        { length: 600 },
+        (_unused, step) => RUSH_FULL_MS + RUSH_PERIOD_MS * 2 + step * 100,
+      );
+
+      it('says a rush is on exactly when the window is being held open', () => {
+        // The claim the whole widget rests on, and the one drift this file has
+        // already had to close once between the doorway and the floor: what the
+        // player is *told* has to be what the window is *doing*. `rushMeterAt`
+        // solves its edges against `RUSH_FLOOR_FROM`, so this is that solution
+        // checked back against the rule it was solved from rather than against
+        // a second copy of the threshold.
+        const disagree = CYCLE.filter(
+          (pos) => rushMeterAt(pos, 0).on !== rushFloorAt(pos, 0) > 0,
+        );
+
+        expect(disagree).toEqual([]);
+      });
+
+      it('fills toward a rush and drains through one', () => {
+        // The two readings that answer *when is the next* and *when does this
+        // end*. Direction is the whole of the information: a crowd rising and a
+        // crowd falling look identical at any one moment, which is why the raw
+        // intensity could not carry this.
+        const climbs: number[] = [];
+        const falls: number[] = [];
+        for (const pos of CYCLE) {
+          const here = rushMeterAt(pos, 0);
+          const next = rushMeterAt(pos + 100, 0);
+          // Only inside a run of one state: the step across an edge is where
+          // the gauge resets from 1 to 0 or 0 to 1 by design.
+          if (here.on !== next.on) continue;
+          (here.on ? falls : climbs).push(next.fill - here.fill);
+        }
+
+        expect(climbs.length).toBeGreaterThan(100);
+        expect(falls.length).toBeGreaterThan(50);
+        expect(Math.min(...climbs)).toBeGreaterThan(0);
+        expect(Math.max(...falls)).toBeLessThan(0);
+      });
+
+      it('lands on 1 as a rush starts and on 0 as it ends', () => {
+        // What makes the doorway's three figures mean something: full at the
+        // instant the window starts being held, empty at the instant it stops.
+        // Sampled either side of each edge rather than at it, since the edge is
+        // a crossing and not a sample.
+        for (const pos of CYCLE) {
+          const here = rushMeterAt(pos, 0);
+          const next = rushMeterAt(pos + 100, 0);
+          if (here.on === next.on) continue;
+
+          // Into a rush: the gauge was nearly full and is now nearly full again
+          // from the other side. Out of it: nearly empty, both ways.
+          const expected = next.on ? 1 : 0;
+          expect(here.fill, `at ${pos}`).toBeCloseTo(expected, 1);
+          expect(next.fill, `at ${pos}`).toBeCloseTo(expected, 1);
+        }
+      });
+
+      it('stays inside its own ends wherever the ramp is read', () => {
+        // Including past the backstop, which the tide runs through and the
+        // anchor table does not: a gauge that clamped with the table would
+        // freeze at whatever phase fifteen minutes lands on, and the longest
+        // runs would be the only ones whose HUD had stopped telling the truth.
+        const far = Array.from(
+          { length: 400 },
+          (_unused, step) => LAST.atMs + step * 997,
+        );
+        for (const pos of [...CYCLE, ...far]) {
+          const { fill } = rushMeterAt(pos, 0);
+          expect(fill, `at ${pos}`).toBeGreaterThanOrEqual(0);
+          expect(fill, `at ${pos}`).toBeLessThanOrEqual(1);
+        }
+      });
+
+      it('shows nothing at all before the tide exists', () => {
+        for (const pos of [0, RUSH_FROM_MS / 2, RUSH_FROM_MS]) {
+          expect(rushMeterAt(pos, 0)).toEqual({ on: false, fill: 0 });
+        }
+      });
     });
 
     it('keeps the swell nine seconds long however big the tide gets', () => {
