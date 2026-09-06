@@ -308,11 +308,42 @@ which is what the `muted` setting (§10) is applied to.
 - Both adapters normalize to a shared `DirectionQueue` (max 2 buffered turns,
   rejects 180° reversals against the *queued* direction, not just current —
   the classic snake input bug to avoid).
-- **Touch:** pointer-down/up delta; dominant axis wins; ~20 px dead zone;
-  swipes register on release OR after passing a threshold mid-drag (feels
-  snappier). Virtual D-pad (optional, settings) feeds the same queue.
-- Phaser's `Input` plugin handles mouse/touch unification; keyboard via
-  `addKeys`.
+- **Touch:** pointer-down/up delta; dominant axis wins; **13 px** dead zone
+  (`SWIPE_THRESHOLD_PX` — it was 20 until the first device report found that
+  commits the turn a block late); swipes register on release OR after passing
+  the threshold mid-drag (feels snappier). Virtual D-pad (optional, settings)
+  feeds the same queue.
+- Phaser's `Input` plugin handles mouse/touch unification; keyboard is bound as
+  `keydown-<KEY>` listeners (`input/keyboard.ts`), not `addKeys`.
+- **Playing the game must never move the page**, and the two input paths need
+  opposite amounts of help to keep that true.
+  - **Touch was already safe, twice over.** Ablated in a mobile context: with
+    `#app canvas { touch-action: none }` removed the page still holds, because
+    Phaser's `TouchManager` calls `preventDefault` on the canvas; with Phaser's
+    handlers neutered it still holds, because of the CSS. Only removing both
+    scrolls it — 617–625 px over three drags. Zoom has three blockers, the
+    viewport meta among them. The guard is **canvas-scoped**, and is sufficient
+    only because the canvas fills the viewport: a DOM overlay added beside it
+    would be unguarded.
+  - **The keyboard had no such luck, and the default is the trap.** Phaser
+    captures *no* key unless asked — `input.keyboard.capture` defaults to empty
+    and `KeyboardManager` only calls `preventDefault` on codes in it — so
+    binding a listener reads the key and lets the browser scroll on it anyway.
+    Measured: 6 arrow presses moved a scrollable page 233 px. Every key the game
+    binds that a browser scrolls on is therefore captured explicitly
+    (`PAGE_SCROLL_KEYS`, and the steering table itself). **Captures are global**,
+    not per-scene, so the two call sites overlap deliberately rather than by
+    accident.
+  - **It needs somewhere to scroll to be visible, which is how it hid.** The
+    page is normally exactly the viewport's height; an inline canvas leaving
+    four pixels of descender space under itself was enough (`display: block`
+    fixes that at the source). The smoke driver now fails on both halves — any
+    overflow at all, and any arrow key moving the page.
+  - **Open, and unverifiable headless:** iOS Safari ignores `user-scalable=no`,
+    so pinch there rests on `touch-action` and Phaser alone. The usual extra is
+    a Safari-only `gesturestart`/`gesturechange`/`gestureend` `preventDefault`;
+    it is not built, because a mitigation nothing in this repo can exercise is
+    one that rots. Wants a real device, like the swipe threshold above.
 
 ## 9. Responsive layout & scaling
 
