@@ -3372,9 +3372,11 @@ step size nobody would ever be told about.
 
 **Two design rules ruled out the obvious version of "like fever mode".** §11
 allows no prose on the play screen and §4 keeps hue for candies, so neither the
-word nor a colour was available; the state change is carried by **value and
-position** instead — silhouettes at half alpha behind the wall while a rush is
-coming, wholly present and a step into the room while one runs. And it goes at
+word nor a colour was available; the first cut carried the state change on
+**value and position** instead — silhouettes at half alpha behind the wall while
+a rush is coming, wholly present and a step into the room while one runs. That
+was not enough on its own and **motion** was added over it; both halves survive,
+and the paragraph below is where that was settled. And it goes at
 the door rather than on the HUD, which is §11's own rule *and* a measurement:
 the free band under the hearts is **16 px** on every phone held sideways
 (812×375, 736×414, 568×320), so a new widget would have been fighting the
@@ -3389,7 +3391,9 @@ other two said only "more".
 
 **The first cut of the doorway was too subtle, and the chair redesigned it.**
 Value and position — half a silhouette's alpha, half a huddle of step — left two
-states that looked alike from the corner of an eye that is steering. The fix came
+states that looked alike from the corner of an eye that is steering. Both are
+still there, and a rushing figure is still the brighter and the further in; what
+follows is added over them rather than in place of them. The fix came
 back from the chair as three lines: *crowd appear 1 by 1 but they dont move at
 all; when 3 crowd appears, rush start, all 3 crowd starts moving; when rush is
 expiring, remove crowd 1 by 1.* That is better than what it replaced for a reason
@@ -3411,12 +3415,16 @@ across the boundary the count does not move and the motion does. Simulated over
 one grown cycle: hidden, then 1 still at 15.5 s, 2 at 25.0, 3 at 34.3, **moving
 at 35.0**, down to 2 at 44.8 and 1 at 55.5.
 
-That last change gave back an optimisation the efficiency pass had found dead. A
-gauge fills through a lull where the raw intensity sat flat at zero, so for one
-revision the widget's empty-doorway short-circuit fired on none of a 15-minute
-run's 42 000 frames past the preview mark, against 15 717 before. With a
-countable crowd there is genuinely nobody to draw below `FIRST_IN`, and it fires
-again.
+That last change gave back part of an optimisation the efficiency pass had found
+dead. A gauge fills through a lull where the raw intensity sat flat at zero, so
+for one revision the widget's empty-doorway short-circuit fired on none of a
+15-minute run's 42 999 frames past the preview mark, against 15 717 before. With
+a countable crowd there is genuinely nobody to draw below `FIRST_IN`, and it
+fires on **5 490 of them, 12.8%** — about a third of what the old reading saved,
+and the honest ceiling on it, since that is the first 27% of every lull and the
+rest of one now has somebody standing in the doorway. Worth saying plainly that
+the cycles are not the reason: 5 490 frames at 26 ns is 0.14 ms across the run.
+The guard is kept because an empty doorway is a state, not a crowd of nobody.
 
 **Both edges are also sounded** — one bell at two pitches, up for the doors
 opening and a fifth below for the peak letting go, so the pair reads as a

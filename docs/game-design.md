@@ -770,8 +770,10 @@ than curve, and it lives in `Game` rather than in the table.
   - **Motion is the channel because it is the only one that survives out
     here.** §4 keeps hue for candies and §11 keeps prose off the play screen, so
     neither a colour nor the word is available — and the first cut spent what
-    was left, half a silhouette's alpha and half a step forward, which read as
-    two states that looked alike. The doorway is only ever seen from the corner
+    was left, half a silhouette's alpha and half a step forward. Those both
+    remain, and a rushing figure is still the brighter and the further in; they
+    were simply not enough on their own, and read as two states that looked
+    alike. The doorway is only ever seen from the corner
     of an eye that is steering, where a change of value is weak and a change of
     movement is not; it is the lesson the urgency pulse already recorded. It is
     this way round and not the reverse, because bobbing while waiting would put
