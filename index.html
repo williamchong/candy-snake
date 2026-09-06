@@ -51,6 +51,23 @@
       }
       #app canvas {
         touch-action: none;
+        /* A long press over a canvas raises iOS's Save Image sheet and starts a
+           selection on Android, either of which lands on top of a run in
+           progress — the same complaint as a page that scrolls under one, and
+           the same answer: while the game is being played, nothing but the game
+           moves. Unverifiable in headless Chromium (these are real-device
+           behaviours), which is why they are the standard properties rather
+           than anything clever. */
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        /* Not decoration: an inline canvas sits on a text baseline, so the line
+           box leaves descender space under it and the page is four pixels
+           taller than the viewport. That is enough for an arrow key to scroll
+           the whole game a few pixels mid-run. `block` takes the canvas off the
+           baseline and the overflow with it. */
+        display: block;
       }
     </style>
   </head>
