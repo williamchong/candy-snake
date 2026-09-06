@@ -3387,6 +3387,37 @@ are now the same moment by construction. Before, the door drew raw intensity,
 so the *first* of three figures landed on the moment the floor engaged and the
 other two said only "more".
 
+**The first cut of the doorway was too subtle, and the chair redesigned it.**
+Value and position — half a silhouette's alpha, half a huddle of step — left two
+states that looked alike from the corner of an eye that is steering. The fix came
+back from the chair as three lines: *crowd appear 1 by 1 but they dont move at
+all; when 3 crowd appears, rush start, all 3 crowd starts moving; when rush is
+expiring, remove crowd 1 by 1.* That is better than what it replaced for a reason
+this file had already written down one paragraph up — a texture swap is invisible
+in peripheral vision, and the doorway is only ever read peripherally, so **motion
+is the one channel that survives out there** and it was being spent on the wait
+instead of on the rush. The reverse arrangement, bobbing while waiting, puts the
+loud channel on the quiet state and makes the rush the moment everything goes
+still, which is a signal the eye is built to ignore.
+
+It also exposed a second fault the contrast argument had hidden: presence ramped
+across each figure's whole share of the gauge, so at the half mark the doorway
+held one solid figure, one at three quarters and one at a half. **There was never
+a countable number up there.** A figure is now in or out, crossing in a second or
+so (`FADE`), and the two states step at different marks so the ends line up —
+gathering, figure *n* is in past `(n + 1) / CROWD`, so the third lands exactly as
+the gauge reaches 1; running, it stays while the gauge is over `n / CROWD`. Read
+across the boundary the count does not move and the motion does. Simulated over
+one grown cycle: hidden, then 1 still at 15.5 s, 2 at 25.0, 3 at 34.3, **moving
+at 35.0**, down to 2 at 44.8 and 1 at 55.5.
+
+That last change gave back an optimisation the efficiency pass had found dead. A
+gauge fills through a lull where the raw intensity sat flat at zero, so for one
+revision the widget's empty-doorway short-circuit fired on none of a 15-minute
+run's 42 000 frames past the preview mark, against 15 717 before. With a
+countable crowd there is genuinely nobody to draw below `FIRST_IN`, and it fires
+again.
+
 **Both edges are also sounded** — one bell at two pitches, up for the doors
 opening and a fifth below for the peak letting go, so the pair reads as a
 question and its answer. Placed against the table rather than picked: it renders

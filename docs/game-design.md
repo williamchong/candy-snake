@@ -760,14 +760,27 @@ than curve, and it lives in `Game` rather than in the table.
   at any one moment — which is what the chair reported at the eleventh sitting,
   having been given the tide's raw strength to read. So the doorway is drawn
   from a **gauge** instead: three figures that fill to exactly the instant a
-  rush starts, and drain to exactly the instant it ends. While one is only
-  coming they are silhouettes behind the wall; while one is running they are
-  wholly present and a step further into the room.
-  - **Value and position carry it, because nothing else may.** §4 keeps hue for
-    candies and §11 keeps prose off the play screen, so neither a colour nor the
-    word is available. Doubling the presence and stepping forward is a large
-    change at the edge of the eye that is steering, which is the only place this
-    is ever read from.
+  rush starts, and drain to exactly the instant it ends.
+  - **They gather still, and move once it is a rush.** One arrives, then two,
+    then three — planted, waiting — and the moment the third is in, the rush is
+    on and all three start shuffling. As it spends itself they leave one at a
+    time. So the *count* says how close and how long, and the *motion* says
+    which side of the edge you are on; across the boundary itself the count does
+    not change at all, only the movement does.
+  - **Motion is the channel because it is the only one that survives out
+    here.** §4 keeps hue for candies and §11 keeps prose off the play screen, so
+    neither a colour nor the word is available — and the first cut spent what
+    was left, half a silhouette's alpha and half a step forward, which read as
+    two states that looked alike. The doorway is only ever seen from the corner
+    of an eye that is steering, where a change of value is weak and a change of
+    movement is not; it is the lesson the urgency pulse already recorded. It is
+    this way round and not the reverse, because bobbing while waiting would put
+    the loud channel on the quiet state and make the rush the moment everything
+    went *still*.
+  - **The crowd is a count, not a fade.** Each figure is in or out, crossing in
+    a second or so, because a doorway holding one solid figure, one at three
+    quarters and one at a half is not a crowd of two or of three — it is a
+    smear, and nothing read in a fifth of a second can be read off a smear.
   - **It goes at the door rather than on the HUD**, per §11's rule that
     announcements go where the player is already looking — and measured: the
     free band under the hearts falls to 16 px on every phone held sideways, so a
