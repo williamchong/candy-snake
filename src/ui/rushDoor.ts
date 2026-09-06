@@ -99,12 +99,62 @@ const RUSH_ALPHA = 1;
 const STEP_IN = 0.5;
 
 /**
- * A slow shuffle. Design §2's comfort constraint binds this the way it binds
- * the patience alarm: a breath, not a blink — and each of them on their own
- * phase, or three bobbing in lockstep reads as one object.
+ * How much of the gauge a figure takes to arrive or leave — and it is small on
+ * purpose, because what this widget is being asked for is a **count**.
+ *
+ * The first cut ramped each figure across its whole share of the gauge, which
+ * meant three figures at three different alphas for most of a cycle: at the
+ * half mark, one solid, one at three quarters and one at a half. That is not a
+ * crowd of two or of three, it is a smear, and a smear is not something an eye
+ * taken off the strand for a fifth of a second can read. The chair's report was
+ * that the doorway was too subtle, and this is the half of it that is not about
+ * contrast at all — there was never a countable number up there.
+ *
+ * So a figure is at 0 or 1 for about ninety per cent of the gauge and crosses in
+ * between, which at the grown shape is a second or two either way: quick enough
+ * that the count is always crisp, slow enough that nobody pops into existence
+ * (design §2's comfort constraint, and the same reason nothing else here cuts).
  */
-const BOB_MS = 900;
-const BOB_PX = 5;
+const FADE = 0.06;
+
+/**
+ * Where the first figure starts to arrive — the earliest gauge reading that
+ * draws anything at all, so the guard in `render` can say "nobody yet" without
+ * walking the crowd to find out.
+ *
+ * Read off the two constants above rather than written down, because a doorway
+ * that hid past the point its first figure was due would be a crowd that never
+ * came.
+ */
+const FIRST_IN = 1 / CROWD - FADE;
+
+/**
+ * The shuffle, and **it only runs while a rush does**.
+ *
+ * That is the whole of how this widget says *now*, and it is the channel the
+ * file's own opening paragraph says to spend: a texture swap is invisible in
+ * peripheral vision, and the doorway is only ever read peripherally, by an eye
+ * that is steering. Motion is the one thing that survives out there.
+ *
+ * So the crowd **gathers still** and **moves once it is a rush**. Half a
+ * silhouette's alpha and half a huddle of step were what the first cut spent,
+ * and read from the corner of the eye they were not enough — the chair's report
+ * was that the two states looked alike. Stillness against motion is a change
+ * nobody has to be looking at to notice, and it costs no geometry.
+ *
+ * It is deliberately *this* way round rather than the reverse. Bobbing while
+ * waiting and planting on arrival is the more literal reading of children in a
+ * doorway, and it puts the loud channel on the quiet state: a lull would twitch
+ * for thirty seconds and the rush would be the moment everything went still,
+ * which is a signal the eye is built to ignore.
+ *
+ * Design §2's comfort constraint binds the numbers the way it binds the patience
+ * alarm: a breath, not a blink. 1.4 Hz is well under anything that could read as
+ * a strobe, and each figure keeps its own phase — three bobbing in lockstep is
+ * one object, not a crowd.
+ */
+const BOB_MS = 700;
+const BOB_PX = 7;
 /** Enough of a period to keep them out of step, and not a neat fraction of it. */
 const BOB_STAGGER = 0.37;
 
@@ -123,17 +173,16 @@ export class RushDoor {
    */
   private intoShop = 1;
   /**
-   * So a run's first minute — before `RUSH_FROM_MS`, when there is no tide at
-   * all — costs one comparison a frame rather than three writes.
+   * So a doorway with nobody in it — the run's first minute, before the tide
+   * exists at all, and the head of every lull after it — costs one comparison a
+   * frame rather than three writes.
    *
-   * **It used to save half of every period after that too, and does not any
-   * more.** Reading the raw intensity, the doorway was empty through every
-   * lull; reading the gauge it is *filling* through every lull, which is the
-   * whole point of the gauge. Swept over a 15-minute run at 20 ms, the
-   * short-circuit fires on 0 of 42 000 frames past the preview mark, against
-   * 15 717 of them before. So this flag is now doing one job rather than two,
-   * and the cost of that is three sprite writes and a sine on every frame of a
-   * run — sub-microsecond against 16.7 ms, and measured rather than assumed.
+   * It nearly stopped doing the second of those. A gauge *fills* through a lull
+   * where the raw intensity this widget used to read sat flat at zero, so for
+   * one revision the short-circuit fired on none of a 15-minute run's 42 000
+   * frames past the preview mark, against 15 717 before. Making the crowd a
+   * countable number rather than a fade gave it back: below `FIRST_IN` there is
+   * genuinely nobody to draw, whatever the gauge reads.
    *
    * Starts `false` against sprites built invisible, deliberately: the first
    * calm frame then does one redundant pass and leaves the two agreeing, where
@@ -195,10 +244,10 @@ export class RushDoor {
    */
   render(meter: RushMeter): void {
     const { on, fill } = meter;
-    // Nothing to draw only when the gauge is empty *and* not running: a rush
-    // that has just drained to its last figure is still a rush, and hiding it a
+    // Nothing to draw until the first figure is due, and never while a rush is
+    // running: a rush down to its last figure is still a rush, and hiding it a
     // frame early would take the doorway down before the bell says it is over.
-    if (!on && fill <= 0) {
+    if (!on && fill < FIRST_IN) {
       if (this.hidden) return;
       this.hidden = true;
       for (const figure of this.figures) figure.setVisible(false);
@@ -211,18 +260,28 @@ export class RushDoor {
     const now = this.scene.time.now;
 
     for (const [index, figure] of this.figures.entries()) {
-      // They arrive one at a time as the gauge fills, so the doorway fills
-      // rather than switching on — the same reason the tide itself eases in —
-      // and they leave one at a time as it drains. The `+ 1` is what makes the
-      // two ends line up: filling, the last figure completes at 1; draining,
-      // the first is gone by the time the gauge reaches 0.
-      const share = (index + 1) / CROWD;
-      const presence = Math.min(fill / share, 1);
-      // `% 1` is not wrapping the sine, which is periodic anyway — it keeps the
-      // argument small as `scene.time.now` climbs into the millions, so the bob
-      // does not coarsen over a long run.
-      const bob =
-        Math.sin(((now / BOB_MS + index * BOB_STAGGER) % 1) * 2 * Math.PI) * BOB_PX;
+      // One figure per step of the gauge, arriving and leaving one at a time.
+      //
+      // **The two states step at different marks, and that is what lines the
+      // ends up.** Gathering, figure *n* is in once the gauge passes
+      // `(n + 1) / CROWD`, so the last of them lands exactly as the gauge
+      // reaches 1 — which is exactly when the rush starts, by construction
+      // (`rushMeterAt` solves its edges against `RUSH_FLOOR_FROM`). Running, it
+      // stays while the gauge is over `n / CROWD`, so the crowd goes 3, 2, 1 as
+      // the rush spends itself and the doorway is empty as it ends.
+      //
+      // Read across the boundary the count does not jump: a full doorway
+      // gathering becomes a full doorway rushing, and the only thing that
+      // changes at that instant is that they start moving.
+      const lo = on ? index / CROWD : (index + 1) / CROWD - FADE;
+      const presence = Math.min(Math.max((fill - lo) / FADE, 0), 1);
+      // Still until the rush is actually on (`BOB_MS`). `% 1` is not wrapping
+      // the sine, which is periodic anyway — it keeps the argument small as
+      // `scene.time.now` climbs into the millions, so the bob does not coarsen
+      // over a long run.
+      const bob = on
+        ? Math.sin(((now / BOB_MS + index * BOB_STAGGER) % 1) * 2 * Math.PI) * BOB_PX
+        : 0;
 
       figure
         .setVisible(true)
