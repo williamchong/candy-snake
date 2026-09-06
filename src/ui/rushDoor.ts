@@ -118,15 +118,25 @@ const STEP_IN = 0.5;
 const FADE = 0.06;
 
 /**
- * Where the first figure starts to arrive — the earliest gauge reading that
- * draws anything at all, so the guard in `render` can say "nobody yet" without
- * walking the crowd to find out.
- *
- * Read off the two constants above rather than written down, because a doorway
- * that hid past the point its first figure was due would be a crowd that never
- * came.
+ * The gauge reading at which figure `index` starts to arrive, while the crowd is
+ * still gathering. Figure *n* is fully in at `(n + 1) / CROWD`, so the last of
+ * them lands exactly as the gauge reaches 1 — which is exactly when the rush
+ * starts, by construction (`rushMeterAt` solves its edges against
+ * `RUSH_FLOOR_FROM`).
  */
-const FIRST_IN = 1 / CROWD - FADE;
+const arrivesAt = (index: number): number => (index + 1) / CROWD - FADE;
+
+/**
+ * The earliest gauge reading that draws anything at all, so the guard in
+ * `render` can say "nobody yet" without walking the crowd to find out.
+ *
+ * **Taken from `arrivesAt` rather than written out again**, which is the whole
+ * point: the guard and the crowd have to agree about when the first figure is
+ * due, and a second copy of that arithmetic would let them drift on any reshape
+ * of the threshold — leaving a doorway that hid past the point somebody was
+ * supposed to be standing in it, with nothing to catch it but this paragraph.
+ */
+const FIRST_IN = arrivesAt(0);
 
 /**
  * The shuffle, and **it only runs while a rush does**.
@@ -179,10 +189,18 @@ export class RushDoor {
    *
    * It nearly stopped doing the second of those. A gauge *fills* through a lull
    * where the raw intensity this widget used to read sat flat at zero, so for
-   * one revision the short-circuit fired on none of a 15-minute run's 42 000
+   * one revision the short-circuit fired on none of a 15-minute run's 42 999
    * frames past the preview mark, against 15 717 before. Making the crowd a
-   * countable number rather than a fade gave it back: below `FIRST_IN` there is
-   * genuinely nobody to draw, whatever the gauge reads.
+   * countable number rather than a fade gave **part** of it back — measured,
+   * **5 490 frames, 12.8%** — because below `FIRST_IN` there is genuinely
+   * nobody to draw, whatever the gauge reads. That is the first 27% of every
+   * lull, which is `FIRST_IN` itself and is the honest ceiling on it: the rest
+   * of a lull now has somebody standing in the doorway, and drawing them is the
+   * point rather than a cost.
+   *
+   * The cycles are not why it is here. 5 490 skipped frames at 26 ns is 0.14 ms
+   * across a fifteen-minute run, which is nothing; the guard earns its place by
+   * saying that an empty doorway is a state rather than a crowd of nobody.
    *
    * Starts `false` against sprites built invisible, deliberately: the first
    * calm frame then does one redundant pass and leaves the two agreeing, where
@@ -224,10 +242,15 @@ export class RushDoor {
    *
    * One run of figures, read two ways. **Filling**, they arrive one at a time
    * as the gauge climbs, so the doorway is full at the instant the rush starts;
-   * **running**, they are lit and inside, and leave one at a time as the gauge
-   * drains, so the doorway is empty at the instant it ends. Both directions
-   * walk the same `share` ladder, which is what keeps a crowd of two on the way
-   * up looking like a crowd of two on the way down.
+   * **running**, they are lit and moving, and leave one at a time as the gauge
+   * drains, so the doorway is empty at the instant it ends.
+   *
+   * The two directions walk **different** ladders — `arrivesAt` gathering,
+   * `index / CROWD` running — and that is what makes the count line up rather
+   * than something to be corrected for. Read across the boundary at a full
+   * gauge both ladders show three, so the crowd does not flicker at the one
+   * moment the player is being told something; all that changes there is that
+   * they start moving.
    *
    * The ladder is also the promise this widget makes and `difficulty.ts` keeps.
    * `RUSH_CROWD` is read from there rather than kept here because the floor
@@ -263,17 +286,15 @@ export class RushDoor {
       // One figure per step of the gauge, arriving and leaving one at a time.
       //
       // **The two states step at different marks, and that is what lines the
-      // ends up.** Gathering, figure *n* is in once the gauge passes
-      // `(n + 1) / CROWD`, so the last of them lands exactly as the gauge
-      // reaches 1 — which is exactly when the rush starts, by construction
-      // (`rushMeterAt` solves its edges against `RUSH_FLOOR_FROM`). Running, it
-      // stays while the gauge is over `n / CROWD`, so the crowd goes 3, 2, 1 as
-      // the rush spends itself and the doorway is empty as it ends.
+      // ends up.** Gathering, they arrive on `arrivesAt`'s ladder, whose last
+      // rung is the gauge reaching 1. Running, a figure stays while the gauge is
+      // over `n / CROWD`, so the crowd goes 3, 2, 1 as the rush spends itself
+      // and the doorway is empty as it ends.
       //
       // Read across the boundary the count does not jump: a full doorway
       // gathering becomes a full doorway rushing, and the only thing that
       // changes at that instant is that they start moving.
-      const lo = on ? index / CROWD : (index + 1) / CROWD - FADE;
+      const lo = on ? index / CROWD : arrivesAt(index);
       const presence = Math.min(Math.max((fill - lo) / FADE, 0), 1);
       // Still until the rush is actually on (`BOB_MS`). `% 1` is not wrapping
       // the sine, which is periodic anyway — it keeps the argument small as
