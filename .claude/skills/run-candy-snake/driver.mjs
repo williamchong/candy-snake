@@ -75,6 +75,50 @@ try {
 
   if (consoleErrors.length > 0) fail(`console errors:\n  ${consoleErrors.join('\n  ')}`);
 
+  // The page must not scroll, and the steering keys must not be able to make it.
+  // Two separate faults produced one symptom once: an inline canvas left four
+  // pixels of descender space under itself, and Phaser captures no key unless
+  // asked — so an arrow key both steered the strand and slid the whole game.
+  // Both are checked, because either alone is enough to put it back.
+  //
+  // What the second check proves is the *rule*, not which line keeps it: Phaser
+  // key captures are global and two scenes ask for the arrows, so deleting
+  // either one on its own leaves this green (`src/input/keyboard.ts` says why
+  // both are there). It fails when the game as a whole stops holding still,
+  // which is the thing a player would notice.
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollHeight - window.innerHeight,
+  );
+  if (overflow > 0) fail(`page is ${overflow}px taller than the viewport`);
+
+  // Then the rule rather than the symptom: with the document made scrollable on
+  // purpose, an arrow key must still move nothing. Into GameScene first, since
+  // the steering keys are bound there.
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(1000);
+  await page.evaluate(() => {
+    const filler = document.createElement('div');
+    filler.id = 'scroll-probe';
+    filler.style.height = '2000px';
+    document.body.append(filler);
+    // From a known zero, so what is measured below is the arrow keys and not
+    // whatever the Space press above may have done. Those are separate faults
+    // with separate fixes, and one masking the other is how the first cut of
+    // this check mis-blamed the arrows for a scroll that space had caused.
+    window.scrollTo(0, 0);
+  });
+  for (const key of ['ArrowDown', 'ArrowRight', 'ArrowDown']) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(80);
+  }
+  const scrolled = await page.evaluate(() => {
+    const y = window.scrollY;
+    document.getElementById('scroll-probe')?.remove();
+    window.scrollTo(0, 0);
+    return y;
+  });
+  if (scrolled > 0) fail(`arrow keys scrolled the page ${scrolled}px`);
+
   await page.screenshot({ path: outPath });
   console.log(`screenshot: ${outPath}`);
 } catch (err) {
