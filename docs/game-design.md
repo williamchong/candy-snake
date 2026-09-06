@@ -507,11 +507,11 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
 | Stage    | Since handover | Order mix (T1/T2/T3) | Max queue | Patience | Arrival | Snake speed |
 | -------- | -------------- | -------------------- | --------- | -------- | ------- | ----------- |
 | Warm-up  | *(pre-tutorial — kept as the shape the ramp grew out of)* | 100 / 0 / 0 | 1 | 45 s | — | 5 cells/s |
-| Handover | 0 s            | 10 / 50 / 40         | 3         | 35 s     | 12 s    | 5 cells/s   |
-| Settled  | 1 min          | 10 / 50 / 40         | 3         | 35 s     | 10 s    | 7 cells/s   |
-| Rush     | 3 min          | 5 / 35 / 60          | 4         | 30 s     | 6 s     | 8 cells/s (cap) |
-| Past it  | 7 min          | 5 / 35 / 60          | 4         | 28 s     | 4 s     | 8 cells/s (cap) |
-| Backstop | 15 min         | 5 / 35 / 60          | 4         | 22 s     | 2.8 s   | 8 cells/s (cap) |
+| Handover | 0 s            | 10 / 50 / 40         | 3         | 42 s     | 12 s    | 5 cells/s   |
+| Settled  | 1 min          | 10 / 50 / 40         | 3         | 42 s     | 10 s    | 7 cells/s   |
+| Rush     | 3 min          | 5 / 35 / 60          | 4         | 36 s     | 6 s     | 8 cells/s (cap) |
+| Past it  | 7 min          | 5 / 35 / 60          | 4         | 34 s     | 4 s     | 8 cells/s (cap) |
+| Backstop | 15 min         | 5 / 35 / 60          | 4         | 26 s     | 2.8 s   | 8 cells/s (cap) |
 
 - Demand starts at the **Mixing** row but speed starts at Warm-up's, and eases
   up to Mixing's over the first minute. The opening levels have already taught
@@ -553,6 +553,20 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
   exactly the pressure the column always named. That is more demand over a run
   rather than the same demand rearranged, and deliberately so: on this same
   table it ends a batching run at 5 minutes where a flat interval took 8.
+- **But every child walks in, and nothing may skip the walk.** No two arrivals
+  fall closer than one second (`WALK_IN_MS`), which is the same beat the opening
+  levels put between a serve and the next child. The rule above and the rush
+  floor below both bottom out well under that — the floor at nothing at all, so
+  serving the third of three children a running tide insists on put the
+  replacement at the counter *on the same step*. Measured at a grown peak, an
+  emptied window was refilling at 577 ms a child. What that delivers is a shop
+  that restocks by teleport, and a maker who can never see a serve land before
+  the next order is standing in the gap; the eleventh sitting reported it back
+  as Sisyphus. It is a floor on the *shape* of the arrivals rather than a second
+  interval added to them — the clock is still paid while the child is walking,
+  so they arrive the moment the doorway clears. It binds only in the endless
+  game: the opening levels author their own beat, and level 4 deliberately
+  halves it so its pair reads as a pair.
 - **Read flat, the Max queue column was unreachable.** Children arrived on a
   fixed beat whatever the window held, so any maker who served faster than the
   interval emptied it and kept it empty, and the queue never rose above one on
@@ -599,15 +613,26 @@ not find the rush already waiting. `core/difficulty.ts` holds the table.
 - The rare **brown-accepting customer** (~5% once the ramp has settled) only
   appears if a brown candy is on the shelf. Because a new arrival sweeps the
   rack, they are served the moment they walk up: the cleanup is the whole visit.
-- Measured against the reference bots, a maker who batches dies around 5.3
-  minutes on most seeds, against a target of 4–6. The target read 8–10 until the seventh
-  sitting, which is where the case for moving it is: **every lever that adds a
-  new thing to do is spent by the 3-minute mark** — max queue at 2 min, the order
-  mix and the speed cap at 3 — and past those only patience and the arrival
-  interval move, neither of which adds anything, only subtracts slack. A target
-  set past the last of the levers was asking this table to hold attention with
-  arithmetic. See the implementation plan for those runs — including the one
-  finding this table could not fix.
+- Measured against the reference bots, a maker who batches dies around **7.0
+  minutes** on most seeds, against a target of **6–8**.
+- **That target has now been 8–10, 4–6 and 6–8, and the round trip is one
+  argument rather than indecision.** The seventh sitting cut it to 4–6 on a
+  point that still holds: **every lever that adds a new thing to do is spent by
+  the 3-minute mark** — max queue at 2 min, the order mix and the speed cap at
+  3 — and past those only patience and the arrival interval move, neither of
+  which adds anything, only subtracts slack. A target set past the last of the
+  levers was asking this table to hold attention with arithmetic. What that
+  settles is where a run should *end*; what it does not settle is how much room
+  there is inside it, and the eleventh sitting's report was that there is none —
+  *too fast, no time to stock candy at all*. So the levers-run-out problem is
+  answered by the tide instead, which is the one thing on this curve still
+  growing when the rest have stopped, and the target goes back out to leave room
+  to build into it. What bought the move is the Patience column, widened ×1.2
+  across the table: patience is the time a candy has to be *made* in, where the
+  arrival interval only says how much is being asked for. The arrival column and
+  the score rate were both tried first and neither could reach 6 alone. See the
+  implementation plan for those runs — including the one finding this table could
+  not fix.
 
 ### The window echoes itself
 
@@ -653,6 +678,8 @@ seven colors it is left to coincidence.
 
 ### The rush (a preview from score ~570, full size from the 3-minute row)
 
+*Drawn and sounded as a gauge — see "the doorway is the gauge" below.*
+
 The bullet above names the hole and **the rush is what goes in it**, asked for
 from the chair twice: once the maker is up to speed the window stops being a
 steady drip and becomes a **tide**, so the ramp carries a shape to read rather
@@ -668,6 +695,17 @@ minute is spent on:
 | peak           | 12 s                            | **20 s**                        |
 | ebb            | 9 s                             | 9 s                             |
 | window held at | 2 children                      | **3 children**                  |
+
+The lull runs at **0.65×** the table's arrival rate and the peak at 2.6×, so a
+cycle swings by a factor of four. It used to be 0.95× and the same 2.6, and the
+eleventh sitting deepened the trough on a report that there was nowhere in a run
+to stock candy: a lull only five per cent easier than the flat table is not a
+lull, it is the same shop with a different label. What it costs is that the tide
+now *grows* less across the run — a cheaper lull is worth more to the preview
+column, whose lull is 30 s, than to the grown one's 22 s, so mean demand over a
+cycle goes 1.5054 → 1.5925 where it used to go 1.5275 → 1.7475. That is paid
+deliberately: the swing *within* a cycle is the reading the chair was giving,
+and it is the one that doubled.
 
 A run **joins that cycle at the swell's foot** rather than at the top of the
 lull, so the first thing it meets once the tide switches on is the tide rising,
@@ -687,8 +725,10 @@ than curve, and it lives in `Game` rather than in the table.
   at the window — met at score ~570 instead of ~860, which is the first time it
   lands inside the stretch the staleness reports keep coming from. Everything
   after it is one growth term: the peak buys 8 s off the lull, and the floor
-  takes a third child. Measured with no rng in it, that is **14% more demand a
-  minute** at full size — mean arrival rate over a cycle 1.5275 → 1.7475.
+  takes a third child. Measured with no rng in it, that is **5.8% more demand a
+  minute** at full size — mean arrival rate over a cycle 1.5054 → 1.5925. (It
+  read 14%, 1.5275 → 1.7475, until the eleventh sitting deepened the lull; see
+  the note under the table for why a cheaper lull narrows the growth.)
   **The swell does not grow**, because it is the warning
   and a bigger rush that shortened its own telegraph would be an ambush; **the
   period does not grow**, because a period that changed under a running cycle
@@ -714,6 +754,39 @@ than curve, and it lives in `Game` rather than in the table.
   on purpose — the ease-in — until the fourth report, which is the bullet above:
   the last third of that minute now carries the preview.
 
+- **The doorway is the gauge, and it answers three questions.** *Am I in a
+  rush, when does this one end, when is the next?* A crowd fading in cannot
+  answer any of them, because a crowd rising and a crowd falling look identical
+  at any one moment — which is what the chair reported at the eleventh sitting,
+  having been given the tide's raw strength to read. So the doorway is drawn
+  from a **gauge** instead: three figures that fill to exactly the instant a
+  rush starts, and drain to exactly the instant it ends. While one is only
+  coming they are silhouettes behind the wall; while one is running they are
+  wholly present and a step further into the room.
+  - **Value and position carry it, because nothing else may.** §4 keeps hue for
+    candies and §11 keeps prose off the play screen, so neither a colour nor the
+    word is available. Doubling the presence and stepping forward is a large
+    change at the edge of the eye that is steering, which is the only place this
+    is ever read from.
+  - **It goes at the door rather than on the HUD**, per §11's rule that
+    announcements go where the player is already looking — and measured: the
+    free band under the hearts falls to 16 px on every phone held sideways, so a
+    new widget would be fighting the tightest layout in the game to say
+    something at the far end of the screen from where it is happening.
+  - **The gauge and the floor are one threshold, by construction.** Its edges
+    are solved against `RUSH_FLOOR_FROM`, the same figure `admitCustomer` holds
+    the window open at, so a full doorway and a held window cannot drift apart.
+    Before the gauge they could: the door drew raw intensity, so the *first*
+    figure landed on the moment the floor engaged and the other two said only
+    "more".
+- **And both edges are sounded**, on the shop's own doorbell — one voice at two
+  pitches, rising for the doors opening and a fifth below for the peak letting
+  go, so the pair reads as a question and its answer rather than as two alarms.
+  It is the loudest thing in the game short of the run ending, which is
+  deliberate: a tide the player cannot hear arriving was the complaint. Nothing
+  on the *board* changes, because §2 makes comfort a constraint and a rush is a
+  minute long — this is the one announcement that must not be a flash across the
+  play field.
 - **The lull is the point as much as the peak is.** A nested ladder is a bundle
   aimed at several orders at once, and it takes longer to build than it does to
   sell; against a flat interval there is never a moment to build one. Half a
@@ -946,14 +1019,18 @@ High scores (top 10, with date) persist in `localStorage`.
 ## 11. HUD & screens
 
 - **HUD:** score, lives (heart pips), the combo meter (four pips, §9), the
-  queue of children with their bubbles and patience bars (§5), shelf contents
-  (6 slots), cheat-sheet tab, mute tab, pause. The hearts are inked in the
+  queue of children with their bubbles and patience bars (§5), the doorway
+  crowd that gauges the rush (§7), shelf contents (6 slots), cheat-sheet tab,
+  mute tab, pause. The hearts are inked in the
   symbol's own dark value rather than red: a life is not a candy, and hue in
   this game belongs to candies alone (§4, palette constraints).
 - **Announcements go where the player is already looking.** The gear change of
   §7's speed ladder pulses the *head* rather than lighting a pip beside the
   score: the thing whose speed changed is the thing being steered, and news
-  delivered to the far end of the screen is news read late or not at all. It is
+  delivered to the far end of the screen is news read late or not at all. The
+  rush follows the same rule to the opposite corner: it happens at the door, so
+  it is drawn at the door, and the measurement behind that is in §7 — the only
+  free band on the HUD is 16 px tall on a phone held sideways. It is
   pale ink, not heat — orange would be the obvious colour for a strand running
   hotter, which is exactly why it is not used (§4: hue belongs to candies, and a
   head flashing a secondary reads as a candy being made).
@@ -1005,7 +1082,8 @@ High scores (top 10, with date) persist in `localStorage`.
 ## 12. Audio & juice (polish targets)
 
 - Squash/stretch on eat; pop + particles on chop; shard burst on self-hit;
-  chime + confetti on serve; muffled sad trombone-ish cue on customer loss.
+  chime + confetti on serve; muffled sad trombone-ish cue on customer loss; the
+  shop's doorbell at both edges of the rush (§7).
 - Light looping kitchen ambience; all audio behind a mute toggle (and starts
   only after first user gesture, per mobile autoplay rules).
 

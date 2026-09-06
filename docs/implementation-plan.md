@@ -3294,6 +3294,177 @@ default 0, so the arm can be re-measured without being rebuilt:
 `SWEEP_PREVIEW=0,1,2,3 npx vitest run src/core/simulation.test.ts -t 'the
 preview sweep'`.
 
+### What the eleventh sitting settled — the rush was right and had no gauge
+
+Three reports from the chair, and the useful thing about them is that all three
+turned out to be one mechanism.
+
+> *I find the rush hour idea pretty good, i think it needs a more detailed
+> implementation — really helps with controlling the pacing.*
+>
+> *Also maybe no need to refill the customer instantly after clearing one, feel
+> a little like sisyphus if they instantly come back.*
+>
+> *Still most favourite, but new version too fast, no time stock candy at all,
+> so like old more.*
+
+**The second and third are the same branch, and it is not a feeling.** Two rules
+in `admitCustomer` bottom out well under a second and one of them bottoms out at
+nothing. `arrivalGapMs` is `interval × (queued + 1) / maxQueue`, so the emptier
+the window the faster it refills; and `belowFloor` skips the arrival clock
+outright, so with the grown floor at three of four places, serving a child put
+the replacement at the counter *on the same step*. Measured across one grown
+cycle, delivered gap in ms by how many were already waiting:
+
+| ramp | tide | floor | interval | gap@0 | gap@1 | gap@2 | gap@3 |
+| ---- | ---- | ----- | -------- | ----- | ----- | ----- | ----- |
+| 3:00 peak | 1.00 | 3 | 2308 | 577 | 1154 | 1731 | 2308 |
+| 3:33 lull | 0.00 | 0 | 6140 | 1535 | 3070 | 4605 | 6140 |
+
+Two things fall out. At a peak the `gap@2` column is never consulted — the floor
+fires first, at 0 ms. And in the *lull*, an emptied window still refills at one
+child per 1.5 s, so clearing the queue is self-punishing everywhere on the ramp
+rather than only during a rush. **There was no point in a run at which the game
+handed the maker a quiet window**, which is exactly the report.
+
+Both of those were built deliberately and this record has the receipts: the
+seventh sitting added the emptier-fills-faster rule so the maker would not "wait
+out the rest of an interval in front of an empty window", and the tide pass added
+the floor because "a rate is the one thing a maker can outrun". Neither was
+wrong. What neither anticipated is that together they leave the window with no
+floor *and* no ceiling on how fast it recovers.
+
+**What shipped, in three parts.**
+
+1. **The walk-in.** No two endless arrivals fall closer than `WALK_IN_MS`, and
+   that constant *is* `TUTORIAL_ARRIVAL_GAP_MS` rather than a new number — the
+   two are one measurement asked twice, how long a child takes to cross the
+   room, read as an interval by the tutorial and as a floor by the endless game.
+   Writing it twice would have drifted at the handover first, where the endless
+   game's first child is brought in on the tutorial's beat exactly. It is a
+   floor on the *shape* of arrivals, not a second interval: the clock is still
+   paid while the child walks, so they arrive the moment the doorway clears.
+   A second clock rather than a floor under `waitMs`, because `waitMs` stops
+   when the window is full and the rush floor skips it — a minimum built on it
+   would inherit both holes.
+2. **The lull got deeper.** `CALM_RATE` 0.95 → 0.65, so a cycle swings by a
+   factor of four where it swung by 2.7. A lull five per cent easier than the
+   flat table is not a lull.
+3. **The target moved out**, 4–6 min → 6–8, which is the third report answered
+   directly. See the arms below.
+
+**The gauge is what the first report asked for, read properly.** *More detailed
+implementation* was put back to the chair and came back as three questions:
+*when does the next rush happen, am I currently in a rush, does the rush ever
+end* — with *make the ui more obvious, like tsum tsum fever mode*. A scalar
+intensity answers none of them, because a crowd rising and a crowd falling look
+identical at any one moment; the same 0.4 means "brace" going up and "it is
+over" coming down.
+
+So `rushMeterAt` returns a gauge — `{ on, fill }` — that fills 0 → 1 to exactly
+the instant a rush starts and drains 1 → 0 to exactly the instant it ends, and
+`RushDoor` is drawn from it instead of from `Game.rush`. The edges are **solved**
+rather than scanned for: the shape is piecewise linear in phase, so the crossing
+is one `lerp` on each side, with the threshold divided by the ease-in swing
+rather than compared against the delivered figure. A scan would have put a loop
+on a getter the HUD reads every frame, and its answer would have depended on a
+step size nobody would ever be told about.
+
+**Two design rules ruled out the obvious version of "like fever mode".** §11
+allows no prose on the play screen and §4 keeps hue for candies, so neither the
+word nor a colour was available; the state change is carried by **value and
+position** instead — silhouettes at half alpha behind the wall while a rush is
+coming, wholly present and a step into the room while one runs. And it goes at
+the door rather than on the HUD, which is §11's own rule *and* a measurement:
+the free band under the hearts is **16 px** on every phone held sideways
+(812×375, 736×414, 568×320), so a new widget would have been fighting the
+tightest layout in the game to say something at the far end of the screen from
+where it is happening.
+
+One tie got tighter on the way. `RUSH_FLOOR_FROM` is `1 / RUSH_CROWD`, and the
+gauge's edges are solved against it — so a full doorway and a held-open window
+are now the same moment by construction. Before, the door drew raw intensity,
+so the *first* of three figures landed on the moment the floor engaged and the
+other two said only "more".
+
+**Both edges are also sounded** — one bell at two pitches, up for the doors
+opening and a fifth below for the peak letting go, so the pair reads as a
+question and its answer. Placed against the table rather than picked: it renders
+to a peak of 0.371, above everything but the run ending (0.406). Nothing on the
+board changes, because §2 forbids a screen flash and a rush is a minute long.
+
+**The arms, on the 64-seed `WIDE` draw.** The report asked for a slower run, and
+the first three candidates could not deliver one. Each row is the batching bot's
+median death in minutes; `ahead` is how many of 64 seeds the batcher outscored
+the grinder on, which is this document's open finding.
+
+| arm | median | ahead |
+| --- | ------ | ----- |
+| shipped, before this pass | 5.22 | — |
+| + walk-in only | 5.28 | 7/64 |
+| lull 0.80 / 0.65 / 0.50 | 5.33 / 5.72 / 5.91 | 5 / 8 / 10 |
+| `MS_PER_POINT` 60 / 52 / 45 | 5.57 / 5.78 / **5.16** | 7 / 6 / 4 |
+| arrival column ×1.15 / ×1.30 / ×1.45 | 5.11 / 5.40 / 5.56 | 7 / 7 / 9 |
+| **patience ×1.15 / ×1.30** | **6.43 / 7.22** | 17 / 25 |
+| **shipped (patience ×1.2, lull 0.65, walk-in)** | **7.05** | **17/64** |
+
+Four things worth keeping from that table.
+
+- **The walk-in is nearly free.** 5.22 → 5.28 on the median, which is inside the
+  noise, while removing the teleport entirely. The complaint cost the curve
+  nothing to fix.
+- **`MS_PER_POINT` is non-monotonic** — 70, 60, 52 climb and then 45 falls back
+  to 5.16 — because at a low enough rate the *clock* floor in `rampMs` starts
+  binding instead of the score term. That is the curve doing exactly what its
+  docblock says it will, caught in a sweep for the first time.
+- **The arrival column is a weak lever for run length**, ×1.45 buying only 0.34
+  min. The bots die to walkouts, and walkouts are patience.
+- **Patience is the lever, and it pays the open finding.** `ahead` goes 7/64 →
+  25/64 across the patience arms — the largest movement this document has ever
+  recorded on that number. A ladder takes time to build and patience is what
+  buys the time, so the maker the game wants to reward is the one more patience
+  rewards. It is not closed (25 and then 17 on the shipped arm is still under
+  half), but it is the first lever that has moved it at all.
+
+**What the assertions had to say about it**, since four of them failed and each
+failure was informative rather than incidental.
+
+- **The floor test fell 0.999 → 0.95.** It asserted the window sat at or above
+  its floor on 99% of sampled ticks, and its own comment explained why it was
+  not 1.0: "a serve empties a place and the next tick fills it". That comment
+  was the Sisyphus bug, written down as intended behaviour and pinned by a test.
+  It now reads 0.9518–0.9732 — three to five per cent of a running tide is a
+  doorway with somebody walking through it.
+- **The tail bound moved with the target**, to nine minutes, one past the top as
+  it has always been. 6 of 62. The interquartile range is 1.8 min wide against
+  1.5, so the window opened without the spread running away.
+- **`meanBatch` on seed 88 went 2.4 → 2.08 and the rest of the draw went *up***
+  (2.89–3.51 against 2.69–3.4). Seed 88 carries the most of any seed and peaks
+  at 8, so it is building longer and cutting smaller — a plan re-rolling around
+  new arrival timings, not a maker that stopped batching. The floor follows this
+  file's doctrine and goes under the worst rather than the second-worst.
+- **The solo-vs-grinder score claim inverted on one seed** and is now pooled
+  over the draw, which is the third time this file has had to make that
+  correction. On seed 777 the *grinder* had a bad run (7 029 against a typical
+  13 500), not the solo a good one; every other seed reads 0.44–0.69 of the
+  grinder, and pooled it is 0.456.
+
+**What is not in this pass, and why.** The strand does not speed up during a
+rush — that was settled twice already and the gauge does not reopen it. No board
+effect accompanies the bell: §2 makes comfort a constraint, a rush lasts a
+minute, and a sustained tint over the play field is the one announcement that
+would have to fight it. And the doorway still holds three figures, because that
+number is `RUSH_FLOOR_FROM`'s denominator and a fourth would move the promise
+without moving the delivery.
+
+**Still open after this sitting.** The growth term got weaker as a side effect —
+mean demand over a cycle now goes 1.5054 → 1.5925 across the run where it went
+1.5275 → 1.7475, because a cheaper lull is worth more to the preview column's
+30 s of it than to the grown column's 22. The tide swings harder within a cycle
+and grows less across the run. That is the right trade for the report that was
+given, and it is worth re-reading if a future sitting says the late game has
+stopped escalating.
+
 ## Risks & mitigations
 
 - **Chop-mode feel** — *retired in Phase 3*, by dropping chop mode outright:
